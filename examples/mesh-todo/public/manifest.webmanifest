@@ -1,0 +1,10 @@
+{
+  "name": "mesh-todo",
+  "short_name": "mesh-todo",
+  "description": "A todo list that replicates over a LoRa mesh — no IP path anywhere.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0e15",
+  "theme_color": "#0b0e15",
+  "icons": []
+}

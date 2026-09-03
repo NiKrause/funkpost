@@ -34,7 +34,7 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     b.onPayload((payload) => received.push(payload));
 
     const payload = bytesOf(500); // ~10 fragments at mtu 60
-    await a.send(payload);
+    await a.send(payload, { awaitDelivery: true });
 
     assert.equal(received.length, 1);
     assert.deepEqual([...received[0]], [...payload]);
@@ -60,7 +60,7 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     b.onPayload((payload) => received.push(payload));
 
     const payload = bytesOf(600, 13);
-    await a.send(payload);
+    await a.send(payload, { awaitDelivery: true });
 
     assert.equal(received.length, 1);
     assert.deepEqual([...received[0]], [...payload]);
@@ -74,7 +74,7 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
       { lossFn: ({ from }) => from === "a" },
       { rtoMs: 15, maxRounds: 3 },
     );
-    await assert.rejects(() => a.send(bytesOf(100)), /undelivered after 3 rounds/);
+    await assert.rejects(() => a.send(bytesOf(100), { awaitDelivery: true }), /undelivered after 3 rounds/);
     close();
   });
 
@@ -82,7 +82,7 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     const { a, b, close } = pairOfCouriers({ duplicateFn: () => true });
     const received = [];
     b.onPayload((payload) => received.push(payload));
-    await a.send(bytesOf(300));
+    await a.send(bytesOf(300), { awaitDelivery: true });
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.equal(received.length, 1);
     close();
@@ -93,7 +93,7 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     const received = [];
     b.onPayload((payload) => received.push(payload));
     const payload = bytesOf(700, 3);
-    await a.send(payload);
+    await a.send(payload, { awaitDelivery: true });
     assert.equal(received.length, 1);
     assert.deepEqual([...received[0]], [...payload]);
     close();
@@ -108,7 +108,7 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
 
     const p1 = bytesOf(250, 5);
     const p2 = bytesOf(260, 9);
-    await Promise.all([a.send(p1), b.send(p2)]);
+    await Promise.all([a.send(p1, { awaitDelivery: true }), b.send(p2, { awaitDelivery: true })]);
     await until(() => atB.length === 1 && atA.length === 1);
 
     assert.deepEqual([...atB[0]], [...p1]);
@@ -122,6 +122,30 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     await assert.rejects(() => courier.send(bytesOf(10)), /region is UNSET/);
     assert.equal(courier.budget().misconfigured, true);
     courier.close();
+  });
+
+  test("a broadcast into an empty room resolves on transmission, then gives up quietly", async () => {
+    // Nobody on the other end at all: no courier B, so no STATUS will ever
+    // come. The default send must resolve once the wave is out (announces and
+    // invites are broadcasts), and the ARQ ends in a giveup EVENT, not a
+    // rejection — this is the demo's create-a-list-before-anyone-joined case.
+    const pair = createMemoryMeshPair({ mtu: 60, delayMs: 1 });
+    const events = [];
+    const a = createMeshtasticCourier({
+      link: pair.a,
+      region: NO_LIMIT,
+      rtoMs: 10,
+      maxRounds: 2,
+      onEvent: (e) => events.push(e.kind),
+    });
+
+    const t0 = Date.now();
+    await a.send(bytesOf(150)); // resolves without any acknowledgement
+    assert.ok(Date.now() - t0 < 1000, "resolved on transmission, not on a timeout");
+
+    await until(() => events.includes("giveup"));
+    assert.ok(!events.includes("delivered"));
+    a.close();
   });
 
   test("budget(): EU_868 pacing is wired through and airtime is accounted", async () => {
@@ -149,7 +173,7 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
       { lossFn: ({ from }) => from === "a" }, // nothing ever arrives
       { rtoMs: 5000, maxRounds: 50 },
     );
-    const pending = a.send(bytesOf(50));
+    const pending = a.send(bytesOf(50), { awaitDelivery: true });
     pending.catch(() => {}); // rejection is expected; keep it handled meanwhile
     await new Promise((resolve) => setTimeout(resolve, 20));
     close();

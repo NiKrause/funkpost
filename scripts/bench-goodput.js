@@ -84,7 +84,7 @@ const startedAt = Date.now();
 
 for (let i = 0; i < COUNT; i++) {
   const t0 = Date.now();
-  await courierA.send(payload);
+  await courierA.send(payload, { awaitDelivery: true });
   const latency = Date.now() - t0;
   latencies.push(latency);
   console.log(`[A] payload ${i + 1}/${COUNT} delivered+acked in ${(latency / 1000).toFixed(1)} s`);

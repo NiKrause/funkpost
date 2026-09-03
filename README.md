@@ -56,6 +56,26 @@ NODE_A=<ip> NODE_B=<ip> npm run bench:goodput
 drives the real courier between two TCP-reachable nodes and prints the gate
 numbers (latency, goodput, retransmit rounds, airtime model vs. wall clock).
 
+## The example: mesh-todo
+
+[`examples/mesh-todo`](examples/mesh-todo) is the demo the data plane owes and
+the bench instrument in one: a todo list on OrbitDB, replicating over the
+courier, with a sync pane that prices every protocol message in packets and
+airtime — the two hardware gates are read off exactly that pane.
+
+```sh
+npm run dev -w @le-space/mesh-todo-example
+```
+
+Open it twice with `?mesh=bc` and the two tabs play the two phones over a
+BroadcastChannel fake mesh (`&loss=0.15` makes the radio lossy). Without the
+parameter, *Connect node* opens the Web Bluetooth chooser for a real
+Meshtastic node — Chrome/Edge, user gesture required, and on a phone the page
+must be served over HTTPS (during development: `adb reverse tcp:5199 tcp:5199`
+makes the dev server a secure `localhost` on the phone). Write access in the
+demo list is open on purpose: the mesh channel's PSK is the demo's trust
+boundary, and per-identity ACLs are a design conversation in issue #1.
+
 ## Why this is a separate repository
 
 **Licence, not taste.** [`@meshtastic/core`](https://www.npmjs.com/package/@meshtastic/core)
