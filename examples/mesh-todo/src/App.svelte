@@ -23,6 +23,7 @@
           kind: "bc",
           room: params.get("room") ?? "mesh-todo",
           loss: Number(params.get("loss") ?? 0),
+          preset: params.get("preset") ?? undefined,
         }
       : { kind: "ble" };
 
