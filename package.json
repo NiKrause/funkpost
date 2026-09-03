@@ -39,6 +39,9 @@
     "datastore-core": "^10.0.4",
     "helia": "^5.5.1",
     "libp2p": "^2.10.0",
-    "orbitdb-storacha-bridge": "github:NiKrause/orbitdb-storacha-bridge#feat/courier-sync"
-  }
+    "orbitdb-storacha-bridge": "github:NiKrause/orbitdb-storacha-bridge#main"
+  },
+  "workspaces": [
+    "examples/*"
+  ]
 }
