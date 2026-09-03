@@ -1,16 +1,60 @@
 # libp2p-webrtc-qr over Meshtastic
 
-Signalling for [libp2p-webrtc-qr](https://github.com/NiKrause/libp2p-webrtc-qr)
-over a Meshtastic LoRa mesh: the WebRTC offer and answer travel as small signed
-payloads between two nodes, so the handshake needs no camera, no messenger and
-no speaker — and works through walls and across floors.
+Two planes over one radio:
 
-**Nothing is built yet.** This repository exists so the work has somewhere to
-live that is licensed correctly, and so the reason for its separateness is
-written down where somebody will find it. The design lives in
-[libp2p-webrtc-qr#161](https://github.com/NiKrause/libp2p-webrtc-qr/issues/161).
+- **Signalling** for [libp2p-webrtc-qr](https://github.com/NiKrause/libp2p-webrtc-qr):
+  the WebRTC offer and answer travel as small signed payloads between two
+  Meshtastic nodes, so the handshake needs no camera, no messenger and no
+  speaker — and works through walls and across floors. Design:
+  [libp2p-webrtc-qr#161](https://github.com/NiKrause/libp2p-webrtc-qr/issues/161).
+- **Data**, for peers with no IP path at all: an OrbitDB database replicates
+  entry by entry over the mesh — signed blocks over the radio, big things via
+  Storacha once one side finds the internet again. Design and arithmetic:
+  [issue #1](https://github.com/NiKrause/libp2p-webrtc-qr-meshtastic/issues/1).
 
----
+## What is here now
+
+The byte courier the data plane runs on (plan step S2 in issue #1), radio-free
+and fully tested:
+
+- [`lib/framing.js`](lib/framing.js) — fragments sized to a mesh packet
+  (`id · idx/total`), plus a STATUS frame carrying the receiver's bitmap
+- [`lib/meshtastic-courier.js`](lib/meshtastic-courier.js) — selective-ACK ARQ
+  over any link: retransmits exactly the missing fragments, bounded rounds,
+  `send()` resolves on end-to-end acknowledgement
+- [`lib/pacing.js`](lib/pacing.js) — airtime estimates per modem preset and a
+  token bucket that paces transmissions to the regional duty cycle, so the
+  firmware never has to refuse and ARQ never mistakes legal throttling for loss
+- [`lib/regions.js`](lib/regions.js) — jurisdictions as data: one row per
+  firmware region with its airtime budget and legal framework; a node with
+  region `UNSET` is refused, not transmitted through
+- [`lib/links/meshtastic-device-link.js`](lib/links/meshtastic-device-link.js) —
+  the thin binding to a real node: `@meshtastic/core` over the private
+  application port, plus region and airtime-utilisation watchers
+- [`lib/links/memory-mesh.js`](lib/links/memory-mesh.js) — the radio's test
+  double: MTU-enforcing, lossy, duplicating, jittering
+
+The transport-neutral sync half lives on the MIT side, in
+[orbitdb-storacha-bridge](https://github.com/NiKrause/orbitdb-storacha-bridge)
+(`courier-sync`, [issue #50](https://github.com/NiKrause/orbitdb-storacha-bridge/issues/50)) —
+see the licence section for why that split is load-bearing.
+
+```sh
+npm test
+```
+
+runs the suites, including the composed proof
+([`test/full-stack.test.js`](test/full-stack.test.js)): two OrbitDB peers
+converge through courier-sync → ARQ → pacing → a mesh that drops frames, while
+both libp2p nodes hold **zero connections**. Only physics is missing, and
+physics is the bench:
+
+```sh
+NODE_A=<ip> NODE_B=<ip> npm run bench:goodput
+```
+
+drives the real courier between two TCP-reachable nodes and prints the gate
+numbers (latency, goodput, retransmit rounds, airtime model vs. wall clock).
 
 ## Why this is a separate repository
 
@@ -21,57 +65,54 @@ that pulled GPL-3.0 into its consumers' builds would be misrepresenting its own
 licence — the optional-peer-dependency pattern it uses for `ggwave` works
 because ggwave is MIT.
 
-The demo in that repository is no refuge either: it is `private: true` but it is
-*distributed*, from a public address, so bundling GPL-3.0 there would make the
-deployed application GPL-3.0.
+So this repository is **GPL-3.0**, and it depends on the permissive packages
+rather than the other way round. Permissive flows into copyleft; the reverse is
+what fails.
 
-So this repository is **GPL-3.0**, and it depends on
-`@le-space/libp2p-webrtc-qr` rather than the other way round. Permissive flows
-into copyleft; the reverse is what fails.
+One consequence stated in advance, because it is a one-way door: anything that
+turns out to belong in a permissive package — the carrier-neutral framing, the
+sync seam — has to be written **there** and used from here. Designing it here
+and wanting it back later does not work. That is why `courier-sync` lives in
+orbitdb-storacha-bridge and this repository only implements its courier
+contract.
 
-One consequence worth stating in advance: any piece of this that turns out to
-belong in the library — the carrier-neutral framing, for instance — has to be
-written **there**, under the permissive licence, and used from here. Designing it
-here and wanting it back later does not work.
-
-## What it will do
+## The topology
 
 ```
-phone ↔ BLE ↔ its own node ↔ LoRa ↔ studio node ↔ BLE ↔ tablet
+phone ↔ BLE ↔ its own node ↔ LoRa ↔ peer node ↔ BLE ↔ phone / tablet
 ```
 
 A browser reaches a Meshtastic node over Web Bluetooth
 ([`@meshtastic/transport-web-bluetooth`](https://meshtastic.org/docs/development/js/),
-the only transport that fits a phone), and the two nodes carry the payloads. One
-BLE client per node is a firmware rule, so each side brings its own.
+the only transport that fits a phone). One BLE client per node is a firmware
+rule, so each side brings its own. Chrome/Edge on Android and desktop; no iOS,
+no Firefox; the page must be foreground with the screen on.
 
-**It uses the compact (v3) payload explicitly.** ~284 bytes is two LoRa packets
-where a full SDP is five or six, under EU 868's 10 % duty cycle — and that
-applies twice, once per direction. v3 also carries its own identity binding,
-which matters more here than on a screen: a mesh is readable by everyone in RF
-range, and a courier can substitute a signed payload of its own.
+## What LoRa does and does not do
 
-## What LoRa does **not** do
+**For the handshake: it carries the handshake, not the connection.** WebRTC
+still needs an IP path between the peers — the same Wi-Fi, or both online with
+NAT traversal working. Two peers linked only by mesh will verify each other's
+signatures perfectly and never connect.
 
-**It carries the handshake, not the connection.** WebRTC still needs an IP path
-between the peers — the same Wi-Fi, or both online with NAT traversal working.
-Two peers linked only by mesh will verify each other's signatures perfectly and
-never connect. This is the sentence most likely to be misread, so it is here
-rather than in a footnote.
+**For the data plane, that sentence gets its counterpart:** where no IP path
+exists, the mesh carries the database itself — at radio pace. ~230-byte
+packets, roughly a kilobit per second on the default preset, and in the EU a
+10 % duty cycle (6 minutes of airtime per hour, enforced by the node's
+firmware). Text and content IDs travel by radio; bytes travel via Storacha
+when one side has internet. A photo does not fit through this pipe, and the
+design does not pretend otherwise.
 
-## Before any code
+## The gates before the build
 
-Three questions are answerable on hardware and two of them can end the idea.
-They are the gate:
+Signalling (from #161, unchanged): handshake time over one hop; whether
+`watchAdvertisements()` works without a Chrome flag; whether a node refuses or
+evicts a second BLE client.
 
-1. **How long does one handshake take over a single hop?** Compact offer plus
-   answer, LongFast, quiet channel. The estimate is 15–45 s; minutes would kill
-   the in-the-room case and leave only long range.
-2. **Does `watchAdvertisements()` work without a Chrome flag?** Decides whether
-   a waiting phone listens for a free BLE slot or falls back to jittered polling.
-3. **Does a node refuse a second BLE client, or evict the first?** The failure
-   mode decides how a shared "guest node" behaves when somebody taps at the
-   wrong moment.
+Data plane (issue #1): single-entry latency (target: seconds to low tens) and
+the ten-entry bootstrap — **over ~10 minutes on a quiet channel, live sync
+loses to the pointer-CID mode**. The bench script above and the demo's sync
+pane exist to answer these on hardware.
 
 ## Trademark
 

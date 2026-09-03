@@ -1,0 +1,44 @@
+{
+  "name": "@le-space/libp2p-webrtc-qr-meshtastic",
+  "version": "0.1.0",
+  "description": "Meshtastic LoRa courier for libp2p-webrtc-qr signalling and the OrbitDB data plane: framing, selective-ACK ARQ and duty-cycle pacing over Web Bluetooth",
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NiKrause/libp2p-webrtc-qr-meshtastic.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./framing": "./lib/framing.js",
+    "./pacing": "./lib/pacing.js",
+    "./regions": "./lib/regions.js",
+    "./courier": "./lib/meshtastic-courier.js",
+    "./links/memory-mesh": "./lib/links/memory-mesh.js",
+    "./links/meshtastic-device": "./lib/links/meshtastic-device-link.js"
+  },
+  "scripts": {
+    "test": "node --test --test-force-exit test/*.test.js",
+    "bench:goodput": "node scripts/bench-goodput.js"
+  },
+  "dependencies": {
+    "@meshtastic/core": "^2.6.7",
+    "@meshtastic/transport-web-bluetooth": "^0.1.5"
+  },
+  "devDependencies": {
+    "@chainsafe/libp2p-noise": "^16.1.5",
+    "@chainsafe/libp2p-yamux": "^7.0.4",
+    "@libp2p/tcp": "^10.1.19",
+    "@meshtastic/transport-node": "^0.0.2",
+    "@orbitdb/core": "^3.0.2",
+    "blockstore-core": "^5.0.4",
+    "datastore-core": "^10.0.4",
+    "helia": "^5.5.1",
+    "libp2p": "^2.10.0",
+    "orbitdb-storacha-bridge": "github:NiKrause/orbitdb-storacha-bridge#feat/courier-sync"
+  }
+}
