@@ -57,7 +57,14 @@ export async function createDatabaseStack() {
 export async function connectCourier({ mode, onEvent, onTelemetry }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
-    const courier = createMeshtasticCourier({ link, region: "EU_868", onEvent });
+    // preset only changes the airtime *estimates* (and with them the ARQ's
+    // patience) — e2e uses SHORT_TURBO so lossy runs heal at test pace.
+    const courier = createMeshtasticCourier({
+      link,
+      region: "EU_868",
+      preset: mode.preset,
+      onEvent,
+    });
     return { courier, kind: "BroadcastChannel (fake mesh)", region: "EU_868", device: null };
   }
 
