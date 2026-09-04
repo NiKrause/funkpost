@@ -69,7 +69,13 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
       preset: mode.preset,
       onEvent,
     });
-    return { courier, kind: "BroadcastChannel (fake mesh)", region: "EU_868", device: null };
+    return {
+      courier,
+      kind: "BroadcastChannel (fake mesh)",
+      region: "EU_868",
+      device: null,
+      setTxChannel: () => {},
+    };
   }
 
   const [{ TransportWebBluetooth }, { MeshDevice }] = await Promise.all([
@@ -112,7 +118,13 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
 
   const link = createMeshtasticDeviceLink({ device, destination: "broadcast" });
   const courier = createMeshtasticCourier({ link, region, onEvent });
-  return { courier, kind: "Meshtastic node (Web Bluetooth)", region, device };
+  return {
+    courier,
+    kind: "Meshtastic node (Web Bluetooth)",
+    region,
+    device,
+    setTxChannel: (index) => link.setChannel(index),
+  };
 }
 
 /**
