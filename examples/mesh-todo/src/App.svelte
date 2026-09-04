@@ -250,7 +250,7 @@
       <p>
         <strong>{linkKind}</strong> — region <strong>{region}</strong>
         {#if airUtil != null}
-          · node airtime {airUtil.toFixed(1)} %
+          · <span title="the node's own measured TX utilisation — all of its traffic (beacons, telemetry, relaying), not just this app">node airtime {airUtil.toFixed(1)} %</span>
         {/if}
       </p>
       {#if primaryChannel || myNode}
@@ -264,7 +264,9 @@
         <div class="bar" title="airtime budget left this hour">
           <div class="fill" style={`width:${budgetPercent()}%`}></div>
         </div>
-        <p class="dim">{budgetPercent()} % of this hour's airtime budget left ({region})</p>
+        <p class="dim">
+          courier airtime budget: <strong>{budgetPercent()} % remaining</strong> this hour ({region})
+        </p>
       {:else}
         <p class="dim">no duty cycle in this region — pacing off, politeness on</p>
       {/if}
