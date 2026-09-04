@@ -49,6 +49,8 @@
   let creating = $state(false);
   let joining = $state(false);
   let neighbours = $state([]);
+  let primaryChannel = $state(null); // { name, fingerprint }
+  let myNode = $state("");
   let showNeighbours = $state(false);
   let nowTick = $state(Date.now());
   const neighbourMap = new Map();
@@ -131,6 +133,20 @@
         mode,
         onEvent: onCourierEvent,
         onTelemetry: (value) => (airUtil = value),
+        onChannel: async (channel) => {
+          if (channel.role !== 1) return; // PRIMARY only
+          const psk = channel.settings?.psk ?? new Uint8Array();
+          const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
+          primaryChannel = {
+            name: channel.settings?.name || "(default)",
+            fingerprint: [...digest.slice(0, 2)]
+              .map((b) => b.toString(16).padStart(2, "0"))
+              .join(""),
+          };
+        },
+        onMyNodeInfo: (info) => {
+          if (info?.myNodeNum) myNode = `!${info.myNodeNum.toString(16).padStart(8, "0")}`;
+        },
         onNodeInfo: (node) => {
           neighbourMap.set(node.num, node);
           neighbours = [...neighbourMap.values()].sort(
@@ -237,6 +253,13 @@
           · node airtime {airUtil.toFixed(1)} %
         {/if}
       </p>
+      {#if primaryChannel || myNode}
+        <p class="dim mono" title="same channel name + key fingerprint on both phones = the nodes can decrypt each other">
+          {#if primaryChannel}primary channel »{primaryChannel.name}« · key ⌗{primaryChannel.fingerprint}{/if}
+          {#if myNode}
+            · this node {myNode}{/if}
+        </p>
+      {/if}
       {#if budgetPercent() != null}
         <div class="bar" title="airtime budget left this hour">
           <div class="fill" style={`width:${budgetPercent()}%`}></div>
@@ -398,6 +421,9 @@
   }
   .addr {
     word-break: break-all;
+    font-family: ui-monospace, monospace;
+  }
+  .mono {
     font-family: ui-monospace, monospace;
   }
   button {
