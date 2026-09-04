@@ -48,6 +48,10 @@
   let linkLost = $state(false);
   let creating = $state(false);
   let joining = $state(false);
+  let neighbours = $state([]);
+  let showNeighbours = $state(false);
+  let nowTick = $state(Date.now());
+  const neighbourMap = new Map();
   let log = $state([]);
   let totals = $state({ framesTx: 0, framesRx: 0, airtimeSpentMs: 0, retransmitRounds: 0 });
 
@@ -114,6 +118,7 @@
         totals = { ...courier.stats };
       }
       if (sync && !db && sync.db) attachDb(sync.db);
+      nowTick = Date.now();
     }, 1000);
     return () => clearInterval(ticker);
   });
@@ -126,6 +131,12 @@
         mode,
         onEvent: onCourierEvent,
         onTelemetry: (value) => (airUtil = value),
+        onNodeInfo: (node) => {
+          neighbourMap.set(node.num, node);
+          neighbours = [...neighbourMap.values()].sort(
+            (a, b) => (b.lastHeard ?? 0) - (a.lastHeard ?? 0),
+          );
+        },
         onStatus: (name) => {
           pushLog(`node status: ${name}`);
           if (name === "disconnected") {
@@ -194,6 +205,14 @@
   async function toggle(todo) {
     await db.put(todo.key, { text: todo.text, done: !todo.done, ts: todo.ts });
   }
+
+  const heardAgo = (node) => {
+    if (!node.lastHeard) return "—";
+    const seconds = Math.max(0, Math.round(nowTick / 1000 - node.lastHeard));
+    if (seconds < 90) return `${seconds}s ago`;
+    if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
+    return `${Math.round(seconds / 3600)}h ago`;
+  };
 
   const budgetPercent = () => {
     if (!budget || budget.dutyCycle == null) return null;
@@ -297,6 +316,34 @@
       {#if log.length === 0}<div class="dim">quiet.</div>{/if}
     </div>
   </section>
+
+  {#if mode.kind !== "bc" && neighbours.length > 0}
+    <section>
+      <h2>
+        4 · Mesh neighbours <span class="dim">({neighbours.length} heard by this node)</span>
+      </h2>
+      <p class="dim">
+        who else is on this channel's air — on a public channel, this is the
+        audience an invite has.
+      </p>
+      <button class="ghost" onclick={() => (showNeighbours = !showNeighbours)}>
+        {showNeighbours ? "Hide" : `Show ${neighbours.length} nodes`}
+      </button>
+      {#if showNeighbours}
+        <div class="log neighbours">
+          {#each neighbours as node (node.num)}
+            <div>
+              <span class="nn">{node.user?.shortName ?? "?"}</span>
+              {node.user?.longName ?? node.user?.id ?? node.num}
+              <span class="dim">
+                · {heardAgo(node)}{node.hopsAway ? ` · ${node.hopsAway} hop${node.hopsAway === 1 ? "" : "s"}` : ""}{node.snr ? ` · SNR ${node.snr.toFixed(1)}` : ""}{node.viaMqtt ? " · via mqtt" : ""}
+              </span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
 
   <footer>
     <a href="https://github.com/NiKrause/funkpost/issues/1">design issue #1</a>
@@ -414,6 +461,12 @@
     height: 100%;
     background: #5dd39e;
     transition: width 0.5s;
+  }
+  .neighbours .nn {
+    display: inline-block;
+    min-width: 4.5ch;
+    font-weight: 650;
+    color: #9ab0dd;
   }
   .log {
     max-height: 220px;
