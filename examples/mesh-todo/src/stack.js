@@ -58,7 +58,10 @@ export async function createDatabaseStack() {
  * (two tabs, no hardware); anything else opens the Web Bluetooth chooser —
  * which must be called from a user gesture.
  */
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError }) {
+const MESHTASTIC_BLE_SERVICE = "6ba1b218-15a8-461f-9fa8-5dcae273eafd";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
     // preset only changes the airtime *estimates* (and with them the ARQ's
@@ -82,57 +85,96 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
     import("@meshtastic/transport-web-bluetooth"),
     import("@meshtastic/core"),
   ]);
-  const transport = await TransportWebBluetooth.create(); // browser chooser
-  const device = new MeshDevice(transport);
+  // Request the device ourselves (rather than TransportWebBluetooth.create,
+  // which hides it) so we hold the BluetoothDevice and can reconnect to it
+  // later without a chooser — the phone's BLE stack drops the GATT link under
+  // load, and we must be able to bring it straight back.
+  const bleDevice = await navigator.bluetooth.requestDevice({
+    filters: [{ services: [MESHTASTIC_BLE_SERVICE] }],
+  });
+  const newMeshDevice = async () =>
+    new MeshDevice(await TransportWebBluetooth.createFromDevice(bleDevice));
 
+  let device = await newMeshDevice();
   const link = createMeshtasticDeviceLink({ device, destination: "broadcast" });
   // The courier starts UNSET and adopts the real region live (below). Nothing
   // transmits until the user acts, so a brief UNSET window costs nothing.
   // minFrameGapMs paces BLE writes so a multi-fragment payload (e.g. the
-  // bootstrap blocks) does not burst and flood the phone's BLE stack — the
-  // blocks-send disconnect seen on hardware. The airtime bucket alone does
-  // not space these when the duty-cycle budget is full.
+  // bootstrap blocks) does not burst and flood the phone's BLE stack.
   const courier = createMeshtasticCourier({ link, region: "UNSET", onEvent, minFrameGapMs: 150 });
 
-  // EVERY watcher subscribes before configure() starts. The config stream
-  // delivers region, the channel table, node identity and neighbours in its
-  // first second — and it does not replay, so a subscription placed after
-  // configure races the stream (sixth field report: a fast laptop lost the
-  // channel dropdown to that race). Region is watched CONTINUOUSLY, not read
-  // once: a node that just rebooted to apply a channel import reports its
-  // region late, and the courier must adopt it whenever it lands rather than
-  // freeze at the UNSET it saw mid-boot (seventh field report).
-  watchDeviceRegion(device, (name) => {
-    courier.setRegion(name);
-    if (onRegion) onRegion(name);
-  });
-  watchAirUtilTx(device, (value) => {
-    courier.reconcileNodeAirtime(value);
-    if (onTelemetry) onTelemetry(value);
-  });
-  if (onStatus) watchDeviceStatus(device, onStatus);
-  if (onNodeInfo) watchNodeInfo(device, onNodeInfo);
-  if (onChannel) watchChannels(device, onChannel);
-  if (onMyNodeInfo) watchMyNodeInfo(device, onMyNodeInfo);
+  let closedByUser = false;
+  let reconnecting = false;
+  let attempts = 0;
 
-  // Keep the BLE session alive: without traffic, browsers and phones drop an
-  // idle GATT link after a few minutes — the first field test lost its node
-  // exactly that way, and every later send failed on a dead stream. The
-  // official clients ping for the same reason.
-  device.setHeartbeatInterval(30_000);
-  // Do NOT swallow configure() errors: on the bench phone the connection
-  // dropped a few seconds in, and a rejecting configure() would have been the
-  // silent cause. Surface it.
-  device.configure().catch((e) => {
-    if (onError) onError(`configure() failed: ${e?.message ?? e}`);
-  });
+  // Attach every watcher to a device and configure it. Run once at connect
+  // and again on each reconnect (a fresh MeshDevice each time). Watchers
+  // subscribe BEFORE configure() — the config stream delivers region,
+  // channels, identity and neighbours in its first second and does not
+  // replay, so a late subscription races it (sixth field report). Region is
+  // watched CONTINUOUSLY, not once: a node that just rebooted reports it late
+  // (seventh field report), and the courier adopts it whenever it lands.
+  const attach = (dev) => {
+    watchDeviceRegion(dev, (name) => {
+      courier.setRegion(name);
+      if (onRegion) onRegion(name);
+    });
+    watchAirUtilTx(dev, (value) => {
+      courier.reconcileNodeAirtime(value);
+      if (onTelemetry) onTelemetry(value);
+    });
+    if (onNodeInfo) watchNodeInfo(dev, onNodeInfo);
+    if (onChannel) watchChannels(dev, onChannel);
+    if (onMyNodeInfo) watchMyNodeInfo(dev, onMyNodeInfo);
+    watchDeviceStatus(dev, (name) => {
+      if (onStatus) onStatus(name);
+      // A phone drops the GATT link under load (a write and a
+      // notification-read overlap; "GATT Operation failed"), often while the
+      // connection is not truly gone — the transport just gives up on one op.
+      // Reconnect and let the courier's ARQ resume instead of ending the run.
+      if (name === "disconnected" && !closedByUser && !reconnecting) reconnect();
+    });
+    // Keep the BLE session alive: browsers drop an idle GATT link after a few
+    // minutes (first field report). The official clients ping for this reason.
+    dev.setHeartbeatInterval(30_000);
+    dev.configure().catch((e) => {
+      if (onError) onError(`configure() failed: ${e?.message ?? e}`);
+    });
+  };
+
+  const reconnect = async () => {
+    reconnecting = true;
+    attempts += 1;
+    if (onReconnecting) onReconnecting(attempts);
+    await sleep(Math.min(1500 * attempts, 6000));
+    if (closedByUser) return;
+    try {
+      device = await newMeshDevice();
+      attach(device);
+      link.rebind(device);
+      attempts = 0;
+      reconnecting = false;
+      if (onReconnected) onReconnected();
+    } catch (e) {
+      reconnecting = false;
+      if (onError) onError(`reconnect failed: ${e?.message ?? e}`);
+      if (!closedByUser) reconnect();
+    }
+  };
+
+  attach(device);
 
   return {
     courier,
     kind: "Meshtastic node (Web Bluetooth)",
     region: "UNSET", // provisional; onRegion carries the live value
-    device,
+    get device() {
+      return device;
+    },
     setTxChannel: (index) => link.setChannel(index),
+    close: () => {
+      closedByUser = true;
+    },
   };
 }
 
