@@ -58,7 +58,7 @@ export async function createDatabaseStack() {
  * (two tabs, no hardware); anything else opens the Web Bluetooth chooser —
  * which must be called from a user gesture.
  */
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion }) {
+export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
     // preset only changes the airtime *estimates* (and with them the ARQ's
@@ -116,7 +116,12 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   // exactly that way, and every later send failed on a dead stream. The
   // official clients ping for the same reason.
   device.setHeartbeatInterval(30_000);
-  device.configure().catch(() => {});
+  // Do NOT swallow configure() errors: on the bench phone the connection
+  // dropped a few seconds in, and a rejecting configure() would have been the
+  // silent cause. Surface it.
+  device.configure().catch((e) => {
+    if (onError) onError(`configure() failed: ${e?.message ?? e}`);
+  });
 
   return {
     courier,
