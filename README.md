@@ -232,20 +232,24 @@ lose the same afternoon.
   Sync crashes on start.
 
 **Known open**
-- On some phones (seen: Samsung Fold, Android 16) funkpost connects, then drops
-  the BLE link after ~5 s with an incomplete config — while the **official
+- On desktop Chrome the whole path works. On some phones (seen: Samsung Fold,
+  Android 16) the connection itself now works too — the node connects, the
+  region live-updates to EU_868, and invite and announce cross the air both
+  ways — but the sender still drops its BLE link partway through the send path
+  (around list creation / the bootstrap blocks), while the **official
   Meshtastic web client holds on the same phone and the same node**. So it is
-  not the OS and not the node; it is something in how funkpost drives the
-  stack, under investigation. Meanwhile, for a two-node bench: run both ends in
-  desktop Chrome (two tabs, one node each) — the desktop BLE path is solid.
+  not the OS and not the node; it is something in how funkpost drives the send,
+  under investigation — paced BLE writes helped but did not fully resolve it.
+  Meanwhile, for a two-node bench: run both ends in desktop Chrome (two tabs,
+  one node each) — the desktop BLE path is solid.
 
 **Upstream references**
 - Android/Samsung BLE quirks:
   [Meshtastic-Android#3361](https://github.com/meshtastic/Meshtastic-Android/issues/3361),
   [firmware#6958](https://github.com/meshtastic/firmware/issues/6958)
   (the developer-options toggle *Show unsupported Bluetooth LE devices* helps
-  the "device never appears" case — but note the official client connects here
-  without it).
+  when a recent Samsung never lists the node at all — a separate symptom from
+  the send-path drop above).
 - JS client: [meshtastic/js](https://github.com/meshtastic/js); reference
   behaviour: the official [client.meshtastic.org](https://client.meshtastic.org).
 - Web Bluetooth support and spec:
