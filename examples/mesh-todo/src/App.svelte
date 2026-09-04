@@ -360,6 +360,14 @@
         keep the screen awake — Web Bluetooth pauses when the screen sleeps
       </label>
     {/if}
+    {#if budget?.misconfigured}
+      <p class="warn">
+        ⚠ this node reports region <strong>UNSET</strong> — the courier refuses to
+        transmit until it knows the local airtime law. Set the region (e.g.
+        EU_868) in the Meshtastic app, then reconnect. Importing a shared
+        channel often resets it, so check the region after every import.
+      </p>
+    {/if}
     {#if error}<p class="error">{error}</p>{/if}
     {#if linkLost}
       <button onclick={() => location.reload()}>Reload &amp; reconnect</button>
@@ -502,6 +510,16 @@
   }
   .error {
     color: #ff7a7a;
+  }
+  .warn {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border: 1px solid #7a5a1a;
+    border-radius: 8px;
+    background: #241d0d;
+    color: #f0c674;
+    font-size: 0.85rem;
+    line-height: 1.5;
   }
   .addr {
     word-break: break-all;
