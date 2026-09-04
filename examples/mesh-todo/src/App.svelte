@@ -178,6 +178,7 @@
         mode,
         onEvent: onCourierEvent,
         onTelemetry: (value) => (airUtil = value),
+        onRegion: (name) => (region = name),
         onChannel: async (channel) => {
           if (channel.role === 0) return; // DISABLED
           const psk = channel.settings?.psk ?? new Uint8Array();

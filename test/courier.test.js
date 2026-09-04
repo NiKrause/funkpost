@@ -184,6 +184,22 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     free.close();
   });
 
+  test("setRegion adopts a region reported after construction (the slow-boot case)", async () => {
+    const pair = createMemoryMeshPair({ mtu: 60 });
+    // The node came up UNSET (mid-reboot); the courier refuses to transmit.
+    const courier = createMeshtasticCourier({ link: pair.a, region: "UNSET" });
+    assert.equal(courier.budget().misconfigured, true);
+    await assert.rejects(() => courier.send(bytesOf(10)), /region is UNSET/);
+
+    // The config stream catches up: EU_868 arrives late.
+    courier.setRegion("EU_868");
+    const b = courier.budget();
+    assert.equal(b.misconfigured, false);
+    assert.equal(b.region, "EU_868");
+    assert.equal(b.dutyCycle, 0.1);
+    courier.close();
+  });
+
   test("close() rejects in-flight sends instead of leaving them hanging", async () => {
     const { a, close } = pairOfCouriers(
       { lossFn: ({ from }) => from === "a" }, // nothing ever arrives

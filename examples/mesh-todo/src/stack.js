@@ -58,7 +58,7 @@ export async function createDatabaseStack() {
  * (two tabs, no hardware); anything else opens the Web Bluetooth chooser —
  * which must be called from a user gesture.
  */
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo }) {
+export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
     // preset only changes the airtime *estimates* (and with them the ARQ's
@@ -85,15 +85,25 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   const transport = await TransportWebBluetooth.create(); // browser chooser
   const device = new MeshDevice(transport);
 
+  const link = createMeshtasticDeviceLink({ device, destination: "broadcast" });
+  // The courier starts UNSET and adopts the real region live (below). Nothing
+  // transmits until the user acts, so a brief UNSET window costs nothing.
+  const courier = createMeshtasticCourier({ link, region: "UNSET", onEvent });
+
   // EVERY watcher subscribes before configure() starts. The config stream
-  // delivers the channel table, node identity and neighbours in its first
-  // second — and it does not replay. A subscription placed after the region
-  // packet has already missed the channels (sixth field report: a fast
-  // laptop lost the channel dropdown to this race while the phone's slower
-  // BLE kept it).
-  let courier; // assigned below; telemetry may arrive first
+  // delivers region, the channel table, node identity and neighbours in its
+  // first second — and it does not replay, so a subscription placed after
+  // configure races the stream (sixth field report: a fast laptop lost the
+  // channel dropdown to that race). Region is watched CONTINUOUSLY, not read
+  // once: a node that just rebooted to apply a channel import reports its
+  // region late, and the courier must adopt it whenever it lands rather than
+  // freeze at the UNSET it saw mid-boot (seventh field report).
+  watchDeviceRegion(device, (name) => {
+    courier.setRegion(name);
+    if (onRegion) onRegion(name);
+  });
   watchAirUtilTx(device, (value) => {
-    courier?.reconcileNodeAirtime(value);
+    courier.reconcileNodeAirtime(value);
     if (onTelemetry) onTelemetry(value);
   });
   if (onStatus) watchDeviceStatus(device, onStatus);
@@ -101,37 +111,17 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   if (onChannel) watchChannels(device, onChannel);
   if (onMyNodeInfo) watchMyNodeInfo(device, onMyNodeInfo);
 
-  // The region decides the pacing law; wait briefly for the node to say
-  // where it stands. UNSET stays UNSET — the courier will refuse, which is
-  // the design (issue #1): configure the node, then transmit.
-  const region = await new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      stop();
-      resolve("UNSET");
-    }, 7000);
-    const stop = watchDeviceRegion(device, (name) => {
-      clearTimeout(timer);
-      stop();
-      resolve(name);
-    });
-    device.configure().catch(() => {
-      clearTimeout(timer);
-      resolve("UNSET");
-    });
-  });
-
   // Keep the BLE session alive: without traffic, browsers and phones drop an
   // idle GATT link after a few minutes — the first field test lost its node
   // exactly that way, and every later send failed on a dead stream. The
   // official clients ping for the same reason.
   device.setHeartbeatInterval(30_000);
+  device.configure().catch(() => {});
 
-  const link = createMeshtasticDeviceLink({ device, destination: "broadcast" });
-  courier = createMeshtasticCourier({ link, region, onEvent });
   return {
     courier,
     kind: "Meshtastic node (Web Bluetooth)",
-    region,
+    region: "UNSET", // provisional; onRegion carries the live value
     device,
     setTxChannel: (index) => link.setChannel(index),
   };
