@@ -27,6 +27,7 @@ import {
   watchDeviceRegion,
   watchAirUtilTx,
   watchDeviceStatus,
+  watchNodeInfo,
 } from "@le-space/funkpost";
 import { createBroadcastChannelLink } from "./fake-bc-link.js";
 
@@ -55,7 +56,7 @@ export async function createDatabaseStack() {
  * (two tabs, no hardware); anything else opens the Web Bluetooth chooser —
  * which must be called from a user gesture.
  */
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus }) {
+export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
     // preset only changes the airtime *estimates* (and with them the ARQ's
@@ -97,6 +98,7 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus }) {
 
   if (onTelemetry) watchAirUtilTx(device, onTelemetry);
   if (onStatus) watchDeviceStatus(device, onStatus);
+  if (onNodeInfo) watchNodeInfo(device, onNodeInfo);
 
   // Keep the BLE session alive: without traffic, browsers and phones drop an
   // idle GATT link after a few minutes — the first field test lost its node
