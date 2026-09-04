@@ -17,6 +17,7 @@
     probeMeshtasticCore,
   } from "./stack.js";
 
+  const build = __BUILD_INFO__;
   const params = new URLSearchParams(location.search);
   const mode =
     params.get("mesh") === "bc"
@@ -289,6 +290,9 @@
     <a href="https://github.com/NiKrause/funkpost/issues/1">design issue #1</a>
     · GPL-3.0 ·
     <a href="https://github.com/NiKrause/funkpost">source</a>
+    <span class="build" title="version · commit · built (UTC)">
+      funkpost {build.version} · {build.commit} · {build.builtAt}
+    </span>
   </footer>
 </main>
 
@@ -416,5 +420,12 @@
   }
   footer a {
     color: #9ab0dd;
+  }
+  .build {
+    display: block;
+    margin-top: 6px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    opacity: 0.75;
   }
 </style>
