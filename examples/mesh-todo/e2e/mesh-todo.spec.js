@@ -7,7 +7,7 @@
  * habit of eating frames. Physics stays untested, as it should: what runs
  * here is everything above the antenna, exactly as the demo ships it.
  */
-import { test, expect } from "@playwright/test";
+import { test, expect, devices } from "@playwright/test";
 
 const room = () => `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -88,4 +88,24 @@ test("the real-radio import path survives the browser (util shim guard)", async 
   // imports @meshtastic/core, so only this probe keeps the hole shut.
   await page.goto("/?probe=meshtastic-core");
   await expect(page.locator('[data-probe="ok"]')).toBeVisible({ timeout: 30_000 });
+});
+
+test("the wake-lock checkbox exists on a phone and not on a desktop", async ({
+  page,
+  browser,
+}) => {
+  // Desktop (the default project): no checkbox — a desktop screen does not
+  // take the radio down with it.
+  await page.goto(`/?mesh=bc&room=${room()}`);
+  await expect(page.getByText("BroadcastChannel (fake mesh)", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByText(/keep the screen awake/)).toHaveCount(0);
+
+  // A phone (emulated): the checkbox appears.
+  const phone = await browser.newContext({ ...devices["Pixel 7"] });
+  const phonePage = await phone.newPage();
+  await phonePage.goto(`/?mesh=bc&room=${room()}`);
+  await expect(phonePage.getByText(/keep the screen awake/)).toBeVisible({ timeout: 30_000 });
+  await phone.close();
 });

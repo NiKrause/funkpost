@@ -55,6 +55,43 @@
   let myNode = $state("");
   let setTxChannelFn = () => {};
   const channelMap = new Map();
+
+  // Screen Wake Lock: phones auto-lock, and Web Bluetooth pauses with the
+  // screen — the bench's quiet killer. Desktop screens do not take the radio
+  // down with them, so the checkbox only exists on mobile devices.
+  const isMobileDevice =
+    navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
+  const wakeLockSupported = "wakeLock" in navigator;
+  let keepAwake = $state(false);
+  let wakeSentinel = null;
+
+  async function acquireWakeLock() {
+    try {
+      wakeSentinel = await navigator.wakeLock.request("screen");
+      wakeSentinel.addEventListener("release", () => {
+        wakeSentinel = null;
+        if (keepAwake) pushLog("screen wake lock released by the system");
+      });
+      pushLog("screen wake lock on");
+    } catch (e) {
+      keepAwake = false;
+      pushLog(`! wake lock refused: ${e.message}`);
+    }
+  }
+
+  async function toggleAwake() {
+    if (keepAwake) {
+      await acquireWakeLock();
+    } else {
+      await wakeSentinel?.release();
+      wakeSentinel = null;
+      pushLog("screen wake lock off");
+    }
+  }
+
+  const reacquireOnReturn = () => {
+    if (keepAwake && document.visibilityState === "visible" && !wakeSentinel) acquireWakeLock();
+  };
   let showNeighbours = $state(false);
   let nowTick = $state(Date.now());
   const neighbourMap = new Map();
@@ -126,7 +163,11 @@
       if (sync && !db && sync.db) attachDb(sync.db);
       nowTick = Date.now();
     }, 1000);
-    return () => clearInterval(ticker);
+    document.addEventListener("visibilitychange", reacquireOnReturn);
+    return () => {
+      clearInterval(ticker);
+      document.removeEventListener("visibilitychange", reacquireOnReturn);
+    };
   });
 
   async function connect() {
@@ -313,6 +354,12 @@
         the mesh with a second tab instead.
       </p>
     {/if}
+    {#if wakeLockSupported && isMobileDevice}
+      <label class="dim awake">
+        <input type="checkbox" bind:checked={keepAwake} onchange={toggleAwake} />
+        keep the screen awake — Web Bluetooth pauses when the screen sleeps
+      </label>
+    {/if}
     {#if error}<p class="error">{error}</p>{/if}
     {#if linkLost}
       <button onclick={() => location.reload()}>Reload &amp; reconnect</button>
@@ -462,6 +509,12 @@
   }
   .mono {
     font-family: ui-monospace, monospace;
+  }
+  .awake {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
   }
   select {
     padding: 4px 8px;
