@@ -46,6 +46,7 @@
   let newText = $state("");
   let probeResult = $state("");
   let linkLost = $state(false);
+  let reconnecting = $state(false);
   let creating = $state(false);
   let joining = $state(false);
   let neighbours = $state([]);
@@ -245,12 +246,17 @@
           );
         },
         onError: (msg) => pushLog(`! ${msg}`),
-        onStatus: (name) => {
-          pushLog(`node status: ${name}`);
-          if (name === "disconnected") {
-            linkLost = true;
-            error = "node link lost — the radio side is down; reload to reconnect";
-          }
+        onStatus: (name) => pushLog(`node status: ${name}`),
+        onReconnecting: (n) => {
+          reconnecting = true;
+          pushLog(`link dropped — reconnecting (attempt ${n})…`);
+        },
+        onReconnected: () => {
+          reconnecting = false;
+          pushLog("reconnected — resuming sync");
+          // Re-announce so the peer re-diffs heads and the courier's ARQ
+          // re-sends whatever the drop interrupted (e.g. the bootstrap blocks).
+          sync?.announce?.();
         },
       });
       courier = connected.courier;
@@ -407,6 +413,9 @@
         EU_868) in the Meshtastic app, then reconnect. Importing a shared
         channel often resets it, so check the region after every import.
       </p>
+    {/if}
+    {#if reconnecting}
+      <p class="dim">link dropped — reconnecting automatically…</p>
     {/if}
     {#if error}<p class="error">{error}</p>{/if}
     {#if linkLost}
