@@ -44,6 +44,7 @@
   let todos = $state([]);
   let newText = $state("");
   let probeResult = $state("");
+  let linkLost = $state(false);
   let log = $state([]);
   let totals = $state({ framesTx: 0, framesRx: 0, airtimeSpentMs: 0, retransmitRounds: 0 });
 
@@ -60,7 +61,10 @@
   const onCourierEvent = (event) => {
     if (event.kind === "payload-rx") pushLog(`⇠ payload ${event.bytes} B (msg ${event.msgId})`);
     if (event.kind === "delivered") pushLog(`✓ delivered msg ${event.msgId} after ${event.rounds} round(s)`);
-    if (event.kind === "giveup") pushLog(`✗ gave up on msg ${event.msgId} after ${event.rounds} rounds`);
+    if (event.kind === "giveup")
+      pushLog(
+        `✗ gave up on msg ${event.msgId} after ${event.rounds} round(s)${event.reason ? ` — ${event.reason}` : ""}`,
+      );
     if (event.kind === "error") pushLog(`! ${event.error?.message ?? event.error}`);
   };
 
@@ -119,6 +123,13 @@
         mode,
         onEvent: onCourierEvent,
         onTelemetry: (value) => (airUtil = value),
+        onStatus: (name) => {
+          pushLog(`node status: ${name}`);
+          if (name === "disconnected") {
+            linkLost = true;
+            error = "node link lost — the radio side is down; reload to reconnect";
+          }
+        },
       });
       courier = connected.courier;
       linkKind = connected.kind;
@@ -211,6 +222,9 @@
       </p>
     {/if}
     {#if error}<p class="error">{error}</p>{/if}
+    {#if linkLost}
+      <button onclick={() => location.reload()}>Reload &amp; reconnect</button>
+    {/if}
     {#if probeResult}
       <p class="dim" data-probe={probeResult}>meshtastic-core probe: {probeResult}</p>
     {/if}
