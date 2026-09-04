@@ -85,6 +85,22 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   const transport = await TransportWebBluetooth.create(); // browser chooser
   const device = new MeshDevice(transport);
 
+  // EVERY watcher subscribes before configure() starts. The config stream
+  // delivers the channel table, node identity and neighbours in its first
+  // second — and it does not replay. A subscription placed after the region
+  // packet has already missed the channels (sixth field report: a fast
+  // laptop lost the channel dropdown to this race while the phone's slower
+  // BLE kept it).
+  let courier; // assigned below; telemetry may arrive first
+  watchAirUtilTx(device, (value) => {
+    courier?.reconcileNodeAirtime(value);
+    if (onTelemetry) onTelemetry(value);
+  });
+  if (onStatus) watchDeviceStatus(device, onStatus);
+  if (onNodeInfo) watchNodeInfo(device, onNodeInfo);
+  if (onChannel) watchChannels(device, onChannel);
+  if (onMyNodeInfo) watchMyNodeInfo(device, onMyNodeInfo);
+
   // The region decides the pacing law; wait briefly for the node to say
   // where it stands. UNSET stays UNSET — the courier will refuse, which is
   // the design (issue #1): configure the node, then transmit.
@@ -103,16 +119,6 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
       resolve("UNSET");
     });
   });
-
-  let courier; // assigned below; telemetry may arrive first
-  watchAirUtilTx(device, (value) => {
-    courier?.reconcileNodeAirtime(value);
-    if (onTelemetry) onTelemetry(value);
-  });
-  if (onStatus) watchDeviceStatus(device, onStatus);
-  if (onNodeInfo) watchNodeInfo(device, onNodeInfo);
-  if (onChannel) watchChannels(device, onChannel);
-  if (onMyNodeInfo) watchMyNodeInfo(device, onMyNodeInfo);
 
   // Keep the BLE session alive: without traffic, browsers and phones drop an
   // idle GATT link after a few minutes — the first field test lost its node
