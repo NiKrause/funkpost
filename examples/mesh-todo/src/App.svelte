@@ -145,6 +145,13 @@
   };
 
   onMount(async () => {
+    // On a phone the console is invisible; surface anything that would
+    // otherwise tear the connection down silently — an exception in a
+    // config handler, a rejecting promise, a polyfill edge case.
+    const onWinError = (e) => pushLog(`! window error: ${e.message ?? e.reason?.message ?? e.reason ?? e}`);
+    window.addEventListener("error", onWinError);
+    window.addEventListener("unhandledrejection", onWinError);
+
     if (params.get("probe") === "meshtastic-core") {
       try {
         probeResult = await probeMeshtasticCore();
@@ -212,6 +219,7 @@
             (a, b) => (b.lastHeard ?? 0) - (a.lastHeard ?? 0),
           );
         },
+        onError: (msg) => pushLog(`! ${msg}`),
         onStatus: (name) => {
           pushLog(`node status: ${name}`);
           if (name === "disconnected") {
