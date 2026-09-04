@@ -284,6 +284,12 @@
           // re-sends whatever the drop interrupted (e.g. the bootstrap blocks).
           sync?.announce?.();
         },
+        onGaveUp: () => {
+          reconnecting = false;
+          linkLost = true;
+          error = "the radio link keeps dropping — this phone's Bluetooth is too unstable; reload to retry, or use desktop Chrome";
+          pushLog("gave up reconnecting after repeated drops");
+        },
       });
       courier = connected.courier;
       linkKind = connected.kind;

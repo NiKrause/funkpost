@@ -61,7 +61,7 @@ export async function createDatabaseStack() {
 const MESHTASTIC_BLE_SERVICE = "6ba1b218-15a8-461f-9fa8-5dcae273eafd";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected }) {
+export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
     // preset only changes the airtime *estimates* (and with them the ARQ's
@@ -103,9 +103,12 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   // bootstrap blocks) does not burst and flood the phone's BLE stack.
   const courier = createMeshtasticCourier({ link, region: "UNSET", onEvent, minFrameGapMs: 150 });
 
+  const MAX_ATTEMPTS = 5;
   let closedByUser = false;
   let reconnecting = false;
   let attempts = 0;
+  let currentDevice = null; // only THIS device's events may drive a reconnect
+  let stableTimer = null; // reset the backoff only after the link stays up
 
   // Attach every watcher to a device and configure it. Run once at connect
   // and again on each reconnect (a fresh MeshDevice each time). Watchers
@@ -115,24 +118,28 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   // watched CONTINUOUSLY, not once: a node that just rebooted reports it late
   // (seventh field report), and the courier adopts it whenever it lands.
   const attach = (dev) => {
+    currentDevice = dev;
     watchDeviceRegion(dev, (name) => {
+      if (dev !== currentDevice) return;
       courier.setRegion(name);
       if (onRegion) onRegion(name);
     });
     watchAirUtilTx(dev, (value) => {
+      if (dev !== currentDevice) return;
       courier.reconcileNodeAirtime(value);
       if (onTelemetry) onTelemetry(value);
     });
-    if (onNodeInfo) watchNodeInfo(dev, onNodeInfo);
-    if (onChannel) watchChannels(dev, onChannel);
-    if (onMyNodeInfo) watchMyNodeInfo(dev, onMyNodeInfo);
+    if (onNodeInfo) watchNodeInfo(dev, (n) => dev === currentDevice && onNodeInfo(n));
+    if (onChannel) watchChannels(dev, (c) => dev === currentDevice && onChannel(c));
+    if (onMyNodeInfo) watchMyNodeInfo(dev, (i) => dev === currentDevice && onMyNodeInfo(i));
     watchDeviceStatus(dev, (name) => {
+      // Ignore events from a device we have already replaced — otherwise the
+      // zombie watchers of every past reconnect pile up and each fires its own
+      // reconnect, and the teardown disconnect of the old device would itself
+      // trigger a new cycle. Only the current device speaks.
+      if (dev !== currentDevice) return;
       if (onStatus) onStatus(name);
-      // A phone drops the GATT link under load (a write and a
-      // notification-read overlap; "GATT Operation failed"), often while the
-      // connection is not truly gone — the transport just gives up on one op.
-      // Reconnect and let the courier's ARQ resume instead of ending the run.
-      if (name === "disconnected" && !closedByUser && !reconnecting) reconnect();
+      if (name === "disconnected" && !closedByUser) reconnect();
     });
     // Keep the BLE session alive: browsers drop an idle GATT link after a few
     // minutes (first field report). The official clients ping for this reason.
@@ -142,19 +149,55 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
     });
   };
 
+  // A phone drops the GATT link under load — a write and a notification-read
+  // overlap and one fails. Reconnect and let the courier's ARQ resume rather
+  // than end the run. Correctness rules learned the hard way (the reconnect
+  // busy-loop): tear the OLD device down first (its disconnect() clears the
+  // heartbeat timer and closes the GATT, so we never run two connections to
+  // one device — the "GATT operation already in progress" storm); back off
+  // exponentially and DON'T reset the backoff on a connect that immediately
+  // drops again (only after it stays up a while); and give up after a cap
+  // instead of looping forever.
   const reconnect = async () => {
+    if (reconnecting || closedByUser) return;
     reconnecting = true;
+    if (stableTimer) {
+      clearTimeout(stableTimer);
+      stableTimer = null;
+    }
+
+    const dying = currentDevice;
+    currentDevice = null; // silence the dying device's watchers from here on
+    try {
+      await dying?.disconnect();
+    } catch {
+      /* best effort — we are replacing it anyway */
+    }
+
     attempts += 1;
+    if (attempts > MAX_ATTEMPTS) {
+      reconnecting = false;
+      if (onGaveUp) onGaveUp();
+      return;
+    }
     if (onReconnecting) onReconnecting(attempts);
-    await sleep(Math.min(1500 * attempts, 6000));
-    if (closedByUser) return;
+    await sleep(Math.min(1000 * 2 ** (attempts - 1), 15000));
+    if (closedByUser) {
+      reconnecting = false;
+      return;
+    }
     try {
       device = await newMeshDevice();
-      attach(device);
+      attach(device); // sets currentDevice = device
       link.rebind(device);
-      attempts = 0;
       reconnecting = false;
       if (onReconnected) onReconnected();
+      // Only call the link healthy — and reset the backoff — once it has
+      // survived a few seconds. A connect that drops again immediately keeps
+      // climbing the backoff toward the cap.
+      stableTimer = setTimeout(() => {
+        attempts = 0;
+      }, 8000);
     } catch (e) {
       reconnecting = false;
       if (onError) onError(`reconnect failed: ${e?.message ?? e}`);
