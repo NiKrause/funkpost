@@ -62,3 +62,28 @@ describe("device link rebind (reconnect survival)", () => {
     assert.equal(d2.sent.length, 1, "new device receives the send");
   });
 });
+
+describe("device link routing-error handling", () => {
+  // A device whose sendPacket rejects with a Meshtastic queue {id, error}.
+  const rejectingDevice = (errorCode) => ({
+    async sendPacket() {
+      throw { id: 1, error: errorCode };
+    },
+    events: { onPrivatePacket: { subscribe: () => () => {} } },
+  });
+
+  test("a 'no ack heard' routing error (MAX_RETRANSMIT) is swallowed, not thrown", async () => {
+    // The ARQ, not the firmware ack, is the delivery authority on a broadcast.
+    const link = createMeshtasticDeviceLink({ device: rejectingDevice(5), mtu: 200 });
+    await link.send(new Uint8Array([1])); // must resolve, not reject
+    for (const code of [3, 8]) {
+      const l = createMeshtasticDeviceLink({ device: rejectingDevice(code), mtu: 200 });
+      await l.send(new Uint8Array([1]));
+    }
+  });
+
+  test("a hard routing error (NO_CHANNEL) still throws, named", async () => {
+    const link = createMeshtasticDeviceLink({ device: rejectingDevice(6), mtu: 200 });
+    await assert.rejects(() => link.send(new Uint8Array([1])), /radio refused the packet: NO_CHANNEL/);
+  });
+});
