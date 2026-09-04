@@ -108,6 +108,46 @@ the only transport that fits a phone). One BLE client per node is a firmware
 rule, so each side brings its own. Chrome/Edge on Android and desktop; no iOS,
 no Firefox; the page must be foreground with the screen on.
 
+## The data plane, drawn
+
+To say it before the diagram does: what is built here (steps S1–S4) is the
+plane **without WebRTC in it**. No offer, no answer, no SDP, no IP path — the
+database itself crosses the radio. The signalling courier of
+[#161](https://github.com/NiKrause/libp2p-webrtc-qr/issues/161) — offer and
+answer over the mesh, with WebRTC still needing an IP path afterwards — is the
+*other* plane: designed, not yet built, and it will ride this same byte
+courier when it is.
+
+```mermaid
+sequenceDiagram
+    participant A as Phone A (OrbitDB + courier-sync)
+    participant CA as Courier A (framing · ARQ · pacing)
+    participant CB as Courier B (framing · ARQ · pacing)
+    participant B as Phone B (OrbitDB + courier-sync)
+
+    Note over CA,CB: every arrow between the couriers is LoRa airtime —<br/>≤200-byte frames, paced to the regional duty cycle.<br/>In the e2e suite, a BroadcastChannel plays this radio.
+
+    A->>CA: invite { database address }
+    CA--)CB: 1 frame over the air
+    CB->>B: join prompt — accepted
+    B->>CB: want { have: [] } — the bootstrap request
+    CB--)CA: 1 frame
+    CA->>A: want { have: [] }
+    A->>CA: blocks { manifest · access controller · identity · entries }
+    CA--)CB: n DATA fragments (id · idx/total) — one is lost
+    CB--)CA: STATUS bitmap — names exactly the gap
+    CA--)CB: retransmit of exactly that fragment
+    CB->>B: payload reassembled → blockstore.put + log.joinEntry(heads)
+    B->>CB: announce { heads }
+    CB--)CA: 1 frame — doubles as the end-to-end acknowledgement
+    CA->>A: their heads equal ours → the exchange goes quiet
+
+    Note over A,B: Converged: same address, same hashes, signatures verified.<br/>A todo added on either phone travels the same road —<br/>announce → (want) → blocks → joinEntry.
+```
+
+The demo runs this sequence live; the e2e suite runs it in CI, lossy mesh
+included.
+
 ## What LoRa does and does not do
 
 **For the handshake: it carries the handshake, not the connection.** WebRTC
