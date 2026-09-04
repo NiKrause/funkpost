@@ -59,9 +59,16 @@
 
   // Screen Wake Lock: phones auto-lock, and Web Bluetooth pauses with the
   // screen — the bench's quiet killer. Desktop screens do not take the radio
-  // down with them, so the checkbox only exists on mobile devices.
+  // down with them, so the checkbox only exists on handheld devices.
+  //
+  // Detection deliberately does NOT gate on `userAgentData.mobile` alone: an
+  // unfolded Samsung Fold (and Android tablets) report `mobile === false`
+  // while still being battery devices that sleep the screen under us. And
+  // `mobile ?? regex` was a bug — `??` only falls back on null/undefined, so a
+  // `false` from a foldable skipped the UA check entirely and hid the box.
   const isMobileDevice =
-    navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
+    navigator.userAgentData?.mobile === true ||
+    /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
   const wakeLockSupported = "wakeLock" in navigator;
   let keepAwake = $state(false);
   let wakeSentinel = null;

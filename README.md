@@ -215,6 +215,24 @@ lose the same afternoon.
   every import.
 - One BLE client per node: fully stop the official Meshtastic app (it reclaims
   the slot) before connecting from a browser.
+- Under load — a multi-fragment send like the bootstrap blocks — a phone drops
+  the GATT link: a write and a notification-triggered read overlap, one fails
+  with *GATT Operation failed for unknown reason*, and
+  `@meshtastic/transport-web-bluetooth` treats that single failed op as a fatal
+  `DeviceDisconnected` (re-thrown, so it also surfaces as an unhandled
+  rejection) — though the link is usually still alive. Don't trust one op:
+  hold the `BluetoothDevice` yourself (request it by the Meshtastic service
+  UUID), `createFromDevice()` again on a drop with **no chooser**, rebind the
+  link to the fresh device, and re-announce so the ARQ re-sends what the drop
+  interrupted. Pacing inter-frame BLE writes helps but does not remove it.
+
+**Phones and foldables**
+- `navigator.userAgentData.mobile` is **`false`** on an unfolded Samsung Fold
+  and on Android tablets — battery devices that still sleep the screen (and
+  pause Web Bluetooth) under you. Don't gate mobile-only UI (a wake-lock
+  toggle, say) on `mobile` alone; also test the UA for `Android|iPhone|iPad`.
+  And `userAgentData?.mobile ?? fallback` is a trap: `??` keeps a `false`, so
+  the fallback never runs.
 
 **Browser build (Vite + `@meshtastic/core`)**
 - `@meshtastic/core` bundles tslog's Node build, which calls
@@ -232,12 +250,14 @@ lose the same afternoon.
   Sync crashes on start.
 
 **Known open**
-- On some phones (seen: Samsung Fold, Android 16) funkpost connects, then drops
-  the BLE link after ~5 s with an incomplete config — while the **official
-  Meshtastic web client holds on the same phone and the same node**. So it is
-  not the OS and not the node; it is something in how funkpost drives the
-  stack, under investigation. Meanwhile, for a two-node bench: run both ends in
-  desktop Chrome (two tabs, one node each) — the desktop BLE path is solid.
+- Desktop Chrome runs the whole path cleanly. On phones the connection now
+  works — the node connects, the region live-updates, invite and announce
+  cross the air both ways — and the earlier drop is understood: it is the
+  GATT-op overlap above, hit hardest during the bootstrap blocks. funkpost now
+  reconnects and resumes automatically, so a drop becomes a hiccup rather than
+  the end of the run. How reliably a full sync completes through repeated
+  drops on a given phone is the open hardware question; for a guaranteed
+  two-node bench, run both ends in desktop Chrome (two tabs, one node each).
 
 **Upstream references**
 - Android/Samsung BLE quirks:
