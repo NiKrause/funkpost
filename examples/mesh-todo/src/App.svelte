@@ -46,6 +46,8 @@
   let newText = $state("");
   let probeResult = $state("");
   let linkLost = $state(false);
+  let creating = $state(false);
+  let joining = $state(false);
   let log = $state([]);
   let totals = $state({ framesTx: 0, framesRx: 0, airtimeSpentMs: 0, retransmitRounds: 0 });
 
@@ -149,6 +151,8 @@
 
   async function create() {
     error = "";
+    creating = true;
+    pushLog("creating list — announce and invite go on the air…");
     try {
       const made = await createList({ orbitdb: stack.orbitdb, courier });
       sync = made.sync;
@@ -157,11 +161,16 @@
       pushLog("invite sent over the mesh");
     } catch (e) {
       error = e.message;
+      pushLog(`! create failed: ${e.message}`);
+    } finally {
+      creating = false;
     }
   }
 
   async function join() {
     error = "";
+    joining = true;
+    pushLog("joining — bootstrap request goes on the air…");
     try {
       const joined = await joinList({ orbitdb: stack.orbitdb, courier, address: invite });
       sync = joined.sync;
@@ -169,6 +178,9 @@
       pushLog("joining — waiting for the first delta…");
     } catch (e) {
       error = e.message;
+      pushLog(`! join failed: ${e.message}`);
+    } finally {
+      joining = false;
     }
   }
 
@@ -262,10 +274,10 @@
     {:else if invite}
       <p>invitation from the mesh:</p>
       <p class="dim addr">{invite}</p>
-      <button onclick={join}>Join this list</button>
+      <button onclick={join} disabled={joining}>{joining ? "Joining…" : "Join this list"}</button>
       <button class="ghost" onclick={() => (invite = "")}>Ignore</button>
     {:else if phase === "ready"}
-      <button onclick={create}>Create a list</button>
+      <button onclick={create} disabled={creating}>{creating ? "Creating — first frames on the air…" : "Create a list"}</button>
       <p class="dim">…or wait for an invitation to arrive over the mesh.</p>
     {:else}
       <p class="dim">connect a node first.</p>
