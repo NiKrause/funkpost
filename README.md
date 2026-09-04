@@ -1,7 +1,9 @@
 # Funkpost
 
+[<img src="docs/badges/m-pwrd.svg" alt="Meshtastic Powered" width="84" align="right">](https://meshtastic.org)
+
 *Post über Funk* — a byte courier for local-first applications over LoRa mesh
-radios; works with Meshtastic devices. A courier carries what it is handed,
+radios; works with Meshtastic® devices. A courier carries what it is handed,
 and this one is handed two very different things: handshakes and databases.
 One radio, two planes — they share the courier and nothing else, so the
 difference gets a table, not a footnote:
@@ -205,10 +207,19 @@ and wanting it back later does not work. That is why `courier-sync` lives in
 orbitdb-storacha-bridge and this repository only implements its courier
 contract.
 
-## Trademark
+## Trademarks
 
-Meshtastic is a trademark of its owners. This project is not affiliated with or
-endorsed by them; it *works with* Meshtastic devices and is named to say so.
+Meshtastic® is a registered trademark of Meshtastic LLC. Meshtastic software
+components are released under various licenses, see GitHub for details. No
+warranty is provided - use at your own risk.
+
+LoRa® is a trademark of Semtech Corporation.
+
+This project is not affiliated with or endorsed by Meshtastic LLC or Semtech;
+it *works with* Meshtastic devices and is named to say so. The M-PWRD badge
+above is the logo Meshtastic's [trademark policy](https://meshtastic.org/docs/legal/trademark/)
+provides for projects using the technology, no grant required; the asset is the
+official one from [meshtastic/design](https://github.com/meshtastic/design/tree/master/Meshtastic%20Powered%20Logo).
 Commercial use of the Meshtastic firmware and marks carries their own terms in
 addition to the GPLv3.
 
