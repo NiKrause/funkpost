@@ -104,6 +104,7 @@
   let nowTick = $state(Date.now());
   const neighbourMap = new Map();
   let log = $state([]);
+  let logSeq = 0; // monotonic, unique — the {#each} key
   let totals = $state({ framesTx: 0, framesRx: 0, airtimeSpentMs: 0, retransmitRounds: 0 });
 
   const stamp = () =>
@@ -111,9 +112,30 @@
     "." +
     String(Date.now() % 1000).padStart(3, "0");
 
+  // The key MUST be unique: two identical lines in the same millisecond (a
+  // burst of the same error) previously collided on ts+text, which threw
+  // Svelte's each_key_duplicate — caught by window.onerror, which logged
+  // another identical line, which collided again: a self-amplifying storm.
+  // A monotonic id ends it.
   const pushLog = (text) => {
-    log.unshift({ ts: stamp(), text });
+    log.unshift({ id: logSeq++, ts: stamp(), text });
     if (log.length > 120) log.pop();
+  };
+
+  // Meshtastic Routing.Error codes, so {id, error: 3} reads as TIMEOUT.
+  const ROUTING_ERROR = {
+    0: "NONE",
+    1: "NO_ROUTE",
+    2: "GOT_NAK",
+    3: "TIMEOUT",
+    4: "NO_INTERFACE",
+    5: "MAX_RETRANSMIT",
+    6: "NO_CHANNEL",
+    7: "TOO_LARGE",
+    8: "NO_RESPONSE",
+    9: "DUTY_CYCLE_LIMIT",
+    32: "BAD_REQUEST",
+    33: "NOT_AUTHORIZED",
   };
 
   // Turn anything — Error, a rejection object, the Meshtastic queue's
@@ -124,12 +146,9 @@
     if (v instanceof Error) return v.message || v.name || "Error";
     if (typeof v === "object") {
       if ("reason" in v && v.reason != null) return describeError(v.reason); // event wrapper
-      if ("error" in v || "message" in v) {
-        try {
-          return JSON.stringify(v);
-        } catch {
-          /* fall through */
-        }
+      if (typeof v.error === "number") {
+        const name = ROUTING_ERROR[v.error] ?? `routing ${v.error}`;
+        return v.id != null ? `${name} (packet ${v.id})` : name;
       }
       try {
         return JSON.stringify(v);
@@ -481,7 +500,7 @@
       {totals.retransmitRounds} · est. airtime {(totals.airtimeSpentMs / 1000).toFixed(1)} s
     </p>
     <div class="log">
-      {#each log as line (line.ts + line.text)}
+      {#each log as line (line.id)}
         <div><span class="dim">{line.ts}</span> {line.text}</div>
       {/each}
       {#if log.length === 0}<div class="dim">quiet.</div>{/if}
