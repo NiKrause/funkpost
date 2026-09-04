@@ -101,7 +101,16 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   // transmits until the user acts, so a brief UNSET window costs nothing.
   // minFrameGapMs paces BLE writes so a multi-fragment payload (e.g. the
   // bootstrap blocks) does not burst and flood the phone's BLE stack.
-  const courier = createMeshtasticCourier({ link, region: "UNSET", onEvent, minFrameGapMs: 150 });
+  // maxRounds 12 (vs the lib default 8): the first-contact bootstrap is the
+  // biggest payload and the public channel is lossy, so give the selective-ACK
+  // ARQ plenty of rounds to fill the gaps before it gives up.
+  const courier = createMeshtasticCourier({
+    link,
+    region: "UNSET",
+    onEvent,
+    minFrameGapMs: 150,
+    maxRounds: 12,
+  });
 
   const MAX_ATTEMPTS = 5;
   let closedByUser = false;
