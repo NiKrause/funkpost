@@ -178,7 +178,10 @@
         mode,
         onEvent: onCourierEvent,
         onTelemetry: (value) => (airUtil = value),
-        onRegion: (name) => (region = name),
+        onRegion: (name) => {
+          region = name;
+          pushLog(`node reports region: ${name}`);
+        },
         onChannel: async (channel) => {
           if (channel.role === 0) return; // DISABLED
           const psk = channel.settings?.psk ?? new Uint8Array();
@@ -196,6 +199,9 @@
           if (entry.role === 1) {
             primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
           }
+          pushLog(
+            `node reports channel ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primary" : ""}`,
+          );
         },
         onMyNodeInfo: (info) => {
           if (info?.myNodeNum) myNode = `!${info.myNodeNum.toString(16).padStart(8, "0")}`;
