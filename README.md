@@ -194,16 +194,22 @@ the only transport that fits a phone). One BLE client per node is a firmware
 rule, so each side brings its own. Chrome/Edge on Android and desktop; no iOS,
 no Firefox; the page must be foreground with the screen on.
 
-**Known caveat — Android 14 drops the BLE link after ~5 s.** On Android 14
-(Samsung One UI 6.x among them) the OS Bluetooth stack disconnects Meshtastic
-nodes a few seconds after connecting — the config stream never completes, so
+**Known caveat — recent Samsung phones need a developer-options toggle.**
+Samsung One UI 7/8 (Android 15/16) classifies Meshtastic nodes as
+"unsupported" BLE devices, so Web Bluetooth either never sees them or connects
+and drops the link after a few seconds — the config stream never completes, so
 the node shows up with region UNSET and no channels, then the link is lost.
-This is an Android-14 bug, not a client one: it hits the official Meshtastic
-app too, across firmware versions, and clears on Android 15/16 and on desktop
-([Meshtastic-Android#3361](https://github.com/meshtastic/Meshtastic-Android/issues/3361)).
-There is no software fix from this side. Use a desktop, a non-Android-14
-phone, or an updated OS — and for a two-node bench without a second phone,
-open the demo in two desktop browser tabs and connect each to its own node.
+The fix is a Samsung setting, not a code change: enable
+**Settings → Developer options → "Show unsupported Bluetooth LE devices"**
+(unlock developer options first by tapping *Build number* seven times), then
+reconnect ([meshtastic/firmware#6958](https://github.com/meshtastic/firmware/issues/6958);
+One UI 8 also has a broader BLE-stability regression that this cannot fully
+cure). The same connect-then-drop family appears on Android 14
+([Meshtastic-Android#3361](https://github.com/meshtastic/Meshtastic-Android/issues/3361)),
+and it hits the official Meshtastic app too — it is an OS Bluetooth issue, not
+a client one. Desktop Chrome is unaffected: for a two-node bench without a
+second working phone, open the demo in two desktop browser tabs and connect
+each to its own node.
 
 ## Why this is a separate repository
 
