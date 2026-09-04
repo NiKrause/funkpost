@@ -108,6 +108,30 @@
     if (log.length > 120) log.pop();
   };
 
+  // Turn anything — Error, a rejection object, the Meshtastic queue's
+  // {id, error} shape — into a readable line. A bare `${obj}` prints the
+  // useless "[object Object]" that hid the real cause on the bench.
+  const describeError = (v) => {
+    if (v == null) return String(v);
+    if (v instanceof Error) return v.message || v.name || "Error";
+    if (typeof v === "object") {
+      if ("reason" in v && v.reason != null) return describeError(v.reason); // event wrapper
+      if ("error" in v || "message" in v) {
+        try {
+          return JSON.stringify(v);
+        } catch {
+          /* fall through */
+        }
+      }
+      try {
+        return JSON.stringify(v);
+      } catch {
+        return Object.prototype.toString.call(v);
+      }
+    }
+    return String(v);
+  };
+
   const onCourierEvent = (event) => {
     if (event.kind === "payload-rx") pushLog(`⇠ payload ${event.bytes} B (msg ${event.msgId})`);
     if (event.kind === "delivered") pushLog(`✓ delivered msg ${event.msgId} after ${event.rounds} round(s)`);
@@ -115,7 +139,7 @@
       pushLog(
         `✗ gave up on msg ${event.msgId} after ${event.rounds} round(s)${event.reason ? ` — ${event.reason}` : ""}`,
       );
-    if (event.kind === "error") pushLog(`! ${event.error?.message ?? event.error}`);
+    if (event.kind === "error") pushLog(`! ${describeError(event.error)}`);
   };
 
   const wireSyncLog = (s) => {
@@ -148,7 +172,8 @@
     // On a phone the console is invisible; surface anything that would
     // otherwise tear the connection down silently — an exception in a
     // config handler, a rejecting promise, a polyfill edge case.
-    const onWinError = (e) => pushLog(`! window error: ${e.message ?? e.reason?.message ?? e.reason ?? e}`);
+    const onWinError = (e) =>
+      pushLog(`! window ${e.type}: ${describeError(e.reason ?? e.error ?? e.message ?? e)}`);
     window.addEventListener("error", onWinError);
     window.addEventListener("unhandledrejection", onWinError);
 
