@@ -19,6 +19,12 @@ difference gets a table, not a footnote:
 The announcement page for both, written for humans:
 [lora.le-space.de](https://lora.le-space.de/).
 
+**Try it now:** the demo — a todo list crossing a LoRa mesh — runs at
+**[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)**. Open
+it twice with `?mesh=bc` and two browser tabs play the two phones; with a
+Meshtastic node over Web Bluetooth, *Connect node* makes it real. Every push
+to main redeploys it.
+
 ## The data plane — built
 
 Two peers whose *only* link is the mesh cannot have a WebRTC channel — but
@@ -75,7 +81,9 @@ sequenceDiagram
 [`examples/mesh-todo`](examples/mesh-todo) runs that sequence live and is the
 bench instrument in one: a todo list on OrbitDB, replicating over the courier,
 with a sync pane that prices every protocol message in packets and airtime —
-the hardware gates are read off exactly that pane.
+the hardware gates are read off exactly that pane. It is deployed at
+**[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)**; for
+local development:
 
 ```sh
 npm run dev -w @le-space/mesh-todo-example
