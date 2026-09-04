@@ -124,6 +124,30 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     courier.close();
   });
 
+  test("minFrameGapMs paces multi-fragment sends even when the airtime budget is full", async () => {
+    // Record the wall-clock time of each frame the link receives. With a full
+    // budget the bucket never waits, so only minFrameGapMs spaces the frames.
+    const times = [];
+    const pair = createMemoryMeshPair({ mtu: 60, delayMs: 0 });
+    const originalSend = pair.a.send.bind(pair.a);
+    pair.a.send = async (bytes) => {
+      times.push(Date.now());
+      return originalSend(bytes);
+    };
+    const a = createMeshtasticCourier({ link: pair.a, region: NO_LIMIT, minFrameGapMs: 40 });
+    const b = createMeshtasticCourier({ link: pair.b, region: NO_LIMIT });
+    b.onPayload(() => {});
+
+    await a.send(bytesOf(400)); // ~8 fragments at mtu 60
+    assert.ok(times.length >= 4, `expected several frames, got ${times.length}`);
+    // Consecutive frames are at least ~minFrameGapMs apart (allow scheduler slack).
+    let tightest = Infinity;
+    for (let i = 1; i < times.length; i++) tightest = Math.min(tightest, times[i] - times[i - 1]);
+    assert.ok(tightest >= 30, `frames too close: tightest gap ${tightest}ms`);
+    a.close();
+    b.close();
+  });
+
   test("a broadcast into an empty room resolves on transmission, then gives up quietly", async () => {
     // Nobody on the other end at all: no courier B, so no STATUS will ever
     // come. The default send must resolve once the wave is out (announces and

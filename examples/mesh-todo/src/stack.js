@@ -88,7 +88,11 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   const link = createMeshtasticDeviceLink({ device, destination: "broadcast" });
   // The courier starts UNSET and adopts the real region live (below). Nothing
   // transmits until the user acts, so a brief UNSET window costs nothing.
-  const courier = createMeshtasticCourier({ link, region: "UNSET", onEvent });
+  // minFrameGapMs paces BLE writes so a multi-fragment payload (e.g. the
+  // bootstrap blocks) does not burst and flood the phone's BLE stack — the
+  // blocks-send disconnect seen on hardware. The airtime bucket alone does
+  // not space these when the duty-cycle budget is full.
+  const courier = createMeshtasticCourier({ link, region: "UNSET", onEvent, minFrameGapMs: 150 });
 
   // EVERY watcher subscribes before configure() starts. The config stream
   // delivers region, the channel table, node identity and neighbours in its
