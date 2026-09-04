@@ -60,6 +60,20 @@ describe("token bucket", () => {
     assert.equal(bucket.take(30), 80); // 40 over → 80 ms wait
   });
 
+  test("an external truth can overwrite the bucket, debt included", () => {
+    let clock = 0;
+    const bucket = createTokenBucket({ dutyCycle: 0.1, windowMs: 1000, now: () => clock });
+    bucket.setRemainingMs(30);
+    assert.equal(bucket.remainingMs(), 30);
+    // The node overspent (it relays for the whole mesh): debt, then refill.
+    bucket.setRemainingMs(-50);
+    assert.equal(bucket.remainingMs(), 0);
+    assert.equal(bucket.take(10), 600); // (50 + 10) / 0.1
+    clock = 1000;
+    bucket.setRemainingMs(100);
+    assert.equal(bucket.remainingMs(), 100); // clamped at capacity
+  });
+
   test("a zero or negative duty cycle is refused", () => {
     assert.throws(() => createTokenBucket({ dutyCycle: 0 }));
     assert.throws(() => createTokenBucket({ dutyCycle: -1 }));
