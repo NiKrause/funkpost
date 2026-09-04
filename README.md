@@ -25,6 +25,30 @@ it twice with `?mesh=bc` and two browser tabs play the two phones; with a
 Meshtastic node over Web Bluetooth, *Connect node* makes it real. Every push
 to main redeploys it.
 
+## Status — first over-the-air replication, 2026-09-04
+
+On **4 September 2026** a todo list replicated end to end over a **real LoRa
+mesh** between two independent Meshtastic nodes, with **no IP path** — the whole
+stack running as designed: `db.put` on one side, courier-sync's delta over the
+paced ARQ courier, the LoRa hop, `joinEntry` on the other, both lists
+converged. Confirmed on **two desktop browsers** (Chrome and Opera, each
+driving its own node over Web Bluetooth). The data plane works on hardware.
+
+Honest about what is not settled yet:
+
+- **Phones vary by Bluetooth stack.** A **Samsung Fold 5** (One UI, Chrome)
+  drops the BLE link repeatedly — an OS Bluetooth-stack instability that hits
+  the official Meshtastic web client too, not funkpost's code (the courier now
+  reconnects and resumes, but a stack that keeps failing `gatt.connect` cannot
+  be cured from JavaScript). **GrapheneOS with Vanadium** held the link with
+  **no disconnects** — a promising sign — though a full end-to-end replication
+  there is not yet confirmed, and neither is one from a phone browser generally.
+- **First-contact bootstrap reliability.** The initial bundle (manifest,
+  access controller, identity and entries — ~2 KB for a two-item list)
+  currently can need a retry to cross a busy public channel within the ARQ's
+  rounds. Block compression and a more patient ARQ are the planned fix; live
+  edits after the bootstrap are small and cross readily.
+
 ## The data plane — built
 
 Two peers whose *only* link is the mesh cannot have a WebRTC channel — but
