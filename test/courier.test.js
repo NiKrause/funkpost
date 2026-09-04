@@ -168,6 +168,22 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     b.close();
   });
 
+  test("the node's own airtime accounting overrides the local estimate", async () => {
+    const pair = createMemoryMeshPair({ mtu: 60 });
+    const courier = createMeshtasticCourier({ link: pair.a, region: "EU_868" });
+    // The device reports 9.5 % of the hour already spent — beacons, relaying,
+    // things our local counter never saw. 10 % − 9.5 % = 18 s of legal air.
+    courier.reconcileNodeAirtime(9.5);
+    const remaining = courier.budget().remainingAirtimeMs;
+    assert.ok(Math.abs(remaining - 18_000) < 50, `remaining=${remaining}`);
+    // A no-limit region ignores reconciliation (nothing to mirror).
+    const free = createMeshtasticCourier({ link: pair.b, region: { dutyCycle: null } });
+    free.reconcileNodeAirtime(50);
+    assert.equal(free.budget().remainingAirtimeMs, Number.POSITIVE_INFINITY);
+    courier.close();
+    free.close();
+  });
+
   test("close() rejects in-flight sends instead of leaving them hanging", async () => {
     const { a, close } = pairOfCouriers(
       { lossFn: ({ from }) => from === "a" }, // nothing ever arrives

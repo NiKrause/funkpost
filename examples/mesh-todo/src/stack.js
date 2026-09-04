@@ -104,7 +104,11 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
     });
   });
 
-  if (onTelemetry) watchAirUtilTx(device, onTelemetry);
+  let courier; // assigned below; telemetry may arrive first
+  watchAirUtilTx(device, (value) => {
+    courier?.reconcileNodeAirtime(value);
+    if (onTelemetry) onTelemetry(value);
+  });
   if (onStatus) watchDeviceStatus(device, onStatus);
   if (onNodeInfo) watchNodeInfo(device, onNodeInfo);
   if (onChannel) watchChannels(device, onChannel);
@@ -117,7 +121,7 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   device.setHeartbeatInterval(30_000);
 
   const link = createMeshtasticDeviceLink({ device, destination: "broadcast" });
-  const courier = createMeshtasticCourier({ link, region, onEvent });
+  courier = createMeshtasticCourier({ link, region, onEvent });
   return {
     courier,
     kind: "Meshtastic node (Web Bluetooth)",
