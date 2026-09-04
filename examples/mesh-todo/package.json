@@ -15,7 +15,7 @@
     "@chainsafe/libp2p-noise": "^16.1.5",
     "@chainsafe/libp2p-yamux": "^7.0.4",
     "@ipld/dag-cbor": "^9.0.6",
-    "@le-space/libp2p-webrtc-qr-meshtastic": "file:../..",
+    "@le-space/funkpost": "file:../..",
     "@libp2p/websockets": "^9.2.19",
     "@meshtastic/core": "^2.6.7",
     "@meshtastic/transport-web-bluetooth": "^0.1.5",

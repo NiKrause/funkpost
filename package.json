@@ -1,12 +1,12 @@
 {
-  "name": "@le-space/libp2p-webrtc-qr-meshtastic",
+  "name": "@le-space/funkpost",
   "version": "0.1.0",
-  "description": "Meshtastic LoRa courier for libp2p-webrtc-qr signalling and the OrbitDB data plane: framing, selective-ACK ARQ and duty-cycle pacing over Web Bluetooth",
+  "description": "Post über Funk: a byte courier for local-first apps over LoRa mesh radios — works with Meshtastic devices. Framing, selective-ACK ARQ, duty-cycle pacing; carries WebRTC handshakes and OrbitDB databases.",
   "type": "module",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NiKrause/libp2p-webrtc-qr-meshtastic.git"
+    "url": "git+https://github.com/NiKrause/funkpost.git"
   },
   "engines": {
     "node": ">=20"
@@ -43,5 +43,8 @@
   },
   "workspaces": [
     "examples/*"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

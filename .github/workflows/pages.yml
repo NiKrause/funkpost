@@ -1,0 +1,42 @@
+name: Deploy mesh-todo to GitHub Pages
+
+# The phones need an HTTPS address — Web Bluetooth refuses insecure origins.
+# Every push to main puts the demo at https://nikrause.github.io/funkpost/
+# until it gets a le-space.de home.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @le-space/mesh-todo-example
+        env:
+          PAGES_BASE: /funkpost/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: examples/mesh-todo/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

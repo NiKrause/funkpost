@@ -4,6 +4,8 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 export default defineConfig({
+  // GitHub Pages serves the demo under /funkpost/; local dev stays at /.
+  base: process.env.PAGES_BASE ?? "/",
   // @orbitdb/core imports node's `events`, @meshtastic/core's logger pulls
   // `os`/`path`/`util` — the same builtins the official Meshtastic web
   // client polyfills for the browser.
