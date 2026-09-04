@@ -100,6 +100,86 @@ sequenceDiagram
     Note over A,B: Converged: same address, same hashes, signatures verified.<br/>A todo added on either phone travels the same road —<br/>announce → (want) → blocks → joinEntry.
 ```
 
+### Deeper: four layers, and two acknowledgements
+
+The diagram above is the *what*. Underneath it are four layers, each with one
+job — and the confusing part (why `MAX_RETRANSMIT` is not a failure) lives at
+the boundary between the bottom two.
+
+| layer | job | vocabulary |
+|---|---|---|
+| **OrbitDB** | hold the data as a signed, content-addressed log | `db.put`, oplog entry, heads, `joinEntry` |
+| **courier-sync** | decide *what* to send | `announce` / `want` / `blocks`, `createDelta` / `applyDelta` |
+| **courier** | get a payload across a tiny-MTU, lossy carrier | fragments, **STATUS** bitmap, selective-ACK ARQ, pacing |
+| **Meshtastic / LoRa** | move one packet over the air | `sendPacket`, `wantAck`, routing result |
+
+**Creating a list** is just `db.put` at the top layer: it writes a signed entry
+to the local oplog and updates the *heads* (the newest entries). The database
+**address** is the hash of its manifest — the same name, type and access
+controller produce the **same address on every device**, which is why an invite
+is only that address: whoever opens it lands on the identical database.
+
+**Receiving** never touches `db.put`. courier-sync puts the raw signed blocks
+into the blockstore and calls `joinEntry(head)`, which walks the parents *from
+local storage*, re-verifies every signature and the access controller, and
+splices them in. Authoring uses `put`; replicating uses `blockstore + joinEntry`
+— the same split OrbitDB's own pubsub sync uses, and the same the
+[Storacha bridge](https://github.com/NiKrause/orbitdb-storacha-bridge) uses to
+restore.
+
+Now the crux. **There are two separate acknowledgements, and only one of them
+is the truth:**
+
+- **The radio's per-packet ack** (Meshtastic, `wantAck`). When the courier
+  hands a frame to the node, it asks the mesh to confirm that one packet. On a
+  busy public channel — 140 neighbours all contending — that confirmation
+  often never comes back, and the firmware reports **`MAX_RETRANSMIT`** (it
+  retried and gave up), **`TIMEOUT`**, or **`NO_RESPONSE`**. Crucially, on a
+  broadcast this means *"no ack was heard"* — **not** *"the packet did not
+  arrive."* The packet may well have crossed; nobody sent back a receipt. So
+  funkpost treats these three as soft: the frame counts as sent, and the
+  courier does **not** abort the payload over them.
+- **funkpost's end-to-end STATUS bitmap** (the courier's own ARQ). The
+  *receiver* answers with a bitmap of exactly which fragments it holds, and the
+  sender retransmits **only the missing ones**. This is the real delivery
+  authority — it is end to end, it is exact, and it does not depend on the
+  radio's unreliable per-hop ack.
+
+One payload's journey, with both acknowledgements shown:
+
+```mermaid
+sequenceDiagram
+    participant CA as courier (sender)
+    participant NA as node A (firmware)
+    participant NB as node B (firmware)
+    participant CB as courier (receiver)
+
+    Note over CA: a ~2 KB "blocks" payload → gzip → ~1.2 KB → ~7 frames<br/>each frame tagged id · idx/total, paced to the duty cycle
+    loop each frame
+        CA->>NA: sendPacket(frame, wantAck)
+        NA-)NB: LoRa broadcast — may be lost in the noise
+        NA--)CA: routing result
+        Note right of CA: ack heard → fine. No ack → MAX_RETRANSMIT / TIMEOUT /<br/>NO_RESPONSE. funkpost logs it and moves on —<br/>the STATUS below decides delivery, not this.
+    end
+    NB->>CB: the frames that arrived, reassembled so far
+    CB--)NA: STATUS bitmap — "I have idx 0,1,3,4,6"
+    NA-)CB: (STATUS is itself just another frame over the air)
+    NA->>CA: STATUS
+    Note over CA: retransmit ONLY idx 2 and 5 — the gaps the bitmap named
+    CA->>NA: sendPacket(frame 2), sendPacket(frame 5)
+    NA-)NB: LoRa
+    NB->>CB: last gaps fill → payload complete
+    Note over CA,CB: complete → the ~2 KB goes up to courier-sync → applyDelta → joinEntry
+```
+
+So on a **quiet or private channel** the radio ack usually comes, sends resolve
+fast, and a bootstrap crosses in one or two rounds. On a **busy public channel**
+the radio ack keeps failing (`MAX_RETRANSMIT`) and airtime burns on the
+firmware's own retries — the sync still completes, driven by the STATUS ARQ,
+but slowly and wastefully. **A private channel with just the two nodes is both
+the reliable setup and the privacy-correct one**; the public channel is for
+first contact and demos.
+
 ### The example: mesh-todo
 
 [`examples/mesh-todo`](examples/mesh-todo) runs that sequence live and is the
