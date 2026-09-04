@@ -14,6 +14,7 @@
     joinList,
     sendInvite,
     watchInvites,
+    probeMeshtasticCore,
   } from "./stack.js";
 
   const params = new URLSearchParams(location.search);
@@ -42,6 +43,7 @@
   let invite = $state("");
   let todos = $state([]);
   let newText = $state("");
+  let probeResult = $state("");
   let log = $state([]);
   let totals = $state({ framesTx: 0, framesRx: 0, airtimeSpentMs: 0, retransmitRounds: 0 });
 
@@ -89,6 +91,13 @@
   };
 
   onMount(async () => {
+    if (params.get("probe") === "meshtastic-core") {
+      try {
+        probeResult = await probeMeshtasticCore();
+      } catch (e) {
+        probeResult = `CRASH: ${e.message}`;
+      }
+    }
     stack = await createDatabaseStack();
     phase = "idle";
     if (mode.kind === "bc") connect();
@@ -202,6 +211,9 @@
       </p>
     {/if}
     {#if error}<p class="error">{error}</p>{/if}
+    {#if probeResult}
+      <p class="dim" data-probe={probeResult}>meshtastic-core probe: {probeResult}</p>
+    {/if}
   </section>
 
   <section>

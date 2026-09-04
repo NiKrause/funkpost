@@ -80,3 +80,12 @@ test("gate 2 in miniature: a wiped peer re-joins and bootstraps the history", as
   await expect(b.getByText("Milch kaufen")).toBeVisible({ timeout: 60_000 });
   await expect(b.getByRole("checkbox")).toBeChecked({ timeout: 15_000 });
 });
+
+test("the real-radio import path survives the browser (util shim guard)", async ({ page }) => {
+  // Constructs a MeshDevice on a stub transport and makes its logger format a
+  // line — the code that only ever ran on a phone, until it crashed there
+  // with "util.formatWithOptions is not a function". The fake-mesh path never
+  // imports @meshtastic/core, so only this probe keeps the hole shut.
+  await page.goto("/?probe=meshtastic-core");
+  await expect(page.locator('[data-probe="ok"]')).toBeVisible({ timeout: 30_000 });
+});

@@ -150,3 +150,20 @@ export function watchInvites(courier, cb) {
     }
   });
 }
+
+/**
+ * Exercises the real-radio import path without a radio: constructs a
+ * MeshDevice on a stub transport and makes its logger format a line — the
+ * code that only ever ran on a phone, until it crashed there
+ * ("util.formatWithOptions is not a function"; the browser util polyfill
+ * lacks what tslog's node build calls, see src/shims/node-util.js).
+ * Driven by ?probe=meshtastic-core and by the e2e suite, so the real
+ * import path never goes untested again.
+ */
+export async function probeMeshtasticCore() {
+  const { MeshDevice } = await import("@meshtastic/core");
+  const stub = { fromDevice: new ReadableStream(), toDevice: new WritableStream() };
+  const device = new MeshDevice(stub);
+  device.log.info("probe: logger formats in the browser");
+  return "ok";
+}
