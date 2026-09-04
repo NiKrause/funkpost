@@ -46,6 +46,7 @@
   let newText = $state("");
   let probeResult = $state("");
   let linkLost = $state(false);
+  let reconnecting = $state(false);
   let creating = $state(false);
   let joining = $state(false);
   let neighbours = $state([]);
@@ -58,9 +59,16 @@
 
   // Screen Wake Lock: phones auto-lock, and Web Bluetooth pauses with the
   // screen — the bench's quiet killer. Desktop screens do not take the radio
-  // down with them, so the checkbox only exists on mobile devices.
+  // down with them, so the checkbox only exists on handheld devices.
+  //
+  // Detection deliberately does NOT gate on `userAgentData.mobile` alone: an
+  // unfolded Samsung Fold (and Android tablets) report `mobile === false`
+  // while still being battery devices that sleep the screen under us. And
+  // `mobile ?? regex` was a bug — `??` only falls back on null/undefined, so a
+  // `false` from a foldable skipped the UA check entirely and hid the box.
   const isMobileDevice =
-    navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
+    navigator.userAgentData?.mobile === true ||
+    /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
   const wakeLockSupported = "wakeLock" in navigator;
   let keepAwake = $state(false);
   let wakeSentinel = null;
@@ -96,6 +104,7 @@
   let nowTick = $state(Date.now());
   const neighbourMap = new Map();
   let log = $state([]);
+  let logSeq = 0; // monotonic, unique — the {#each} key
   let totals = $state({ framesTx: 0, framesRx: 0, airtimeSpentMs: 0, retransmitRounds: 0 });
 
   const stamp = () =>
@@ -103,9 +112,30 @@
     "." +
     String(Date.now() % 1000).padStart(3, "0");
 
+  // The key MUST be unique: two identical lines in the same millisecond (a
+  // burst of the same error) previously collided on ts+text, which threw
+  // Svelte's each_key_duplicate — caught by window.onerror, which logged
+  // another identical line, which collided again: a self-amplifying storm.
+  // A monotonic id ends it.
   const pushLog = (text) => {
-    log.unshift({ ts: stamp(), text });
+    log.unshift({ id: logSeq++, ts: stamp(), text });
     if (log.length > 120) log.pop();
+  };
+
+  // Meshtastic Routing.Error codes, so {id, error: 3} reads as TIMEOUT.
+  const ROUTING_ERROR = {
+    0: "NONE",
+    1: "NO_ROUTE",
+    2: "GOT_NAK",
+    3: "TIMEOUT",
+    4: "NO_INTERFACE",
+    5: "MAX_RETRANSMIT",
+    6: "NO_CHANNEL",
+    7: "TOO_LARGE",
+    8: "NO_RESPONSE",
+    9: "DUTY_CYCLE_LIMIT",
+    32: "BAD_REQUEST",
+    33: "NOT_AUTHORIZED",
   };
 
   // Turn anything — Error, a rejection object, the Meshtastic queue's
@@ -116,12 +146,9 @@
     if (v instanceof Error) return v.message || v.name || "Error";
     if (typeof v === "object") {
       if ("reason" in v && v.reason != null) return describeError(v.reason); // event wrapper
-      if ("error" in v || "message" in v) {
-        try {
-          return JSON.stringify(v);
-        } catch {
-          /* fall through */
-        }
+      if (typeof v.error === "number") {
+        const name = ROUTING_ERROR[v.error] ?? `routing ${v.error}`;
+        return v.id != null ? `${name} (packet ${v.id})` : name;
       }
       try {
         return JSON.stringify(v);
@@ -245,12 +272,23 @@
           );
         },
         onError: (msg) => pushLog(`! ${msg}`),
-        onStatus: (name) => {
-          pushLog(`node status: ${name}`);
-          if (name === "disconnected") {
-            linkLost = true;
-            error = "node link lost — the radio side is down; reload to reconnect";
-          }
+        onStatus: (name) => pushLog(`node status: ${name}`),
+        onReconnecting: (n) => {
+          reconnecting = true;
+          pushLog(`link dropped — reconnecting (attempt ${n})…`);
+        },
+        onReconnected: () => {
+          reconnecting = false;
+          pushLog("reconnected — resuming sync");
+          // Re-announce so the peer re-diffs heads and the courier's ARQ
+          // re-sends whatever the drop interrupted (e.g. the bootstrap blocks).
+          sync?.announce?.();
+        },
+        onGaveUp: () => {
+          reconnecting = false;
+          linkLost = true;
+          error = "the radio link keeps dropping — this phone's Bluetooth is too unstable; reload to retry, or use desktop Chrome";
+          pushLog("gave up reconnecting after repeated drops");
         },
       });
       courier = connected.courier;
@@ -408,6 +446,9 @@
         channel often resets it, so check the region after every import.
       </p>
     {/if}
+    {#if reconnecting}
+      <p class="dim">link dropped — reconnecting automatically…</p>
+    {/if}
     {#if error}<p class="error">{error}</p>{/if}
     {#if linkLost}
       <button onclick={() => location.reload()}>Reload &amp; reconnect</button>
@@ -465,7 +506,7 @@
       {totals.retransmitRounds} · est. airtime {(totals.airtimeSpentMs / 1000).toFixed(1)} s
     </p>
     <div class="log">
-      {#each log as line (line.ts + line.text)}
+      {#each log as line (line.id)}
         <div><span class="dim">{line.ts}</span> {line.text}</div>
       {/each}
       {#if log.length === 0}<div class="dim">quiet.</div>{/if}

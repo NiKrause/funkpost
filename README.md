@@ -25,6 +25,30 @@ it twice with `?mesh=bc` and two browser tabs play the two phones; with a
 Meshtastic node over Web Bluetooth, *Connect node* makes it real. Every push
 to main redeploys it.
 
+## Status — first over-the-air replication, 2026-09-04
+
+On **4 September 2026** a todo list replicated end to end over a **real LoRa
+mesh** between two independent Meshtastic nodes, with **no IP path** — the whole
+stack running as designed: `db.put` on one side, courier-sync's delta over the
+paced ARQ courier, the LoRa hop, `joinEntry` on the other, both lists
+converged. Confirmed on **two desktop browsers** (Chrome and Opera, each
+driving its own node over Web Bluetooth). The data plane works on hardware.
+
+Honest about what is not settled yet:
+
+- **Phones vary by Bluetooth stack.** A **Samsung Fold 5** (One UI, Chrome)
+  drops the BLE link repeatedly — an OS Bluetooth-stack instability that hits
+  the official Meshtastic web client too, not funkpost's code (the courier now
+  reconnects and resumes, but a stack that keeps failing `gatt.connect` cannot
+  be cured from JavaScript). **GrapheneOS with Vanadium** held the link with
+  **no disconnects** — a promising sign — though a full end-to-end replication
+  there is not yet confirmed, and neither is one from a phone browser generally.
+- **First-contact bootstrap reliability.** The initial bundle (manifest,
+  access controller, identity and entries — ~2 KB for a two-item list)
+  currently can need a retry to cross a busy public channel within the ARQ's
+  rounds. Block compression and a more patient ARQ are the planned fix; live
+  edits after the bootstrap are small and cross readily.
+
 ## The data plane — built
 
 Two peers whose *only* link is the mesh cannot have a WebRTC channel — but
@@ -75,6 +99,86 @@ sequenceDiagram
 
     Note over A,B: Converged: same address, same hashes, signatures verified.<br/>A todo added on either phone travels the same road —<br/>announce → (want) → blocks → joinEntry.
 ```
+
+### Deeper: four layers, and two acknowledgements
+
+The diagram above is the *what*. Underneath it are four layers, each with one
+job — and the confusing part (why `MAX_RETRANSMIT` is not a failure) lives at
+the boundary between the bottom two.
+
+| layer | job | vocabulary |
+|---|---|---|
+| **OrbitDB** | hold the data as a signed, content-addressed log | `db.put`, oplog entry, heads, `joinEntry` |
+| **courier-sync** | decide *what* to send | `announce` / `want` / `blocks`, `createDelta` / `applyDelta` |
+| **courier** | get a payload across a tiny-MTU, lossy carrier | fragments, **STATUS** bitmap, selective-ACK ARQ, pacing |
+| **Meshtastic / LoRa** | move one packet over the air | `sendPacket`, `wantAck`, routing result |
+
+**Creating a list** is just `db.put` at the top layer: it writes a signed entry
+to the local oplog and updates the *heads* (the newest entries). The database
+**address** is the hash of its manifest — the same name, type and access
+controller produce the **same address on every device**, which is why an invite
+is only that address: whoever opens it lands on the identical database.
+
+**Receiving** never touches `db.put`. courier-sync puts the raw signed blocks
+into the blockstore and calls `joinEntry(head)`, which walks the parents *from
+local storage*, re-verifies every signature and the access controller, and
+splices them in. Authoring uses `put`; replicating uses `blockstore + joinEntry`
+— the same split OrbitDB's own pubsub sync uses, and the same the
+[Storacha bridge](https://github.com/NiKrause/orbitdb-storacha-bridge) uses to
+restore.
+
+Now the crux. **There are two separate acknowledgements, and only one of them
+is the truth:**
+
+- **The radio's per-packet ack** (Meshtastic, `wantAck`). When the courier
+  hands a frame to the node, it asks the mesh to confirm that one packet. On a
+  busy public channel — 140 neighbours all contending — that confirmation
+  often never comes back, and the firmware reports **`MAX_RETRANSMIT`** (it
+  retried and gave up), **`TIMEOUT`**, or **`NO_RESPONSE`**. Crucially, on a
+  broadcast this means *"no ack was heard"* — **not** *"the packet did not
+  arrive."* The packet may well have crossed; nobody sent back a receipt. So
+  funkpost treats these three as soft: the frame counts as sent, and the
+  courier does **not** abort the payload over them.
+- **funkpost's end-to-end STATUS bitmap** (the courier's own ARQ). The
+  *receiver* answers with a bitmap of exactly which fragments it holds, and the
+  sender retransmits **only the missing ones**. This is the real delivery
+  authority — it is end to end, it is exact, and it does not depend on the
+  radio's unreliable per-hop ack.
+
+One payload's journey, with both acknowledgements shown:
+
+```mermaid
+sequenceDiagram
+    participant CA as courier (sender)
+    participant NA as node A (firmware)
+    participant NB as node B (firmware)
+    participant CB as courier (receiver)
+
+    Note over CA: a ~2 KB "blocks" payload → gzip → ~1.2 KB → ~7 frames<br/>each frame tagged id · idx/total, paced to the duty cycle
+    loop each frame
+        CA->>NA: sendPacket(frame, wantAck)
+        NA-)NB: LoRa broadcast — may be lost in the noise
+        NA--)CA: routing result
+        Note right of CA: ack heard → fine. No ack → MAX_RETRANSMIT / TIMEOUT /<br/>NO_RESPONSE. funkpost logs it and moves on —<br/>the STATUS below decides delivery, not this.
+    end
+    NB->>CB: the frames that arrived, reassembled so far
+    CB--)NA: STATUS bitmap — "I have idx 0,1,3,4,6"
+    NA-)CB: (STATUS is itself just another frame over the air)
+    NA->>CA: STATUS
+    Note over CA: retransmit ONLY idx 2 and 5 — the gaps the bitmap named
+    CA->>NA: sendPacket(frame 2), sendPacket(frame 5)
+    NA-)NB: LoRa
+    NB->>CB: last gaps fill → payload complete
+    Note over CA,CB: complete → the ~2 KB goes up to courier-sync → applyDelta → joinEntry
+```
+
+So on a **quiet or private channel** the radio ack usually comes, sends resolve
+fast, and a bootstrap crosses in one or two rounds. On a **busy public channel**
+the radio ack keeps failing (`MAX_RETRANSMIT`) and airtime burns on the
+firmware's own retries — the sync still completes, driven by the STATUS ARQ,
+but slowly and wastefully. **A private channel with just the two nodes is both
+the reliable setup and the privacy-correct one**; the public channel is for
+first contact and demos.
 
 ### The example: mesh-todo
 
@@ -215,6 +319,24 @@ lose the same afternoon.
   every import.
 - One BLE client per node: fully stop the official Meshtastic app (it reclaims
   the slot) before connecting from a browser.
+- Under load — a multi-fragment send like the bootstrap blocks — a phone drops
+  the GATT link: a write and a notification-triggered read overlap, one fails
+  with *GATT Operation failed for unknown reason*, and
+  `@meshtastic/transport-web-bluetooth` treats that single failed op as a fatal
+  `DeviceDisconnected` (re-thrown, so it also surfaces as an unhandled
+  rejection) — though the link is usually still alive. Don't trust one op:
+  hold the `BluetoothDevice` yourself (request it by the Meshtastic service
+  UUID), `createFromDevice()` again on a drop with **no chooser**, rebind the
+  link to the fresh device, and re-announce so the ARQ re-sends what the drop
+  interrupted. Pacing inter-frame BLE writes helps but does not remove it.
+
+**Phones and foldables**
+- `navigator.userAgentData.mobile` is **`false`** on an unfolded Samsung Fold
+  and on Android tablets — battery devices that still sleep the screen (and
+  pause Web Bluetooth) under you. Don't gate mobile-only UI (a wake-lock
+  toggle, say) on `mobile` alone; also test the UA for `Android|iPhone|iPad`.
+  And `userAgentData?.mobile ?? fallback` is a trap: `??` keeps a `false`, so
+  the fallback never runs.
 
 **Browser build (Vite + `@meshtastic/core`)**
 - `@meshtastic/core` bundles tslog's Node build, which calls
@@ -232,16 +354,14 @@ lose the same afternoon.
   Sync crashes on start.
 
 **Known open**
-- On desktop Chrome the whole path works. On some phones (seen: Samsung Fold,
-  Android 16) the connection itself now works too — the node connects, the
-  region live-updates to EU_868, and invite and announce cross the air both
-  ways — but the sender still drops its BLE link partway through the send path
-  (around list creation / the bootstrap blocks), while the **official
-  Meshtastic web client holds on the same phone and the same node**. So it is
-  not the OS and not the node; it is something in how funkpost drives the send,
-  under investigation — paced BLE writes helped but did not fully resolve it.
-  Meanwhile, for a two-node bench: run both ends in desktop Chrome (two tabs,
-  one node each) — the desktop BLE path is solid.
+- Desktop Chrome runs the whole path cleanly. On phones the connection now
+  works — the node connects, the region live-updates, invite and announce
+  cross the air both ways — and the earlier drop is understood: it is the
+  GATT-op overlap above, hit hardest during the bootstrap blocks. funkpost now
+  reconnects and resumes automatically, so a drop becomes a hiccup rather than
+  the end of the run. How reliably a full sync completes through repeated
+  drops on a given phone is the open hardware question; for a guaranteed
+  two-node bench, run both ends in desktop Chrome (two tabs, one node each).
 
 **Upstream references**
 - Android/Samsung BLE quirks:
@@ -249,7 +369,7 @@ lose the same afternoon.
   [firmware#6958](https://github.com/meshtastic/firmware/issues/6958)
   (the developer-options toggle *Show unsupported Bluetooth LE devices* helps
   when a recent Samsung never lists the node at all — a separate symptom from
-  the send-path drop above).
+  the connection drop above).
 - JS client: [meshtastic/js](https://github.com/meshtastic/js); reference
   behaviour: the official [client.meshtastic.org](https://client.meshtastic.org).
 - Web Bluetooth support and spec:
