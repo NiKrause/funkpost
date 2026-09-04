@@ -26,7 +26,7 @@ import {
   createMeshtasticDeviceLink,
   watchDeviceRegion,
   watchAirUtilTx,
-} from "@le-space/libp2p-webrtc-qr-meshtastic";
+} from "@le-space/funkpost";
 import { createBroadcastChannelLink } from "./fake-bc-link.js";
 
 const INVITE_VERSION = 1;

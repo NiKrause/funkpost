@@ -260,9 +260,9 @@
   </section>
 
   <footer>
-    <a href="https://github.com/NiKrause/libp2p-webrtc-qr-meshtastic/issues/1">design issue #1</a>
+    <a href="https://github.com/NiKrause/funkpost/issues/1">design issue #1</a>
     · GPL-3.0 ·
-    <a href="https://github.com/NiKrause/libp2p-webrtc-qr-meshtastic">source</a>
+    <a href="https://github.com/NiKrause/funkpost">source</a>
   </footer>
 </main>
 
