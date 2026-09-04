@@ -194,6 +194,63 @@ the only transport that fits a phone). One BLE client per node is a firmware
 rule, so each side brings its own. Chrome/Edge on Android and desktop; no iOS,
 no Firefox; the page must be foreground with the screen on.
 
+## Field notes
+
+Specifics learned building this on real hardware — so the next person doesn't
+lose the same afternoon.
+
+**Meshtastic over Web Bluetooth**
+- The config stream (region, channels, node info) is sent once on connect and
+  never replays — subscribe to every event *before* calling `configure()`, or
+  a fast link races past it and shows no channels.
+- Read the region *continuously*, not once: a node that just rebooted (e.g.
+  after a channel import) reports its region a beat late, and a one-shot read
+  freezes on the transient `UNSET`.
+- `sendPacket` defaults `wantAck: true` for a reason — the client's send queue
+  resolves only on a routing ACK, and a broadcast earns the firmware's implicit
+  ACK only with `wantAck`. Send with `wantAck: false` and every call hangs
+  ~60 s, then times out with no visible reason.
+- Importing a shared channel URL reboots the node (BLE drops for a few seconds)
+  and commonly resets the LoRa **region to UNSET** — re-check the region after
+  every import.
+- One BLE client per node: fully stop the official Meshtastic app (it reclaims
+  the slot) before connecting from a browser.
+
+**Browser build (Vite + `@meshtastic/core`)**
+- `@meshtastic/core` bundles tslog's Node build, which calls
+  `util.formatWithOptions` and `util.types.isNativeError`; the stock browser
+  `util` polyfill has neither, so the first log line throws. Shim `util` — see
+  [`examples/mesh-todo/src/shims/node-util.js`](examples/mesh-todo/src/shims/node-util.js).
+- Node builtins to polyfill: `events`, `os`, `path`, `util`, `buffer`,
+  `process` (via `vite-plugin-node-polyfills`).
+
+**OrbitDB / Helia in the browser**
+- Pin `blockstore-core@^5` / `datastore-core@^10` — v7/v12 implement a newer
+  `interface-*` than Helia 5 expects, and the mismatch surfaces as
+  `CBOR decode error: data to decode must be a Uint8Array` deep in pinning.
+- Open every database with `sync: false` on a pubsub-less libp2p, or OrbitDB's
+  Sync crashes on start.
+
+**Known open**
+- On some phones (seen: Samsung Fold, Android 16) funkpost connects, then drops
+  the BLE link after ~5 s with an incomplete config — while the **official
+  Meshtastic web client holds on the same phone and the same node**. So it is
+  not the OS and not the node; it is something in how funkpost drives the
+  stack, under investigation. Meanwhile, for a two-node bench: run both ends in
+  desktop Chrome (two tabs, one node each) — the desktop BLE path is solid.
+
+**Upstream references**
+- Android/Samsung BLE quirks:
+  [Meshtastic-Android#3361](https://github.com/meshtastic/Meshtastic-Android/issues/3361),
+  [firmware#6958](https://github.com/meshtastic/firmware/issues/6958)
+  (the developer-options toggle *Show unsupported Bluetooth LE devices* helps
+  the "device never appears" case — but note the official client connects here
+  without it).
+- JS client: [meshtastic/js](https://github.com/meshtastic/js); reference
+  behaviour: the official [client.meshtastic.org](https://client.meshtastic.org).
+- Web Bluetooth support and spec:
+  [WebBluetoothCG/web-bluetooth](https://github.com/WebBluetoothCG/web-bluetooth).
+
 ## Why this is a separate repository
 
 **Licence, not taste.** [`@meshtastic/core`](https://www.npmjs.com/package/@meshtastic/core)
