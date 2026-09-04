@@ -368,8 +368,8 @@ lose the same afternoon.
   [Meshtastic-Android#3361](https://github.com/meshtastic/Meshtastic-Android/issues/3361),
   [firmware#6958](https://github.com/meshtastic/firmware/issues/6958)
   (the developer-options toggle *Show unsupported Bluetooth LE devices* helps
-  the "device never appears" case — but note the official client connects here
-  without it).
+  when a recent Samsung never lists the node at all — a separate symptom from
+  the connection drop above).
 - JS client: [meshtastic/js](https://github.com/meshtastic/js); reference
   behaviour: the official [client.meshtastic.org](https://client.meshtastic.org).
 - Web Bluetooth support and spec:
