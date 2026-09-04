@@ -50,7 +50,11 @@
   let joining = $state(false);
   let neighbours = $state([]);
   let primaryChannel = $state(null); // { name, fingerprint }
+  let channels = $state([]); // [{ index, name, fingerprint, role }]
+  let txChannel = $state(0);
   let myNode = $state("");
+  let setTxChannelFn = () => {};
+  const channelMap = new Map();
   let showNeighbours = $state(false);
   let nowTick = $state(Date.now());
   const neighbourMap = new Map();
@@ -134,15 +138,22 @@
         onEvent: onCourierEvent,
         onTelemetry: (value) => (airUtil = value),
         onChannel: async (channel) => {
-          if (channel.role !== 1) return; // PRIMARY only
+          if (channel.role === 0) return; // DISABLED
           const psk = channel.settings?.psk ?? new Uint8Array();
           const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
-          primaryChannel = {
+          const entry = {
+            index: channel.index,
+            role: channel.role,
             name: channel.settings?.name || "(default)",
             fingerprint: [...digest.slice(0, 2)]
               .map((b) => b.toString(16).padStart(2, "0"))
               .join(""),
           };
+          channelMap.set(entry.index, entry);
+          channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
+          if (entry.role === 1) {
+            primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
+          }
         },
         onMyNodeInfo: (info) => {
           if (info?.myNodeNum) myNode = `!${info.myNodeNum.toString(16).padStart(8, "0")}`;
@@ -164,6 +175,7 @@
       courier = connected.courier;
       linkKind = connected.kind;
       region = connected.region;
+      setTxChannelFn = connected.setTxChannel ?? (() => {});
       budget = courier.budget();
       watchInvites(courier, (addr) => {
         if (!db) invite = addr;
@@ -258,6 +270,29 @@
           {#if primaryChannel}primary channel »{primaryChannel.name}« · key ⌗{primaryChannel.fingerprint}{/if}
           {#if myNode}
             · this node {myNode}{/if}
+        </p>
+      {/if}
+      {#if channels.length > 0}
+        <p class="dim mono">
+          <label
+            title="transmissions go on this channel — pick the same »name« ⌗fingerprint on both phones. Reception decodes every channel the node holds a key for."
+          >
+            TX channel:
+            <select
+              bind:value={txChannel}
+              onchange={() => {
+                setTxChannelFn(txChannel);
+                const ch = channels.find((c) => c.index === txChannel);
+                pushLog(`TX channel → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint}`);
+              }}
+            >
+              {#each channels as ch (ch.index)}
+                <option value={ch.index}>
+                  {ch.index} »{ch.name}« ⌗{ch.fingerprint}{ch.role === 1 ? " · primary" : ""}
+                </option>
+              {/each}
+            </select>
+          </label>
         </p>
       {/if}
       {#if budgetPercent() != null}
@@ -427,6 +462,15 @@
   }
   .mono {
     font-family: ui-monospace, monospace;
+  }
+  select {
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid #3a4358;
+    background: #10141f;
+    color: inherit;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
   }
   button {
     padding: 8px 14px;
