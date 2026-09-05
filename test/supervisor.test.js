@@ -52,6 +52,9 @@ const stubDevice = (log = []) => {
     onChannelPacket: dispatcher(log, "channel"),
     onMyNodeInfo: dispatcher(log, "myNodeInfo"),
     onPrivatePacket: dispatcher(log, "private"),
+    // Every packet the node hears, decodable or not — how the app tells
+    // "nobody is there" from "we cannot decrypt them".
+    onMeshPacket: dispatcher(log, "traffic"),
   };
   const device = {
     events,
@@ -407,6 +410,25 @@ describe("meshtastic supervisor", () => {
     }
     // The third drop exceeded the cap, so that one went the hard way.
     assert.ok(factory.made[2].disconnected, "a link that keeps breaking earns a real reconnect");
+    managed.close();
+  });
+
+  test("reports traffic it cannot decrypt, so silence is distinguishable", async () => {
+    const factory = deviceFactory();
+    const heard = [];
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      on: { traffic: (p) => heard.push(p.payloadVariant.case) },
+      ...FAST,
+    });
+
+    // A neighbour we can read, and one whose channel key we do not hold. The
+    // second is dropped inside the client library with only a debug line, so
+    // without this the app cannot tell it from an empty room.
+    factory.made[0].events.onMeshPacket.emit({ payloadVariant: { case: "decoded" } });
+    factory.made[0].events.onMeshPacket.emit({ payloadVariant: { case: "encrypted" } });
+
+    assert.deepEqual(heard, ["decoded", "encrypted"]);
     managed.close();
   });
 

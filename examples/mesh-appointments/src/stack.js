@@ -71,7 +71,7 @@ export async function createStack({ room, days = DEFAULT_SHOP.horizonDays, pinne
  * `mode.kind === "bc"` uses a BroadcastChannel as a fake mesh — two browser
  * tabs play salon and customer with no hardware at all.
  */
-export async function connectCourier({ stack, mode, onEvent, onChange, onStatus, onRegion, onChannel, onMyNodeInfo, onError, onReconnecting, onReconnected, onGaveUp }) {
+export async function connectCourier({ stack, mode, onEvent, onChange, onStatus, onRegion, onChannel, onMyNodeInfo, onTraffic, onError, onReconnecting, onReconnected, onGaveUp }) {
   const { doc, log, days, pinnedToday } = stack;
   // Recomputed per call, not frozen at load: a salon tablet left running over
   // a night would otherwise keep a horizon that starts yesterday, and quietly
@@ -149,6 +149,7 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
       // classic field failure, and it is invisible without this.
       channel: onChannel,
       myNodeInfo: onMyNodeInfo,
+      traffic: onTraffic,
       reconnecting: onReconnecting,
       reconnected: () => {
         // Re-greet: one digest and one state vector, and whatever the drop

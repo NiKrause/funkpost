@@ -77,6 +77,12 @@ import { wallAt } from "./domain/time.js";
   let setTxChannelFn = () => {};
   const channelMap = new Map();
 
+  // What the node hears, before it decides whether it can read it. A packet on
+  // a channel whose key this node does not hold is dropped inside the client
+  // library with only a debug line — so "nobody is there" and "somebody is
+  // there and we cannot read a word" look identical without this.
+  let heard = $state({ total: 0, undecryptable: 0 });
+
   // Phones sleep their screen, and Web Bluetooth pauses with it — the quiet
   // killer of a bench session. Desktops do not take the radio down with them,
   // so the box only appears on handhelds. The detection deliberately does not
@@ -322,6 +328,13 @@ import { wallAt } from "./domain/time.js";
           if (entry.role === 1) primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
           pushLog(`Kanal ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primär" : ""}`);
         },
+        onTraffic: (packet) => {
+          heard = {
+            total: heard.total + 1,
+            undecryptable:
+              heard.undecryptable + (packet?.payloadVariant?.case === "encrypted" ? 1 : 0),
+          };
+        },
         onMyNodeInfo: (info) => {
           if (info?.myNodeNum) myNode = `!${info.myNodeNum.toString(16).padStart(8, "0")}`;
         },
@@ -452,6 +465,15 @@ import { wallAt } from "./domain/time.js";
       {linkState.text}
       {#if region && region !== "UNSET"}<span class="dim"> · {region}</span>{/if}
     </p>
+    {#if heard.undecryptable > 0 && presence.peers.length === 0}
+      <p class="mismatch" data-testid="key-mismatch">
+        <strong>{heard.undecryptable} von {heard.total} Paketen sind nicht lesbar.</strong>
+        Der Knoten hört etwas, kann es aber nicht entschlüsseln — die Gegenstelle
+        sendet auf einem Kanal, dessen Schlüssel dieser Knoten nicht hat.
+        Vergleicht den Fingerabdruck ⌗ unten auf beiden Geräten.
+      </p>
+    {/if}
+
     {#if channels.length > 0}
       <p class="channel" data-testid="channel">
         <label
@@ -857,6 +879,11 @@ import { wallAt } from "./domain/time.js";
   .led.waiting { background: #a86412; }
   .led.live { background: #12855a; }
   .awake { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .mismatch {
+    margin: 0; padding: 10px 12px; font-size: 0.84rem; line-height: 1.5;
+    border: 1px solid #a86412; background: #fbf0dd; color: #6b5426;
+    border-radius: 9px;
+  }
   .channel {
     margin: 0; font-size: 0.82rem; color: #5b6478;
     font-family: "IBM Plex Mono", monospace;
