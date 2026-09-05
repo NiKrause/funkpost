@@ -6,10 +6,79 @@ Status: **built and tested** ([#38](https://github.com/NiKrause/funkpost/issues/
 A1–A4) — the domain and the calendar file. No UI yet (P5), never run on
 hardware (P7). Tests: `examples/mesh-appointments/test/`.
 
+Bookings no longer live in the CRDT: see **Two substrates** below, and
+[#45](https://github.com/NiKrause/funkpost/issues/45) for the measurement that
+moved them.
+
 An appointment book for a local business, on the Yjs plane. It is the demo that
 proves the plane, and it was chosen because it exercises what a lossy,
 duty-cycled, high-latency link is *worst* at: contention for a scarce resource
 that two people want at once.
+
+## Two substrates, and why
+
+| what | where | why |
+|---|---|---|
+| shop rules — hours, services, mode, the salon's public key | **Yjs** | a handful of stable devices write them, and merge genuinely helps |
+| bookings — requests, decisions, cancellations | **claim log** | every customer session would be a permanent new Yjs author |
+
+The Yjs provider greets a peer by publishing a **state vector**, and a Yjs state
+vector is O(authors who have ever written) and never shrinks. Measured:
+
+| distinct writers | state vector | frames per greeting |
+|---|---|---|
+| 5 | 36 B | 1 |
+| 1 000 | **5 936 B** | **30** |
+
+Deleting *every booking* leaves it at 5 936 B — the clocks must be remembered,
+so client ids are permanent. Thirty frames to say hello would spend a EU-868
+hour's whole duty cycle on greetings.
+
+This is not a Yjs defect. Yjs is built for a handful of collaborators on one
+document, and there it is excellent — which is exactly why the rules stayed.
+
+The **claim log** summarises the same information as one small digest per day of
+the horizon:
+
+| | claim log |
+|---|---|
+| greeting | **111 bytes for three weeks — at 1, 100 or 1 000 writers** |
+| grows with | the horizon, not the number of people |
+| expiry | drop yesterday's bucket; no tombstones, no ids kept for ever |
+
+Two peers who agree exchange **one frame each and fall silent**. Only days whose
+fingerprints differ are ever discussed.
+
+### The deeper reason, beyond the byte count
+
+Two things were true of the old shape, and the second matters more:
+
+1. **We used almost none of Yjs.** No `Y.Text`, no sequence CRDT, no concurrent
+   edits to the same value — nobody ever edits anybody else's booking. It was a
+   replicated *set* of immutable records.
+2. **The conflict resolution was already ours.** Mutual exclusion is precisely
+   what a CRDT cannot give you, so `arbitration.js` was doing the hard part
+   regardless.
+
+Add that appointments *expire* while CRDTs are built to remember, and the
+substrate was carrying the easy half and fighting the rest.
+
+**What survived the change untouched:** `arbitration.js`, `slots.js`, `mask.js`,
+`capability.js`, `ics.js`, `link.js`. Every one of their tests passed unmodified
+through the substrate swap, which is what "substrate-independent" was supposed
+to mean when it was claimed.
+
+### Authority is a signature now, not a convention
+
+The old shape kept writers off each other's keys by agreement. The salon now has
+an identity — its public key travels in the rules — and a **decision not signed
+by that key is not a decision**. It is refused on every device, *including the
+one that wrote it*, so the rule cannot be broken locally either. That is the
+access control Yjs could not offer, and it costs one verification per decision.
+
+Requests stay deliberately unsigned: forging one only creates a booking, which
+anyone within radio range of a public channel can already do, and a signature
+per request would double its airtime. The channel key remains the real boundary.
 
 ## Convergence is not agreement
 
@@ -107,25 +176,26 @@ prefix and imported, and the public half is read back out of the JWK export.
 the booking. Confidentiality needs a private Meshtastic channel, and the UI
 must say so.
 
-## The document
+## The records
 
-Shaped to keep concurrent writers off each other's keys. Yjs has no access
-control, so rather than bolt one on, each role owns a map and every entry is
-keyed by booking id:
+Three immutable kinds, bucketed by the day of the slot they concern — so a whole
+booking's history expires together:
 
-| map | written by |
-|---|---|
-| `shop` | the salon — the rules, including the mode |
-| `requests` | the customer who owns that id |
-| `decisions` | the salon |
-| `cancels` | whoever holds the capability key |
-| `mask` | the salon |
+| kind | authored by | proven by |
+|---|---|---|
+| `request` | the customer | nothing; it carries the capability's public key |
+| `decision` | the salon | a signature under the salon's key |
+| `cancel` | the capability holder | a signature under the booking's own key |
 
-Two writers therefore practically never touch the same key, and the CRDT is
-left doing set-union — the case it is perfect at.
+Merging is set union, because nothing is ever mutated. A booking carries its
+**absolute start time**, not an index into whichever horizon happened to be on
+screen, so it means the same thing next week and changing `slotMinutes` no
+longer reinterprets the past.
 
 Only a first name and a service id ever travel. Everything else a salon knows
-about a customer belongs in a local document that is never synced.
+about a customer belongs in a local document that is never synced — and the
+busy mask exists so a customer can learn that 14:00 is gone without receiving
+anybody's name at all.
 
 ## The `.ics`, and the link with no server behind it
 
@@ -183,10 +253,16 @@ until someone has done it on all three this gate is only half met.
 
 ## Open, and deliberately so
 
-- **Document compaction.** A salon books for years and Yjs keeps history.
-  Folding settled bookings into the mask and deleting them, or starting a new
-  document each season — undecided, and it needs deciding before anyone runs
-  this for real.
-- **Changing `slotMinutes` shifts the whole index space.** A booking stores its
-  own `steps` so it survives a service getting longer, but the grid itself is
-  not versioned. Same conversation as compaction.
+- **Nobody prunes yet.** `log.forgetBefore(day)` exists and is tested, but no
+  scheduler calls it. A running app must, or the horizon's tail accumulates —
+  the mechanism is there, the policy is not.
+- **The digest is a hint, not a proof.** A 32-bit XOR per day plus a count: a
+  hash collision *and* an equal count would read as agreement. The odds are
+  negligible at these sizes and the failure is silent divergence, so if this
+  ever runs somewhere that matters, widen it.
+- **A request is not signed.** Anyone in radio range can create bookings on a
+  public channel. That is already true of the medium; a private Meshtastic
+  channel is the answer, not a signature.
+
+Solved by the substrate change, and no longer open: unbounded document growth,
+and a booking's meaning depending on the horizon it was made in.

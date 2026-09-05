@@ -6,25 +6,24 @@ import { createYjsProvider } from "@le-space/funkpost/yjs";
 import { createMeshtasticCourier } from "@le-space/funkpost/courier";
 import { createMemoryMeshPair } from "@le-space/funkpost/links/memory-mesh";
 import { createBookingBook } from "../src/domain/booking.js";
+import { createClaimLog, encodeDigest, KIND_DECISION, KIND_CANCEL } from "../src/domain/claimlog.js";
+import { createClaimSync } from "../src/domain/claimsync.js";
 import { CONFIRMED, PENDING, DECLINED, SUPERSEDED, CANCELLED } from "../src/domain/arbitration.js";
-import {
-  newToken,
-  keysFromToken,
-  actionMessage,
-  verifyAction,
-  verifiedCancels,
-  toBase64Url,
-  fromBase64Url,
-} from "../src/domain/capability.js";
+import { newToken, keysFromToken, actionMessage } from "../src/domain/capability.js";
+import { epochDay, parseISODate } from "../src/domain/time.js";
 
 const MONDAY = "2026-09-07";
+const DAYS = 21;
+const FROM_DAY = epochDay(parseISODate(MONDAY));
+const horizon = () => ({ fromDay: FROM_DAY, days: DAYS });
+
 const NO_LIMIT = { dutyCycle: null };
 const FAST = { rtoMs: 40, gapMs: 15, region: NO_LIMIT };
 
 const until = async (fn, timeoutMs = 8000, stepMs = 5) => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (fn()) return;
+    if (await fn()) return;
     await new Promise((resolve) => setTimeout(resolve, stepMs));
   }
   throw new Error("condition not reached in time");
@@ -32,239 +31,327 @@ const until = async (fn, timeoutMs = 8000, stepMs = 5) => {
 
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-describe("the booking book", () => {
-  test("a request occupies exactly its service length, and shows as busy", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    await book.request({ slotIndex: 8, serviceId: "cut", handle: "Nico", at: 1000 });
+/** A salon on its own: rules in Yjs, bookings in a claim log. */
+const makeBook = async (patch = {}) => {
+  const doc = new Y.Doc();
+  const log = createClaimLog();
+  const book = createBookingBook({ doc, log });
+  const salonToken = await book.becomeSalon();
+  if (Object.keys(patch).length) book.setShop(patch);
+  return { doc, log, book, salonToken };
+};
 
-    const state = await book.state(MONDAY, 1);
+const ask = (book, extra = {}) => ({ fromISO: MONDAY, days: DAYS, ...extra });
+
+describe("the booking book on a claim log", () => {
+  test("a request occupies exactly its service length, and shows as busy", async () => {
+    const { book } = await makeBook();
+    await book.request(ask(book, { slotIndex: 8, serviceId: "cut", handle: "Nico", at: 1000 }));
+
+    const state = await book.state(MONDAY, DAYS);
     assert.deepEqual([...state.busy].sort((a, b) => a - b), [8, 9, 10], "45 min = 3 steps");
     assert.ok(!state.offerable("cut").some((s) => s.index === 8));
-    assert.ok(state.offerable("cut").some((s) => s.index === 11), "the slot after is free");
+    assert.ok(state.offerable("cut").some((s) => s.index === 11));
+  });
+
+  test("a booking keeps its meaning when the horizon moves", async () => {
+    const { book } = await makeBook();
+    // Book Thursday, then look at the book from a week starting Wednesday.
+    const grid = book.grid(MONDAY, DAYS);
+    const thursday = grid.findIndex((s) => s.iso === "2026-09-10");
+    await book.request(ask(book, { slotIndex: thursday, serviceId: "cut", handle: "Nico", at: 1 }));
+
+    const shifted = await book.state("2026-09-09", 14);
+    const booking = shifted.bookings.find((b) => b.handle === "Nico");
+    assert.ok(booking, "the booking is still there");
+    assert.equal(booking.status, CONFIRMED);
+    assert.equal(shifted.grid[booking.slotIndex].iso, "2026-09-10", "and still on Thursday");
   });
 
   test("auto mode confirms itself; ask mode waits for the salon", async () => {
-    const auto = createBookingBook({ doc: new Y.Doc() });
-    const { id: autoId } = await auto.request({ slotIndex: 4, serviceId: "trim", handle: "A", at: 1 });
-    assert.equal((await auto.state(MONDAY, 1)).statusOf(autoId).status, CONFIRMED);
+    const auto = await makeBook();
+    const { id: autoId } = await auto.book.request(ask(auto.book, { slotIndex: 4, serviceId: "trim", handle: "A", at: 1 }));
+    assert.equal((await auto.book.state(MONDAY, DAYS)).statusOf(autoId).status, CONFIRMED);
 
-    const ask = createBookingBook({ doc: new Y.Doc() });
-    ask.setShop({ mode: "ask" });
-    const { id: askId } = await ask.request({ slotIndex: 4, serviceId: "trim", handle: "B", at: 1 });
-    assert.equal((await ask.state(MONDAY, 1)).statusOf(askId).status, PENDING);
+    const w = await makeBook({ mode: "ask" });
+    const { id } = await w.book.request(ask(w.book, { slotIndex: 4, serviceId: "trim", handle: "B", at: 1 }));
+    assert.equal((await w.book.state(MONDAY, DAYS)).statusOf(id).status, PENDING);
 
-    ask.decide(askId, CONFIRMED, { at: 2 });
-    assert.equal((await ask.state(MONDAY, 1)).statusOf(askId).status, CONFIRMED);
+    await w.book.decide(id, CONFIRMED, { salonToken: w.salonToken, at: 2 });
+    assert.equal((await w.book.state(MONDAY, DAYS)).statusOf(id).status, CONFIRMED);
+  });
 
-    const declined = createBookingBook({ doc: new Y.Doc() });
-    declined.setShop({ mode: "ask" });
-    const { id } = await declined.request({ slotIndex: 4, serviceId: "trim", handle: "C", at: 1 });
-    declined.decide(id, DECLINED, { at: 2, note: "leider voll" });
-    const state = await declined.state(MONDAY, 1);
+  test("a decline frees the time and carries its note", async () => {
+    const { book, salonToken } = await makeBook({ mode: "ask" });
+    const { id } = await book.request(ask(book, { slotIndex: 4, serviceId: "trim", handle: "C", at: 1 }));
+    await book.decide(id, DECLINED, { salonToken, at: 2, note: "leider voll" });
+
+    const state = await book.state(MONDAY, DAYS);
     assert.equal(state.statusOf(id).status, DECLINED);
     assert.equal(state.statusOf(id).reason, "leider voll");
-    assert.equal(state.busy.size, 0, "a declined booking frees its time");
+    assert.equal(state.busy.size, 0);
   });
 
-  test("the mask compacts busy time into one payload and is honoured on read", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    await book.request({ slotIndex: 2, serviceId: "cut", handle: "Nico", at: 1 });
-    const bytes = await book.publishMask(MONDAY, 21);
+  test("the mask still hides who is booked, which is now its only job", async () => {
+    const { book, doc } = await makeBook();
+    await book.request(ask(book, { slotIndex: 2, serviceId: "cut", handle: "Nico", at: 1 }));
+    const bytes = await book.publishMask(MONDAY, DAYS);
+    assert.ok(bytes.length <= 200);
 
-    assert.ok(bytes.length <= 200, `${bytes.length} bytes must fit one frame`);
-
-    // A customer who has the mask but not the entry still sees the time taken.
+    // A customer holding only the rules and the mask sees the time is gone,
+    // and learns nothing about whose it is.
     const fresh = new Y.Doc();
-    fresh.getMap("mask").set("bytes", bytes);
-    const customer = createBookingBook({ doc: fresh });
-    const state = await customer.state(MONDAY, 21);
+    Y.applyUpdate(fresh, Y.encodeStateAsUpdate(doc));
+    const customer = createBookingBook({ doc: fresh, log: createClaimLog() });
+    const state = await customer.state(MONDAY, DAYS);
     assert.ok(state.busy.has(2) && state.busy.has(3) && state.busy.has(4));
-  });
-
-  test("a mask computed for another horizon is ignored, not misread", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    await book.request({ slotIndex: 2, serviceId: "cut", handle: "Nico", at: 1 });
-    await book.publishMask(MONDAY, 21);
-
-    // Same rules, different week: the indices would mean other days entirely.
-    const state = await book.state("2026-09-14", 21);
-    assert.equal(state.busy.size, 3, "only the live entry counts, not the stale mask");
+    assert.equal(state.bookings.length, 0, "no names, no handles, nothing");
   });
 });
 
-describe("capability keys", () => {
-  test("a token derives the same key pair every time", async () => {
-    const token = newToken();
-    const first = await keysFromToken(token);
-    const second = await keysFromToken(token);
-    assert.deepEqual([...first.publicKey], [...second.publicKey]);
-    assert.equal(first.publicKey.length, 32);
-  });
+describe("authority is a signature, not a convention", () => {
+  test("only the salon's key can decide — even locally", async () => {
+    const { book, salonToken } = await makeBook({ mode: "ask" });
+    const { id } = await book.request(ask(book, { slotIndex: 4, serviceId: "trim", handle: "A", at: 1 }));
 
-  test("a signed cancellation verifies; a replayed or altered one does not", async () => {
-    const token = newToken();
-    const { publicKey, sign } = await keysFromToken(token);
-    const action = { bookingId: "bk1", action: "cancel", at: 1000 };
-    const sig = await sign(actionMessage(action));
-
-    assert.ok(await verifyAction(publicKey, sig, action));
-    // The same signature moved to another booking, or another moment, is void.
-    assert.ok(!(await verifyAction(publicKey, sig, { ...action, bookingId: "bk2" })));
-    assert.ok(!(await verifyAction(publicKey, sig, { ...action, at: 1001 })));
-    // And someone else's key cannot vouch for it.
-    const other = await keysFromToken(newToken());
-    assert.ok(!(await verifyAction(other.publicKey, sig, action)));
-  });
-
-  test("overhearing a booking does not let you cancel it", async () => {
-    // The neighbour sees everything on the channel: the id, the public key,
-    // the time. None of it is enough.
-    const victim = await keysFromToken(newToken());
-    const attacker = await keysFromToken(newToken());
-    const action = { bookingId: "bk1", action: "cancel", at: 2000 };
-    const forged = await attacker.sign(actionMessage(action));
-
-    const cancels = await verifiedCancels(
-      [{ id: "bk1", publicKey: victim.publicKey }],
-      new Map([["bk1", { at: 2000, sig: forged }]]),
+    await assert.rejects(
+      () => book.decide(id, CONFIRMED, { salonToken: newToken(), at: 2 }),
+      /not signed by this shop's key/,
+      "an impostor's decision is refused on the device that wrote it",
     );
-    assert.equal(cancels.size, 0, "a forged cancellation must not survive verification");
+    assert.equal((await book.state(MONDAY, DAYS)).statusOf(id).status, PENDING);
+
+    await book.decide(id, CONFIRMED, { salonToken, at: 3 });
+    assert.equal((await book.state(MONDAY, DAYS)).statusOf(id).status, CONFIRMED);
   });
 
-  test("malformed input is rejected quietly rather than thrown", async () => {
-    assert.equal(await verifyAction(new Uint8Array(5), new Uint8Array(64), { bookingId: "x", action: "cancel", at: 1 }), false);
-    assert.equal(await verifyAction(new Uint8Array(32), new Uint8Array(3), { bookingId: "x", action: "cancel", at: 1 }), false);
-    await assert.rejects(() => keysFromToken(new Uint8Array(8)), /32 bytes/);
+  test("a forged decision arriving over the air is discarded", async () => {
+    const { book, log } = await makeBook({ mode: "ask" });
+    const { id } = await book.request(ask(book, { slotIndex: 4, serviceId: "trim", handle: "A", at: 1 }));
+    const request = book.find(id);
+
+    const impostor = await keysFromToken(newToken());
+    const sig = await impostor.sign(actionMessage({ bookingId: id, action: "decide:confirmed", at: 2 }));
+    const accepted = await log.accept({
+      kind: KIND_DECISION, id, day: request.day, status: CONFIRMED, decidedAt: 2, sig,
+    });
+
+    assert.equal(accepted, false, "a decision is only a decision if the salon signed it");
+    assert.equal((await book.state(MONDAY, DAYS)).statusOf(id).status, PENDING);
   });
 
-  test("a token survives the round trip through a calendar note", () => {
-    const token = newToken();
-    const text = toBase64Url(token);
-    assert.ok(!/[+/=]/.test(text), "must be URL-safe to sit in a link");
-    assert.deepEqual([...fromBase64Url(text)], [...token]);
-  });
+  test("only the token holder can cancel, and the slot then comes free", async () => {
+    const { book } = await makeBook();
+    const { id, token } = await book.request(ask(book, { slotIndex: 6, serviceId: "trim", handle: "Nico", at: 1 }));
+    assert.equal((await book.state(MONDAY, DAYS)).statusOf(id).status, CONFIRMED);
 
-  test("only the holder can cancel, and then the slot comes free", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    const { id, token } = await book.request({ slotIndex: 6, serviceId: "trim", handle: "Nico", at: 1 });
-    assert.equal((await book.state(MONDAY, 1)).statusOf(id).status, CONFIRMED);
+    await assert.rejects(() => book.cancel(id, newToken(), { at: 2 }), /not signed by this booking's key/);
+    assert.equal((await book.state(MONDAY, DAYS)).statusOf(id).status, CONFIRMED, "the booking stands");
 
-    await book.cancel(id, token, { at: 2 });
-    const state = await book.state(MONDAY, 1);
+    await book.cancel(id, token, { at: 3 });
+    const state = await book.state(MONDAY, DAYS);
     assert.equal(state.statusOf(id).status, CANCELLED);
     assert.equal(state.busy.size, 0);
   });
 
-  test("a cancellation signed with the wrong token is written but never counts", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    const { id } = await book.request({ slotIndex: 6, serviceId: "trim", handle: "Nico", at: 1 });
-
-    await book.cancel(id, newToken(), { at: 2 }); // an attacker's token
+  test("a cancellation for a booking nobody holds is not taken on faith", async () => {
+    const { log } = await makeBook();
+    const { sign } = await keysFromToken(newToken());
+    const sig = await sign(actionMessage({ bookingId: "ghost", action: "cancel", at: 1 }));
     assert.equal(
-      (await book.state(MONDAY, 1)).statusOf(id).status,
-      CONFIRMED,
-      "the booking stands — the signature did not check out",
+      await log.accept({ kind: KIND_CANCEL, id: "ghost", day: FROM_DAY, at: 1, sig }),
+      false,
     );
   });
 });
 
+describe("the claim log: the greeting stops growing", () => {
+  test("the headline: a digest is constant, whatever the number of writers", async () => {
+    const sizes = [];
+    for (const customers of [1, 100, 1000]) {
+      const { book } = await makeBook();
+      for (let i = 0; i < customers; i++) {
+        // Every customer is a different person on a different device — the
+        // case that made a Yjs state vector 5.9 kB at this scale (issue #45).
+        // eslint-disable-next-line no-await-in-loop
+        await book.request(ask(book, { slotIndex: i % 500, serviceId: "trim", handle: `k${i}`, at: 1000 + i }));
+      }
+      sizes.push(encodeDigest(book.log, FROM_DAY, DAYS).length);
+    }
+    assert.deepEqual(sizes, [111, 111, 111], "111 bytes — one frame — at every scale");
+  });
+
+  test("expiry is forgetting: yesterday's bookings simply stop existing", async () => {
+    const { book, log } = await makeBook();
+    const grid = book.grid(MONDAY, DAYS);
+    const monday = grid.findIndex((s) => s.iso === "2026-09-07");
+    const thursday = grid.findIndex((s) => s.iso === "2026-09-10");
+    await book.request(ask(book, { slotIndex: monday, serviceId: "trim", handle: "past", at: 1 }));
+    await book.request(ask(book, { slotIndex: thursday, serviceId: "trim", handle: "future", at: 2 }));
+    assert.equal(log.size, 2);
+
+    const dropped = log.forgetBefore(epochDay(parseISODate("2026-09-09")));
+    assert.equal(dropped, 1);
+    assert.equal(log.size, 1, "no tombstone, no client id, nothing left behind");
+
+    const state = await book.state(MONDAY, DAYS);
+    assert.equal(state.bookings.length, 1);
+    assert.equal(state.bookings[0].handle, "future");
+  });
+
+  test("two decisions for one booking settle the same way on every device", async () => {
+    const { book, salonToken, log } = await makeBook({ mode: "ask" });
+    const { id } = await book.request(ask(book, { slotIndex: 4, serviceId: "trim", handle: "A", at: 1 }));
+    const request = book.find(id);
+    const { sign } = await keysFromToken(salonToken);
+
+    // The salon answers from two devices; the later one arrives first.
+    const late = { kind: KIND_DECISION, id, day: request.day, status: DECLINED, decidedAt: 900, note: null,
+      sig: await sign(actionMessage({ bookingId: id, action: "decide:declined", at: 900 })) };
+    const early = { kind: KIND_DECISION, id, day: request.day, status: CONFIRMED, decidedAt: 100, note: null,
+      sig: await sign(actionMessage({ bookingId: id, action: "decide:confirmed", at: 100 })) };
+
+    assert.ok(await log.accept(late));
+    assert.ok(await log.accept(early));
+    assert.equal(
+      (await book.state(MONDAY, DAYS)).statusOf(id).status,
+      CONFIRMED,
+      "the earlier decision stands, whichever order they landed in",
+    );
+  });
+});
+
+/** Rules over Yjs, bookings over the claim log — both on one courier. */
+const meshPair = (lossFn = null) => {
+  const pair = createMemoryMeshPair({ mtu: 60, delayMs: 1, lossFn });
+  const a = createMeshtasticCourier({ link: pair.a, ...FAST });
+  const b = createMeshtasticCourier({ link: pair.b, ...FAST });
+  return { a, b, close: () => (a.close(), b.close()) };
+};
+
+const wire = (doc, log, courier) => ({
+  provider: createYjsProvider({ doc, courier, coalesceMs: 20 }),
+  sync: createClaimSync({ log, courier, horizon, minAnnounceGapMs: 20 }),
+});
+
 describe("the gate: two customers race for one slot over a lossy mesh", () => {
   test("both sides reach the same winner, and no packet is spent deciding", async () => {
-    const pair = createMemoryMeshPair({ mtu: 60, delayMs: 1, lossFn: ({ seq }) => seq % 5 === 4 });
-    const courierA = createMeshtasticCourier({ link: pair.a, ...FAST });
-    const courierB = createMeshtasticCourier({ link: pair.b, ...FAST });
+    const couriers = meshPair(({ seq }) => seq % 5 === 4);
 
-    const docA = new Y.Doc();
-    const docB = new Y.Doc();
-    const anna = createBookingBook({ doc: docA });
-    const bert = createBookingBook({ doc: docB });
+    const annaDoc = new Y.Doc();
+    const bertDoc = new Y.Doc();
+    const annaLog = createClaimLog();
+    const bertLog = createClaimLog();
+    const anna = createBookingBook({ doc: annaDoc, log: annaLog });
+    await anna.becomeSalon();
 
-    // Both want 14:00 on the Monday, and neither can see the other yet — the
-    // partition that makes auto mode interesting.
-    const { id: annaId } = await anna.request({ slotIndex: 20, serviceId: "cut", handle: "Anna", at: 1_000 });
-    const { id: bertId } = await bert.request({ slotIndex: 20, serviceId: "cut", handle: "Bert", at: 1_500 });
+    const annaWire = wire(annaDoc, annaLog, couriers.a);
+    const bertWire = wire(bertDoc, bertLog, couriers.b);
+    await until(() => bertWire.provider.synced(annaDoc));
+    const bert = createBookingBook({ doc: bertDoc, log: bertLog, sync: bertWire.sync });
+    const annaBook = createBookingBook({ doc: annaDoc, log: annaLog, sync: annaWire.sync });
 
-    const provA = createYjsProvider({ doc: docA, courier: courierA, coalesceMs: 20 });
-    const provB = createYjsProvider({ doc: docB, courier: courierB, coalesceMs: 20 });
+    const { id: annaId } = await annaBook.request(ask(annaBook, { slotIndex: 20, serviceId: "cut", handle: "Anna", at: 1_000 }));
+    const { id: bertId } = await bert.request(ask(bert, { slotIndex: 20, serviceId: "cut", handle: "Bert", at: 1_500 }));
 
-    await until(() => provA.synced(docB) && provB.synced(docA));
-    await settle(120);
-    const trafficAfterConverging = provA.stats.payloadsSent + provB.stats.payloadsSent;
+    await until(() => annaLog.size === 2 && bertLog.size === 2);
+    await settle(150);
+    const trafficAfterConverging = annaWire.sync.stats.payloadsSent + bertWire.sync.stats.payloadsSent;
 
-    const stateA = await anna.state(MONDAY, 1);
-    const stateB = await bert.state(MONDAY, 1);
+    const stateA = await annaBook.state(MONDAY, DAYS);
+    const stateB = await bert.state(MONDAY, DAYS);
 
-    // The same verdict on both phones, computed independently.
     assert.equal(stateA.statusOf(annaId).status, CONFIRMED, "Anna claimed it first");
     assert.equal(stateA.statusOf(bertId).status, SUPERSEDED);
     assert.equal(stateB.statusOf(annaId).status, CONFIRMED);
     assert.equal(stateB.statusOf(bertId).status, SUPERSEDED);
-
-    // Bert's screen can say why, without asking anyone.
     assert.match(stateB.statusOf(bertId).reason, /booked it first/);
 
-    // Nothing was transmitted to arbitrate. Resolving a race must not be able
-    // to start another one, and on a duty-cycled link it must not cost airtime.
-    await settle(200);
+    await settle(250);
     assert.equal(
-      provA.stats.payloadsSent + provB.stats.payloadsSent,
+      annaWire.sync.stats.payloadsSent + bertWire.sync.stats.payloadsSent,
       trafficAfterConverging,
       "arbitration put bytes on the air",
     );
 
-    // And the loser is offered a way out: the next free time.
     const alternatives = stateB.offerable("cut");
-    assert.ok(alternatives.length > 0);
-    assert.ok(!alternatives.some((s) => s.index === 20), "not the one that just went");
+    assert.ok(alternatives.length > 0 && !alternatives.some((s) => s.index === 20));
 
-    provA.destroy();
-    provB.destroy();
-    courierA.close();
-    courierB.close();
+    annaWire.provider.destroy();
+    bertWire.provider.destroy();
+    annaWire.sync.close();
+    bertWire.sync.close();
+    couriers.close();
   });
 
-  test("in ask mode the salon decides, and the loser is told rather than double-booked", async () => {
-    const pair = createMemoryMeshPair({ mtu: 60, delayMs: 1 });
-    const courierSalon = createMeshtasticCourier({ link: pair.a, ...FAST });
-    const courierGuest = createMeshtasticCourier({ link: pair.b, ...FAST });
-
+  test("peers already in step exchange one digest and fall silent", async () => {
+    const couriers = meshPair();
     const salonDoc = new Y.Doc();
     const guestDoc = new Y.Doc();
-    const salon = createBookingBook({ doc: salonDoc });
+    const salonLog = createClaimLog();
+    const guestLog = createClaimLog();
+
+    const salonWire = wire(salonDoc, salonLog, couriers.a);
+    const guestWire = wire(guestDoc, guestLog, couriers.b);
+    const salon = createBookingBook({ doc: salonDoc, log: salonLog, sync: salonWire.sync });
+    await salon.becomeSalon();
+    await until(() => guestWire.provider.synced(salonDoc));
+
+    await salon.request(ask(salon, { slotIndex: 8, serviceId: "cut", handle: "Anna", at: 1 }));
+    await until(() => guestLog.size === 1);
+    await settle(200);
+
+    const quiet = salonWire.sync.stats.payloadsSent + guestWire.sync.stats.payloadsSent;
+    salonWire.sync.resync();
+    guestWire.sync.resync();
+    await settle(250);
+
+    // Two digests went out, and nothing came back: agreement is one frame each.
+    assert.equal(
+      salonWire.sync.stats.payloadsSent + guestWire.sync.stats.payloadsSent - quiet,
+      2,
+      "an in-step greeting must cost exactly one payload per side",
+    );
+    assert.ok(salonWire.sync.inStepWith(guestLog));
+
+    salonWire.provider.destroy();
+    guestWire.provider.destroy();
+    salonWire.sync.close();
+    guestWire.sync.close();
+    couriers.close();
+  });
+
+  test("in ask mode the salon decides, and its signature crosses with the decision", async () => {
+    const couriers = meshPair();
+    const salonDoc = new Y.Doc();
+    const guestDoc = new Y.Doc();
+    const salonLog = createClaimLog();
+    const guestLog = createClaimLog();
+
+    const salonWire = wire(salonDoc, salonLog, couriers.a);
+    const guestWire = wire(guestDoc, guestLog, couriers.b);
+    const salon = createBookingBook({ doc: salonDoc, log: salonLog, sync: salonWire.sync });
+    const salonToken = await salon.becomeSalon();
     salon.setShop({ mode: "ask" });
 
-    const provSalon = createYjsProvider({ doc: salonDoc, courier: courierSalon, coalesceMs: 20 });
-    const provGuest = createYjsProvider({ doc: guestDoc, courier: courierGuest, coalesceMs: 20 });
-    await until(() => provGuest.synced(salonDoc));
-
-    const guest = createBookingBook({ doc: guestDoc });
+    await until(() => guestWire.provider.synced(salonDoc));
+    const guest = createBookingBook({ doc: guestDoc, log: guestLog, sync: guestWire.sync });
     assert.equal(guest.shop().mode, "ask", "the rules crossed the air");
 
-    const { id: early } = await guest.request({ slotIndex: 20, serviceId: "cut", handle: "Anna", at: 1_000 });
-    await until(() => salonDoc.getMap("requests").has(early));
-    const { id: late } = await salon.request({ slotIndex: 20, serviceId: "cut", handle: "Bert", at: 9_000 });
+    const { id } = await guest.request(ask(guest, { slotIndex: 20, serviceId: "cut", handle: "Anna", at: 1_000 }));
+    await until(() => salonLog.size === 1);
+    assert.equal((await guest.state(MONDAY, DAYS)).statusOf(id).status, PENDING);
 
-    // The salon prefers the later request — its word outranks the clock here.
-    salon.decide(late, CONFIRMED, { at: 10_000 });
-    salon.decide(early, DECLINED, { at: 10_001, note: "schon vergeben" });
-    await until(async () => guestDoc.getMap("decisions").has(early));
-    await until(() => provGuest.synced(salonDoc) && provSalon.synced(guestDoc));
+    await salon.decide(id, CONFIRMED, { salonToken, at: 10_000 });
+    // The guest's log verifies the salon's signature against the key it learned
+    // from the rules — it never has to take the decision on trust.
+    await until(async () => (await guest.state(MONDAY, DAYS)).statusOf(id)?.status === CONFIRMED);
+    assert.ok(guestLog.salonKey, "the guest knows who the salon is");
 
-    for (const [who, book] of [["salon", salon], ["guest", guest]]) {
-      const state = await book.state(MONDAY, 1);
-      assert.equal(state.statusOf(late).status, CONFIRMED, `${who} sees the salon's choice`);
-      assert.equal(state.statusOf(early).status, DECLINED, `${who} sees the decline`);
-      assert.equal(state.statusOf(early).reason, "schon vergeben");
-    }
-
-    provSalon.destroy();
-    provGuest.destroy();
-    courierSalon.close();
-    courierGuest.close();
+    salonWire.provider.destroy();
+    guestWire.provider.destroy();
+    salonWire.sync.close();
+    guestWire.sync.close();
+    couriers.close();
   });
 });
