@@ -79,8 +79,12 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     assert.equal(sent.length, 0, "nothing went out");
     assert.ok(events.includes("duty-cycle-exhausted"), "and it said why");
     assert.ok(!events.includes("giveup"), "but it did not give up on the payload");
-    // The firmware just proved our budget was fiction, so pacing must believe it.
-    assert.equal(courier.budget().remainingAirtimeMs, 0);
+    // The firmware just proved our budget was fiction, so pacing must believe
+    // it. Asserted as "cannot afford a frame" rather than "is exactly zero":
+    // the bucket refills continuously, so a millisecond of wall clock between
+    // the drain and the question already puts 0.1 ms back — which is how this
+    // passed locally and failed in CI.
+    assert.ok(courier.timeUntilAffordable() > 0, "pacing must believe the radio");
 
     // The window moves on; the frame is still outstanding and goes out on a
     // later wave, rather than having been thrown away.
