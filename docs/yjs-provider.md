@@ -2,11 +2,13 @@
 
 # The Yjs provider
 
+Status: **built and tested** ([#36](https://github.com/NiKrause/funkpost/issues/36)
+S1–S2) — not yet run over real hardware.
+
 A [Yjs](https://yjs.dev) provider that syncs a `Y.Doc` over a **byte courier**
 — on a LoRa mesh through funkpost, or over any transport you already have.
 
-Status: **built and tested** ([#36](https://github.com/NiKrause/funkpost/issues/36)
-S1–S2). Convergence and coalescing are covered by
+Convergence and coalescing are covered by
 [`test/yjs-provider.test.js`](../test/yjs-provider.test.js); it has not yet run
 over real hardware.
 
@@ -150,3 +152,7 @@ const pair = createMemoryMeshPair({ mtu: 60, lossFn: ({ seq }) => seq % 5 === 4 
 ```
 
 That is exactly how the 20 %-loss gate runs in CI.
+
+---
+
+← [funkpost](../README.md) · [ROADMAP](../ROADMAP.md)

@@ -338,3 +338,7 @@ is not on.
 
 Solved by the substrate change, and no longer open: unbounded document growth,
 and a booking's meaning depending on the horizon it was made in.
+
+---
+
+← [funkpost](../README.md) · [ROADMAP](../ROADMAP.md)
