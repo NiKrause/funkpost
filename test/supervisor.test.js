@@ -326,6 +326,90 @@ describe("meshtastic supervisor", () => {
     managed.close();
   });
 
+  test("a live link is re-attached, not torn down", async () => {
+    const factory = deviceFactory();
+    const reattached = [];
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      // The link is fine; only the stream broke — the Android Chrome case.
+      isLinkAlive: () => true,
+      on: { reattached: (n) => reattached.push(n) },
+      ...FAST,
+    });
+
+    factory.made[0].drop();
+    await until(() => factory.made.length === 2);
+    await settle(20);
+
+    assert.equal(reattached.length, 1, "it repaired rather than reconnected");
+    assert.equal(
+      factory.made[0].disconnected,
+      false,
+      "closing a live GATT is us breaking the very connection we are keeping",
+    );
+    // Parked instead: it must stop writing without the link being closed.
+    assert.ok(factory.made[0].heartbeatMs > 1e9, "the old device was parked, not disconnected");
+    managed.close();
+  });
+
+  test("a dead link is still torn down properly", async () => {
+    const factory = deviceFactory();
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      isLinkAlive: () => false, // really gone
+      ...FAST,
+    });
+
+    factory.made[0].drop();
+    await until(() => factory.made.length === 2);
+    assert.ok(factory.made[0].disconnected, "a genuinely dead link gets the full teardown");
+    managed.close();
+  });
+
+  test("falls back to a real reconnect when the link lied about being alive", async () => {
+    let calls = 0;
+    const created = [];
+    const events = [];
+    const createDevice = async () => {
+      calls++;
+      if (calls === 2) throw new Error("gatt gone after all");
+      const device = stubDevice(created);
+      created.device = device;
+      return device;
+    };
+    const managed = await connectMeshtasticDevice({
+      createDevice,
+      isLinkAlive: () => true,
+      backoff: () => 1,
+      stableMs: 30,
+      on: { reconnecting: () => events.push("reconnect"), error: () => events.push("error") },
+    });
+
+    created.device.drop();
+    await until(() => events.includes("reconnect"), 3000);
+    assert.ok(events.includes("error"), "the failed re-attach is reported");
+    managed.close();
+  });
+
+  test("stops re-attaching for ever and reconnects instead", async () => {
+    const factory = deviceFactory();
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      isLinkAlive: () => true,
+      maxReattaches: 2,
+      ...FAST,
+    });
+
+    for (let i = 0; i < 3; i++) {
+      factory.made[factory.made.length - 1].drop();
+      await until(() => factory.made.length === i + 2);
+      await settle(15);
+    }
+    // The third drop exceeded the cap, so that one went the hard way.
+    assert.ok(factory.made[2].disconnected, "a link that keeps breaking earns a real reconnect");
+    managed.close();
+  });
+
   test("requires a createDevice factory", async () => {
     await assert.rejects(() => connectMeshtasticDevice({}), /createDevice/);
   });
