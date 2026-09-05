@@ -43,6 +43,53 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     close();
   });
 
+  test("waits out a duty-cycle refusal instead of dropping the payload", async () => {
+    // The firmware measures its own airtime and refuses past the regional
+    // limit. That is a "not yet", and giving up on it throws away a payload
+    // over a limit that expires by itself.
+    let refuse = true;
+    const sent = [];
+    const link = {
+      mtu: 60,
+      async send(bytes) {
+        if (refuse) {
+          const error = new Error("the node has spent its hourly airtime — waiting");
+          error.dutyCycleExhausted = true;
+          throw error;
+        }
+        sent.push(bytes);
+      },
+      onFrame() { return () => {}; },
+    };
+    const events = [];
+    const courier = createMeshtasticCourier({
+      link,
+      ...FAST,
+      region: { dutyCycle: 0.1 },
+      // A fast preset and a short window, so a frame's airtime fits the budget
+      // and the bucket refills inside a test. In the field the window is an
+      // hour, and the back-off after a refusal is meant to last: the radio has
+      // just said it has nothing left to spend.
+      preset: "SHORT_TURBO",
+      windowMs: 2000,
+      onEvent: (e) => events.push(e.kind),
+    });
+
+    await courier.send(bytesOf(50));
+    assert.equal(sent.length, 0, "nothing went out");
+    assert.ok(events.includes("duty-cycle-exhausted"), "and it said why");
+    assert.ok(!events.includes("giveup"), "but it did not give up on the payload");
+    // The firmware just proved our budget was fiction, so pacing must believe it.
+    assert.equal(courier.budget().remainingAirtimeMs, 0);
+
+    // The window moves on; the frame is still outstanding and goes out on a
+    // later wave, rather than having been thrown away.
+    refuse = false;
+    await until(() => sent.length > 0, 5000);
+
+    courier.close();
+  });
+
   test("adopts the node's modem preset — twentyfold, not a rounding error", async () => {
     const pair = createMemoryMeshPair({ mtu: 60, delayMs: 1 });
     // Region without a duty cycle, so the bucket never masks the difference.
