@@ -323,6 +323,27 @@ Now such a record keeps its status, is reported as off-grid rather than lost,
 and the screen renders it from its own instant. It occupies nothing on a grid it
 is not on.
 
+## What is bound to what
+
+Worth being precise about, because the answer differs by role.
+
+**Radio nodes are interchangeable.** Nothing in either demo keys on a node's
+identity — a node is a radio, and any device may use any node at any time. What
+*must* match is the **channel**: reception decodes every channel the node holds
+a key for, so a mismatch is silent, with both sides hearing each other's packets
+and decrypting none of them. The transmit channel is therefore selectable, and
+shown with the first two bytes of its key's SHA-256 so two people can compare
+across a room.
+
+**Devices are not interchangeable for the salon.** The salon's identity is a
+key in one browser's storage, and only the device holding it can decide.
+Opening the shop on a second laptop is refused rather than silently taking over,
+because a take-over invalidates every decision the first device ever signed.
+
+**A customer may change device, via the link.** The capability token lives in
+the browser that made the booking — but also in the `.ics`, which is what that
+link is for.
+
 ## Open, and deliberately so
 
 - **Nobody prunes yet.** `log.forgetBefore(day)` exists and is tested, but no

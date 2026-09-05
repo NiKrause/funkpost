@@ -71,7 +71,7 @@ export async function createStack({ room, fromISO, days = DEFAULT_SHOP.horizonDa
  * `mode.kind === "bc"` uses a BroadcastChannel as a fake mesh — two browser
  * tabs play salon and customer with no hardware at all.
  */
-export async function connectCourier({ stack, mode, onEvent, onChange, onStatus, onRegion, onError, onReconnecting, onReconnected, onGaveUp }) {
+export async function connectCourier({ stack, mode, onEvent, onChange, onStatus, onRegion, onChannel, onMyNodeInfo, onError, onReconnecting, onReconnected, onGaveUp }) {
   const { doc, log, fromISO, days } = stack;
   const horizon = () => horizonFor(fromISO, days);
 
@@ -141,6 +141,11 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
         }
       },
       status: onStatus,
+      // Which channels the node holds a key for, and which one we transmit on.
+      // Two nodes that hear each other perfectly and decrypt nothing is the
+      // classic field failure, and it is invisible without this.
+      channel: onChannel,
+      myNodeInfo: onMyNodeInfo,
       reconnecting: onReconnecting,
       reconnected: () => {
         // Re-greet: one digest and one state vector, and whatever the drop

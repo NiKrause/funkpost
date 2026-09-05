@@ -66,6 +66,17 @@ import { wallAt } from "./domain/time.js";
   let syncStats = $state({ payloadsSent: 0, payloadsReceived: 0 });
   let presence = $state({ peers: [], lastHeardAgoMs: null });
 
+  // Which channel we TRANSMIT on. Reception decodes every channel the node
+  // holds a key for, so a mismatch is silent: both sides hear each other's
+  // packets and decrypt none of them. The fingerprint is the first two bytes
+  // of the key's SHA-256 — enough for two people to compare across a room.
+  let channels = $state([]);
+  let primaryChannel = $state(null);
+  let txChannel = $state(0);
+  let myNode = $state("");
+  let setTxChannelFn = () => {};
+  const channelMap = new Map();
+
   // Phones sleep their screen, and Web Bluetooth pauses with it — the quiet
   // killer of a bench session. Desktops do not take the radio down with them,
   // so the box only appears on handhelds. The detection deliberately does not
@@ -296,6 +307,24 @@ import { wallAt } from "./domain/time.js";
           pushLog(`Knoten meldet Region ${name}`);
         },
         onStatus: (name) => pushLog(`Knoten: ${name}`),
+        onChannel: async (channel) => {
+          if (channel.role === 0) return; // DISABLED
+          const psk = channel.settings?.psk ?? new Uint8Array();
+          const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
+          const entry = {
+            index: channel.index,
+            role: channel.role,
+            name: channel.settings?.name || "(Standard)",
+            fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+          };
+          channelMap.set(entry.index, entry);
+          channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
+          if (entry.role === 1) primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
+          pushLog(`Kanal ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primär" : ""}`);
+        },
+        onMyNodeInfo: (info) => {
+          if (info?.myNodeNum) myNode = `!${info.myNodeNum.toString(16).padStart(8, "0")}`;
+        },
         onError: (message) => pushLog(`! ${message}`),
         onReconnecting: (n) => pushLog(`Verbindung weg — Versuch ${n}…`),
         onReconnected: (how) =>
@@ -310,14 +339,24 @@ import { wallAt } from "./domain/time.js";
       });
       linkKind = live.kind;
       region = live.region;
+      setTxChannelFn = live.setTxChannel ?? (() => {});
 
       if (role === "salon") {
         const saved = localStorage.getItem(`salon:${room}`);
-        salonToken = saved
-          ? await live.book.becomeSalon(fromBase64Url(saved))
-          : await live.book.becomeSalon();
-        localStorage.setItem(`salon:${room}`, toBase64Url(salonToken));
-        pushLog("Salon-Identität veröffentlicht");
+        try {
+          salonToken = saved
+            ? await live.book.becomeSalon(fromBase64Url(saved))
+            : await live.book.becomeSalon();
+          localStorage.setItem(`salon:${room}`, toBase64Url(salonToken));
+          pushLog("Salon-Identität veröffentlicht");
+        } catch (e) {
+          // Another device already holds this shop. Say so plainly rather than
+          // taking it over and silently voiding that device's decisions.
+          error =
+            "Dieser Salon wird bereits von einem anderen Gerät geführt. " +
+            "Bestätigen kann nur dieses eine Gerät — hier lässt sich der Tagesplan ansehen.";
+          pushLog(`! ${e.message}`);
+        }
       }
 
       // A booking may arrive at any moment; the Yjs rules likewise.
@@ -413,6 +452,31 @@ import { wallAt } from "./domain/time.js";
       {linkState.text}
       {#if region && region !== "UNSET"}<span class="dim"> · {region}</span>{/if}
     </p>
+    {#if channels.length > 0}
+      <p class="channel" data-testid="channel">
+        <label
+          title="Gesendet wird auf diesem Kanal — auf beiden Geräten derselbe »Name« ⌗Fingerabdruck. Empfangen wird auf allen, für die der Knoten einen Schlüssel hat."
+        >
+          Sendekanal:
+          <select
+            bind:value={txChannel}
+            onchange={() => {
+              setTxChannelFn(txChannel);
+              const ch = channels.find((c) => c.index === txChannel);
+              pushLog(`Sendekanal → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint}`);
+            }}
+          >
+            {#each channels as ch (ch.index)}
+              <option value={ch.index}>
+                {ch.index} »{ch.name}« ⌗{ch.fingerprint}{ch.role === 1 ? " · primär" : ""}
+              </option>
+            {/each}
+          </select>
+        </label>
+        {#if myNode}<span class="dim"> · dieser Knoten {myNode}</span>{/if}
+      </p>
+    {/if}
+
     {#if wakeLockSupported && isHandheld}
       <label class="awake dim">
         <input type="checkbox" bind:checked={keepAwake} onchange={toggleAwake} data-testid="wake-lock" />
@@ -793,6 +857,14 @@ import { wallAt } from "./domain/time.js";
   .led.waiting { background: #a86412; }
   .led.live { background: #12855a; }
   .awake { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .channel {
+    margin: 0; font-size: 0.82rem; color: #5b6478;
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .channel select {
+    font: inherit; font-size: 0.8rem; padding: 3px 7px;
+    border: 1px solid #d5dae4; border-radius: 6px; background: #fff; color: #14171f;
+  }
 
   footer { color: #8b93a5; font-size: 0.8rem; }
   footer a { color: #2d4ad0; }
