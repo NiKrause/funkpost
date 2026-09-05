@@ -1,0 +1,185 @@
+// SPDX-License-Identifier: GPL-3.0-only
+/**
+ * The demo driven the way two people would drive it: a salon on one device, a
+ * customer on another, every byte between them crossing a fake mesh.
+ *
+ * Two pages in **one** browser context, because a BroadcastChannel does not
+ * cross contexts — isolating them the way two real phones are isolated would
+ * cut the very wire under test. The app namespaces its local storage by role,
+ * so the two still do not read each other's.
+ *
+ * The date is pinned with `?today=`, so this is the same test every morning.
+ */
+import { test, expect } from "@playwright/test";
+
+const MONDAY = "2026-09-07";
+let room = 0;
+const nextRoom = () => `e2e-${Date.now()}-${room++}`;
+
+const open = async (context, { room: id, role, loss }) => {
+  const page = await context.newPage();
+  const query = new URLSearchParams({ mesh: "bc", room: id, role, today: MONDAY });
+  if (loss) query.set("loss", String(loss));
+  await page.goto(`/?${query}`);
+  return { page };
+};
+
+/** Both sides ready and talking. */
+const ready = async (page) => {
+  await expect(page.getByTestId(page.url().includes("role=salon") ? "salon" : "customer")).toBeVisible({
+    timeout: 30_000,
+  });
+};
+
+const bookSlot = async (page, { time, service, handle }) => {
+  if (service) await page.getByTestId("service").selectOption(service);
+  await page.getByTestId("handle").fill(handle);
+  await page.locator(`[data-slot="${time}"]`).click();
+  await page.getByTestId("book").click();
+};
+
+test("the whole script: ask, approve, converge, download, parse", async ({ context }) => {
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+  // Rückfrage: the salon decides, so nothing confirms itself.
+  await salon.page.getByTestId("mode-ask").click();
+
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+  // The rules crossed the mesh — this is the Yjs plane, not a local default.
+  await expect(guest.page.getByTestId("book")).toHaveText(/anfragen/, { timeout: 20_000 });
+
+  await bookSlot(guest.page, { time: "14:00", handle: "Anna" });
+
+  // …and the request crossed the other way, onto the salon's screen.
+  const ask = salon.page.getByTestId("pending");
+  await expect(ask).toContainText("Anna", { timeout: 20_000 });
+  await expect(ask).toContainText("14:00");
+
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "pending");
+
+  await salon.page.getByTestId("confirm").click();
+
+  // The salon's SIGNED decision comes back and verifies on the guest's device.
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 20_000,
+  });
+
+  // The artefact that outlives the radio session.
+  const [download] = await Promise.all([
+    guest.page.waitForEvent("download"),
+    guest.page.getByTestId("save-ics").click(),
+  ]);
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const ics = Buffer.concat(chunks).toString("utf8");
+
+  expect(download.suggestedFilename()).toMatch(/\.ics$/);
+  expect(ics).toContain("BEGIN:VCALENDAR");
+  expect(ics).toContain("METHOD:PUBLISH");
+  expect(ics).toContain("STATUS:CONFIRMED");
+  expect(ics).toMatch(/DTSTART:20260907T\d{6}Z/);
+  // Every content line must stay inside 75 octets, folded or not.
+  for (const line of ics.split("\r\n").filter(Boolean)) {
+    expect(Buffer.byteLength(line, "utf8")).toBeLessThanOrEqual(75);
+  }
+  // And the change link, unfolded, round-trips back to this booking.
+  const unfolded = ics.replace(/\r\n[ \t]/g, "");
+  expect(unfolded).toMatch(/URL:https:\/\/[^\r\n]+#\/b\/salon-funkpost\/[\w-]+\/[\w-]{43}/);
+
+  await salon.page.close();
+  await guest.page.close();
+});
+
+test("auto mode confirms without the salon doing anything", async ({ context }) => {
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+  await salon.page.getByTestId("mode-auto").click();
+
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+  await expect(guest.page.getByTestId("book")).toHaveText(/buchen/, { timeout: 20_000 });
+
+  await bookSlot(guest.page, { time: "10:30", handle: "Bert" });
+
+  // No popup, no decision, no round trip: the slot was free and that was that.
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 20_000,
+  });
+  await expect(salon.page.getByTestId("pending")).toHaveCount(0);
+  await expect(salon.page.getByTestId("salon")).toContainText("Bert", { timeout: 20_000 });
+
+  await salon.page.close();
+  await guest.page.close();
+});
+
+test("a booking blocks the times it really occupies, on both screens", async ({ context }) => {
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+  await salon.page.getByTestId("mode-auto").click();
+
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+  await bookSlot(guest.page, { time: "14:00", service: "cut", handle: "Anna" });
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 20_000,
+  });
+
+  // 45 minutes covers three quarter-hours; and a NEW 45-minute cut may not
+  // start at 13:30 or 13:45 either, because it would run into them.
+  for (const time of ["13:30", "13:45", "14:00", "14:15", "14:30"]) {
+    await expect(guest.page.locator(`[data-slot="${time}"]`)).toBeDisabled();
+  }
+  await expect(guest.page.locator('[data-slot="13:15"]')).toBeEnabled();
+  await expect(guest.page.locator('[data-slot="14:45"]')).toBeEnabled();
+
+  await salon.page.close();
+  await guest.page.close();
+});
+
+test("a decline frees the slot and says why", async ({ context }) => {
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+  await salon.page.getByTestId("mode-ask").click();
+
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+  await expect(guest.page.getByTestId("book")).toHaveText(/anfragen/, { timeout: 20_000 });
+  await bookSlot(guest.page, { time: "11:00", handle: "Cem" });
+
+  await expect(salon.page.getByTestId("pending")).toContainText("Cem", { timeout: 20_000 });
+  await salon.page.getByTestId("decline").click();
+
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "declined", {
+    timeout: 20_000,
+  });
+  // Declined means the time is genuinely free again, not merely marked.
+  await expect(guest.page.locator('[data-slot="11:00"]')).toBeEnabled();
+
+  await salon.page.close();
+  await guest.page.close();
+});
+
+test("converges over a mesh that eats a fifth of all frames", async ({ context }) => {
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon", loss: 0.2 });
+  await ready(salon.page);
+  await salon.page.getByTestId("mode-auto").click();
+
+  const guest = await open(context, { room: id, role: "customer", loss: 0.2 });
+  await ready(guest.page);
+  await bookSlot(guest.page, { time: "15:30", handle: "Dora" });
+
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 40_000,
+  });
+  await expect(salon.page.getByTestId("salon")).toContainText("Dora", { timeout: 40_000 });
+
+  await salon.page.close();
+  await guest.page.close();
+});

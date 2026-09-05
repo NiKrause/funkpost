@@ -6,10 +6,23 @@
   "description": "Appointment book for a local business, over a LoRa mesh — the Yjs plane's demo (issue #38).",
   "license": "GPL-3.0-only",
   "scripts": {
-    "test": "node --test --test-force-exit test/*.test.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test --test-force-exit test/*.test.js",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@le-space/funkpost": "file:../..",
+    "@meshtastic/core": "^2.6.7",
+    "@meshtastic/transport-web-bluetooth": "^0.1.5",
     "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "svelte": "^5.39.6",
+    "vite": "^7.1.9",
+    "vite-plugin-node-polyfills": "^0.28.0"
   }
 }

@@ -120,20 +120,32 @@ cancel whose signature verifies. **Import into Apple Calendar, Google Calendar
 and Thunderbird is a manual check and has not been done**; until it has, treat
 this phase as open.
 
-### P5 · The two UIs — #38 A5
+### P5 · The two UIs — #38 A5 ✅
 
 Customer booking flow and salon day view, the Rückfrage popup, the mode switch,
 and the collapsible radio strip that keeps the transport honest.
 
-*Gate:* Playwright e2e over the BroadcastChannel fake mesh — book → approve →
-converge → download → parse.
+*Gate met:* five Playwright runs over the fake mesh — the full script (ask →
+approve → converge → download → parse, with every `.ics` line checked to be
+inside 75 octets), auto-confirm without the salon acting, occupancy blocking the
+times a service really covers, a decline genuinely freeing the slot, and the
+whole thing again over a mesh dropping a fifth of all frames.
 
-### P6 · Deploy both demos — #38 A6
+Two things the browser found that the unit tests could not: the view was
+computed *after* the template was told it was ready, which is a crash rather
+than a flicker; and a BroadcastChannel does not cross browser contexts, so
+isolating the two roles the way two real phones are isolated cut the very wire
+under test. Local storage is namespaced by role instead.
 
-`pages.yml` builds two examples: `mesh-todo` stays at `/funkpost/`, the booking
-demo lands at `/funkpost/termine/`. A service worker caches the app shell so a
-link opened cold still works. **The path is a one-way door** — every `.ics` ever
-downloaded points at it.
+### P6 · Deploy both demos — #38 A6 ◐
+
+`pages.yml` now builds both: `mesh-todo` stays at `/funkpost/`, the booking demo
+lands at `/funkpost/termine/`, matching `DEFAULT_BASE` in `link.js`. **The path
+is a one-way door** — every `.ics` ever downloaded points at it.
+
+*Still missing:* the service worker, so a link opened cold on a phone with no
+signal does not yet work offline. Until it lands, the QR code at the counter is
+the only offline-native path — which the docs already say it should be anyway.
 
 ### P7 · Hardware bench — #38 A7
 
