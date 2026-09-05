@@ -3,7 +3,7 @@
 # The appointment core
 
 Status: **built and tested** ([#38](https://github.com/NiKrause/funkpost/issues/38)
-A1–A3) — the domain only. No UI yet (P5), no `.ics` yet (P4), never run on
+A1–A4) — the domain and the calendar file. No UI yet (P5), never run on
 hardware (P7). Tests: `examples/mesh-appointments/test/`.
 
 An appointment book for a local business, on the Yjs plane. It is the demo that
@@ -126,6 +126,60 @@ left doing set-union — the case it is perfect at.
 
 Only a first name and a service id ever travel. Everything else a salon knows
 about a customer belongs in a local document that is never synced.
+
+## The `.ics`, and the link with no server behind it
+
+The calendar file is the one artefact of this system that outlives the radio
+session: it lands in Apple Calendar or Thunderbird and has to still be correct
+months later, on a device that has never heard of LoRa. Three details are easy
+to get wrong and are therefore tested rather than assumed:
+
+- **Folding is counted in octets, not characters.** A line may not exceed 75
+  octets and a multi-byte character may not be split across the fold. "Föhnen"
+  and "—" are two and three octets; counting characters yields lines that look
+  legal and are not.
+- **TEXT escapes `\` `;` `,` and newlines, in that order** — reverse it and the
+  backslashes you just inserted get escaped again. An unescaped comma silently
+  truncates an address.
+- **`UID` is stable and `SEQUENCE` rises.** The same UID on both sides means the
+  salon and the customer hold *one* event; a rising SEQUENCE means a changed or
+  cancelled booking **replaces** the earlier entry instead of appearing beside
+  it. Getting this wrong is how a rescheduled appointment becomes two.
+
+Times go out in UTC (`…Z`), so no `VTIMEZONE` is ever shipped and we are never
+wrong about a zone the receiving client knows better.
+
+The customer's file carries the change/cancel link; the **salon's does not** —
+the salon holds no capability and must not publish a link implying otherwise.
+
+### Why the link works without a backend
+
+```
+https://…/termine/#/b/<shopId>/<bookingId>/<token>
+                  ^ everything from here never leaves the browser
+```
+
+A fragment is not sent to the server — not in the request line, not in a
+header, not in a referrer. The capability token is therefore never disclosed to
+the host, a CDN, or anything in between. Opening the link fetches **static
+files only**; the change itself then travels over the mesh, signed with the key
+the token derives.
+
+**The sharpest edge, stated plainly:** the *link* needs the app, and the app
+arrives over HTTPS the first time. Installed as a PWA it works offline
+afterwards; a stranger tapping a cold link needs one moment of internet to
+fetch the page — after which the booking itself is pure radio. The QR code at
+the counter is the offline-native path and should be the primary one.
+
+The deploy path is a **one-way door**: every `.ics` ever downloaded points at
+it, and a calendar entry from last spring must still lead somewhere useful.
+
+### What CI cannot prove
+
+Structural correctness is tested — every line ≤ 75 octets, CRLF throughout, a
+full parse-back round trip, `SEQUENCE` behaviour. Whether **Apple Calendar,
+Google Calendar and Thunderbird** each accept the file is a manual check, and
+until someone has done it on all three this gate is only half met.
 
 ## Open, and deliberately so
 

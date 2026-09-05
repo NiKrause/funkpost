@@ -27,7 +27,7 @@ roadmap is built to keep testing.
 | **#1** | OrbitDB data plane | **First over-the-air replication 2026-09-04** — two desktop browsers, two nodes, no IP path. Open: first-contact reliability on a busy public channel, and the phone Bluetooth lottery. |
 | **#36** | Yjs data plane | **Built** (S1–S2) — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss. Not yet run on hardware. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
 | **#37** | Hoist demo scaffolding into the lib | **Built** — the device supervisor and the error humaniser are library code; `mesh-todo` is a consumer. Not yet re-run on hardware. [docs](docs/links.md) |
-| **#38** | `mesh-appointments` demo | **Core built** (A1–A3) — slot engine, busy mask, arbitration, capability keys. No UI, no `.ics`, no hardware yet. [docs](docs/appointments.md) |
+| **#38** | `mesh-appointments` demo | **Core + calendar built** (A1–A4) — slot engine, busy mask, arbitration, capability keys, `.ics` and the serverless link. No UI, no hardware yet. [docs](docs/appointments.md) |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -104,14 +104,20 @@ Deliberately deferred and written down rather than forgotten: **document
 compaction** (a salon books for years and Yjs keeps history) and the fact that
 changing `slotMinutes` shifts the whole grid index space.
 
-### P4 · `.ics` and the serverless Calendly link — #38 A4
+### P4 · `.ics` and the serverless Calendly link — #38 A4 ◐
 
-Generator with correct folding and escaping, `SEQUENCE`/`METHOD:CANCEL`
-handling, and the fragment-routed change/cancel link whose state-changing
-traffic travels only over the mesh.
+Generator with folding counted in **octets** (not characters, and never
+splitting a multi-byte character), TEXT escaping in the order that does not
+double-escape, stable `UID` with a rising `SEQUENCE` so a change replaces rather
+than duplicates, and `METHOD:CANCEL` for a withdrawal. Times in UTC, so no
+`VTIMEZONE` ships. The customer's file carries the capability link; the salon's
+does not.
 
-*Gate:* the file imports cleanly into Apple Calendar, Google Calendar and
-Thunderbird; the link round-trips to a cancel whose signature verifies.
+*Gate half met:* structure is proven in CI — every line ≤ 75 octets, CRLF
+throughout, a full parse-back round trip, and a real booking round-tripping to a
+cancel whose signature verifies. **Import into Apple Calendar, Google Calendar
+and Thunderbird is a manual check and has not been done**; until it has, treat
+this phase as open.
 
 ### P5 · The two UIs — #38 A5
 

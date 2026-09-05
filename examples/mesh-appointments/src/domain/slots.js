@@ -26,6 +26,7 @@ import {
 /** A salon that has not been configured yet — enough to render something. */
 export const DEFAULT_SHOP = {
   name: "Salon Funkpost",
+  location: "Marktplatz 3, Eggenfelden",
   tz: "Europe/Berlin",
   mode: "auto", // "auto" (self-confirming) | "ask" (Rückfrage)
   slotMinutes: 15,
