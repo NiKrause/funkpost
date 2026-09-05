@@ -323,6 +323,45 @@ Now such a record keeps its status, is reported as off-grid rather than lost,
 and the screen renders it from its own instant. It occupies nothing on a grid it
 is not on.
 
+## How two devices find each other
+
+There is no discovery, and no peer list. Everyone tuned to the same Meshtastic
+channel and listening on the private application port hears everything — so
+"connecting" is not a thing that happens, and neither is a handshake.
+
+What happens instead:
+
+1. On start a device publishes one **digest** — a small fingerprint per day of
+   the horizon, **111 bytes for three weeks**, the same size whether the book is
+   empty or full and whether two people or two thousand have ever used it.
+2. Anyone who hears it compares it with their own, and names **only the days
+   that differ**. Those days exchange record keys, then the missing records.
+3. If the digests match, **nothing is sent**. Two devices in step exchange one
+   frame each and fall silent.
+
+So the answer to *"do they sync every time?"* is no. They compare every time,
+which costs one frame, and only talk about what actually differs.
+
+A new booking does not wait for any of that — it goes on the air as it is made.
+The digest is the safety net, not the mechanism.
+
+### The greeting repeats, on purpose
+
+A greeting is unacknowledged. If the only one a device ever sent were lost —
+the peer's radio busy at that moment, briefly out of range — then neither side
+would have any reason to speak again, and both would sit silent with different
+books for ever.
+
+So it repeats: roughly **every 45 seconds while nobody has been heard**, and
+every **five minutes** once somebody has. Looking for company is worth more
+airtime than keeping in step with company you already have, and at one frame
+each even the fast cadence is a rounding error against a six-minute hourly
+budget.
+
+The horizon is recomputed rather than fixed at load, so a tablet left running
+overnight rolls onto the new day instead of quietly disagreeing with everyone
+else about which days exist.
+
 ## What is bound to what
 
 Worth being precise about, because the answer differs by role.

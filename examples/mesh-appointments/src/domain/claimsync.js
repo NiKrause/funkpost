@@ -95,6 +95,15 @@ const readKeys = (body) => {
  * @param {() => { fromDay: number, days: number }} options.horizon What we
  *   currently care about — moves forward as days pass, which is how the log
  *   forgets
+ * @param {number} [options.announceIntervalMs] Re-publish the fingerprints on
+ *   this interval once somebody has been heard (default 5 min). One greeting is
+ *   not enough on a broadcast: nothing acknowledges it, so a peer whose radio
+ *   was busy at that moment never learns we exist, and neither of us has any
+ *   reason to speak again. A digest is one frame, so a slow heartbeat is
+ *   affordable where silence is not.
+ * @param {number} [options.searchIntervalMs] The interval to use while nobody
+ *   has been heard at all (default 45 s) — looking for company is worth more
+ *   airtime than keeping in step with company you already have.
  * @param {boolean} [options.announceOnStart] Publish our fingerprints on
  *   construction (default true). Without it a peer joining an existing room —
  *   somebody opening a calendar link on a phone that has never seen the book —
@@ -111,6 +120,9 @@ export function createClaimSync({
   horizon,
   peerId = globalThis.crypto.getRandomValues(new Uint8Array(4)),
   peerTimeoutMs = 120_000,
+  announceIntervalMs = 300_000,
+  searchIntervalMs = 45_000,
+  timers = { setTimeout: (...a) => setTimeout(...a), clearTimeout: (...a) => clearTimeout(...a) },
   announceOnStart = true,
   minAnnounceGapMs = 1000,
   now = () => Date.now(),
@@ -278,9 +290,26 @@ export function createClaimSync({
     }
   });
 
-  // Say hello. A digest is one frame, and it is the only thing that makes a
-  // late joiner's empty log fill itself.
+  // Say hello, then keep saying it — quietly.
+  //
+  // A greeting is unacknowledged: if the only one we ever send is lost, the
+  // peer never learns we exist and we never learn about them, and both sides
+  // sit silent with different books for ever. So the greeting repeats, faster
+  // while nobody has answered than once somebody has.
+  let beat = null;
+  const scheduleBeat = () => {
+    if (closed || !announceIntervalMs) return;
+    const alone = peers.size === 0;
+    beat = timers.setTimeout(() => {
+      beat = null;
+      if (closed) return;
+      announce({ force: true });
+      scheduleBeat();
+    }, alone ? searchIntervalMs : announceIntervalMs);
+  };
+
   if (announceOnStart) announce({ force: true });
+  scheduleBeat();
 
   return {
     /** Publish our day fingerprints, honouring the announce floor. */
@@ -325,6 +354,8 @@ export function createClaimSync({
     close() {
       if (closed) return;
       closed = true;
+      if (beat) timers.clearTimeout(beat);
+      beat = null;
       unsubscribe();
     },
   };
