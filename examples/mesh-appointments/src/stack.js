@@ -115,6 +115,10 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
   const managed = await connectMeshtasticDevice({
     createDevice: async () =>
       new MeshDevice(await TransportWebBluetooth.createFromDevice(bleDevice)),
+    // The transport reports a failed GATT write as a disconnection, and
+    // Android Chrome produces those readily. This is the ground truth that
+    // stops us closing a connection that never actually dropped.
+    isLinkAlive: () => bleDevice.gatt?.connected === true,
     createCourier: (link) =>
       createMeshtasticCourier({
         link,
@@ -144,6 +148,13 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
         started?.sync.resync();
         started?.provider.resync();
         if (onReconnected) onReconnected();
+      },
+      reattached: () => {
+        // The stream was replaced over a link that never dropped; re-greet so
+        // whatever was in flight when it broke comes back.
+        started?.sync.resync();
+        started?.provider.resync();
+        if (onReconnected) onReconnected("reattached");
       },
       gaveUp: onGaveUp,
       error: (e) => onError && onError(describeMeshtasticError(e)),

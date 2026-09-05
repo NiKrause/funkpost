@@ -94,6 +94,10 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   const managed = await connectMeshtasticDevice({
     createDevice: async () =>
       new MeshDevice(await TransportWebBluetooth.createFromDevice(bleDevice)),
+    // The transport reports a failed GATT write as a disconnection, and
+    // Android Chrome produces those readily. This is the ground truth that
+    // stops us closing a connection that never actually dropped.
+    isLinkAlive: () => bleDevice.gatt?.connected === true,
     // minFrameGapMs paces BLE writes so a multi-fragment payload (the bootstrap
     // blocks) does not burst and flood the phone's stack. maxRounds 12 (vs the
     // lib default 8): first contact is the biggest payload and the public

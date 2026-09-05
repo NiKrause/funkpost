@@ -71,6 +71,39 @@ Every rule below is in the code because its absence broke a bench session.
 | **One generation speaks** | Every past reconnect leaves live watchers behind. Without the guard each of them fires its own reconnect — and the teardown disconnect starts a fresh cycle by itself. |
 | **Back off, and don't reset early** | A connect that drops again immediately looks like success. Resetting the counter there means a flapping stack retries forever at full speed. The counter only resets after the link *stays* up for `stableMs`. |
 | **Give up** | A stack that keeps failing `gatt.connect` cannot be cured from JavaScript. Looping forever just hides that from the user; `gaveUp` lets the UI say so. |
+| **Check before you close** | The transport reports a *failed GATT operation* as a disconnection. Closing the link then converts a hiccup into a real outage — repeatedly, until the cap. `isLinkAlive` tells the two apart. |
+
+### Not every "disconnected" is a disconnection
+
+The Web Bluetooth transport emits `DeviceDisconnected` with reason
+`write-error` when a `writeValue` fails, and Android Chrome produces those
+readily: a write and a notification-driven read overlap, and one loses. The GATT
+link is still up — but the transport's `WritableStream` is now errored, so
+nothing can be sent through it again.
+
+Both halves of that matter. Ignoring the report leaves an app that can receive
+and never send; acting on it by disconnecting destroys a working connection. So
+a live link gets a **re-attach**: a fresh `MeshDevice` over the same open GATT,
+with no `gatt.disconnect()`, no re-pairing and no radio renegotiation. The old
+device is *parked* — its heartbeat pushed out to effectively never, since the
+library offers no way to stop one — rather than disconnected, because
+disconnecting it would close the very link being kept.
+
+```js
+connectMeshtasticDevice({
+  createDevice,
+  isLinkAlive: () => bleDevice.gatt?.connected === true,
+});
+```
+
+Only when that predicate says the link is genuinely gone does the full teardown
+run. A re-attach that fails falls through to one, and a link that keeps breaking
+stops earning cheap repairs after `maxReattaches`.
+
+This is also why the official web client looks steadier on the same hardware: it
+does not reconnect at all — [meshtastic/web#589](https://github.com/meshtastic/web/issues/589)
+is an open request for the feature — so a spurious report costs it nothing, and
+a chat app writes rarely enough to seldom provoke one.
 | **Heartbeat** | Browsers drop an idle GATT link after a few minutes. The official clients ping for this reason. |
 
 ### Options

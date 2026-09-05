@@ -49,13 +49,21 @@ driving its own node over Web Bluetooth). The data plane works on hardware.
 
 Honest about what is not settled yet:
 
-- **Phones vary by Bluetooth stack.** A **Samsung Fold 5** (One UI, Chrome)
-  drops the BLE link repeatedly — an OS Bluetooth-stack instability that hits
-  the official Meshtastic web client too, not funkpost's code (the courier now
-  reconnects and resumes, but a stack that keeps failing `gatt.connect` cannot
-  be cured from JavaScript). **GrapheneOS with Vanadium** held the link with
-  **no disconnects** — a promising sign — though a full end-to-end replication
-  there is not yet confirmed, and neither is one from a phone browser generally.
+- **Phones vary by Bluetooth stack — and some of that was our fault.** Android
+  Chrome devices dropped repeatedly while the official web client held on the
+  same hardware, which an earlier version of this section wrongly explained away
+  as an OS problem. It is not. The Web Bluetooth transport reports a **failed
+  GATT operation** as a disconnection (`write-error`), Android Chrome produces
+  those readily when a write and a notification-driven read overlap, and funkpost
+  answered by *closing the connection* — turning a hiccup into a real outage, and
+  repeating until it gave up. The official client looks steadier because it does
+  not reconnect at all ([meshtastic/web#589](https://github.com/meshtastic/web/issues/589)
+  asks for the feature) and, as a chat app, writes rarely enough to seldom
+  provoke the error. A courier pushing multi-fragment payloads provokes it
+  constantly. The supervisor now checks whether the link is genuinely gone and
+  **re-attaches over the still-open GATT** instead. **GrapheneOS with Vanadium**
+  held the link throughout, which is consistent: fewer collisions, fewer
+  spurious reports.
 - **First-contact bootstrap reliability.** The initial bundle (manifest,
   access controller, identity and entries — ~2 KB for a two-item list)
   currently can need a retry to cross a busy public channel within the ARQ's

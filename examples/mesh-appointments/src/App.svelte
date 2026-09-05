@@ -298,7 +298,12 @@ import { wallAt } from "./domain/time.js";
         onStatus: (name) => pushLog(`Knoten: ${name}`),
         onError: (message) => pushLog(`! ${message}`),
         onReconnecting: (n) => pushLog(`Verbindung weg — Versuch ${n}…`),
-        onReconnected: () => pushLog("wieder verbunden"),
+        onReconnected: (how) =>
+          pushLog(
+            how === "reattached"
+              ? "Schreibkanal war kurz gestört — repariert, Verbindung stand durchgehend"
+              : "wieder verbunden",
+          ),
         onGaveUp: () => {
           error = "Der Funkkontakt bricht immer wieder ab — bitte neu laden.";
         },
