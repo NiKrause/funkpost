@@ -189,6 +189,8 @@
       if (courier) {
         budget = courier.budget();
         totals = { ...courier.stats };
+        // One frame is what a single todo costs.
+        if (courier.timeUntilAffordable) blockedForMs = courier.timeUntilAffordable();
       }
       if (sync && !db && sync.db) attachDb(sync.db);
       nowTick = Date.now();
@@ -332,6 +334,23 @@
     return `${Math.round(seconds / 3600)}h ago`;
   };
 
+  // Airtime is rationed by law and the node enforces it: past the limit it
+  // simply refuses to transmit. A progress bar shading towards empty does not
+  // tell anyone that adding a todo has stopped working, so say it and stop
+  // offering the actions that cannot happen.
+  let blockedForMs = $state(0);
+  const airtimeBlocked = $derived(blockedForMs > 0);
+  const untilFree = $derived.by(() => {
+    if (blockedForMs <= 0) return "";
+    const minutes = Math.ceil(blockedForMs / 60_000);
+    return minutes <= 1 ? "in under a minute" : `in about ${minutes} minutes`;
+  });
+  const dutyCycleText = $derived(
+    budget?.dutyCycle == null
+      ? ""
+      : `${(budget.dutyCycle * 100).toFixed(budget.dutyCycle < 0.05 ? 1 : 0)} % of an hour`,
+  );
+
   const budgetPercent = () => {
     if (!budget || budget.dutyCycle == null) return null;
     return Math.round((budget.remainingAirtimeMs / (budget.dutyCycle * 3_600_000)) * 100);
@@ -383,6 +402,14 @@
               {/each}
             </select>
           </label>
+        </p>
+      {/if}
+      {#if airtimeBlocked}
+        <p class="warn" data-testid="airtime-blocked">
+          <strong>Airtime spent.</strong> This node has used its legal hourly
+          allowance{#if dutyCycleText} ({region} · {dutyCycleText}){/if} and will
+          not transmit. Receiving continues; adding and inviting resume
+          <strong>{untilFree}</strong>.
         </p>
       {/if}
       {#if budgetPercent() != null}
@@ -440,7 +467,9 @@
         }}
       >
         <input bind:value={newText} placeholder="Milch kaufen…" aria-label="new todo" />
-        <button type="submit" disabled={!newText.trim()}>Add</button>
+        <button type="submit" disabled={!newText.trim() || airtimeBlocked}>
+          {airtimeBlocked ? "Airtime spent" : "Add"}
+        </button>
       </form>
       <ul class="todos">
         {#each todos as todo (todo.key)}
@@ -453,7 +482,9 @@
         {/each}
       </ul>
       <p class="dim">{todos.length} entr{todos.length === 1 ? "y" : "ies"} · every change crosses the mesh</p>
-      <button class="ghost" onclick={() => sendInvite(courier, db.address)}>Invite again</button>
+      <button class="ghost" disabled={airtimeBlocked} onclick={() => sendInvite(courier, db.address)}>
+        Invite again
+      </button>
       <button class="ghost" onclick={() => location.reload()}>Reset (drops local copy)</button>
     {:else if sync}
       <p>joining — the first delta carries manifest, access controller and entries…</p>

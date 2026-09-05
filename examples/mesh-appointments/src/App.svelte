@@ -66,6 +66,27 @@ import { wallAt } from "./domain/time.js";
   let syncStats = $state({ payloadsSent: 0, payloadsReceived: 0 });
   let presence = $state({ peers: [], lastHeardAgoMs: null });
 
+  // Airtime is rationed by law and the node enforces it. When there is none
+  // left, the honest thing is to stop offering actions that cannot happen —
+  // and to say when they can, rather than letting a booking fail silently.
+  let blockedForMs = $state(0);
+  let budget = $state(null);
+
+  /** The regional share, from the courier rather than a constant: EU 868 allows
+   *  10 % of an hour, EU 866 only 2.5 %, and stating the wrong one is stating a
+   *  legal limit wrongly. */
+  const dutyCycleText = $derived(
+    budget?.dutyCycle == null ? "" : `${(budget.dutyCycle * 100).toFixed(budget.dutyCycle < 0.05 ? 1 : 0)} % pro Stunde`,
+  );
+  const airtimeBlocked = $derived(blockedForMs > 0);
+
+  const untilFree = $derived.by(() => {
+    if (blockedForMs <= 0) return "";
+    const minutes = Math.ceil(blockedForMs / 60_000);
+    if (minutes <= 1) return "in weniger als einer Minute";
+    return `in etwa ${minutes} Minuten`;
+  });
+
   // Which channel we TRANSMIT on. Reception decodes every channel the node
   // holds a key for, so a mismatch is silent: both sides hear each other's
   // packets and decrypt none of them. The fingerprint is the first two bytes
@@ -266,6 +287,12 @@ import { wallAt } from "./domain/time.js";
       if (live?.courier?.stats) totals = { ...live.courier.stats };
       if (live?.sync?.stats) syncStats = { ...live.sync.stats };
       if (live?.sync?.presence) presence = live.sync.presence();
+      // One frame is what any single action costs — a booking, a decision, a
+      // cancellation are all one record.
+      if (live?.courier?.timeUntilAffordable) {
+        blockedForMs = live.courier.timeUntilAffordable();
+        budget = live.courier.budget();
+      }
     }, 1000);
     document.addEventListener("visibilitychange", reacquireOnReturn);
     return () => {
@@ -354,6 +381,10 @@ import { wallAt } from "./domain/time.js";
       });
       linkKind = live.kind;
       region = live.region;
+      // Deliberate test seam: the e2e suite has no radio to exhaust, so it
+      // drives the node's own airtime figure the way a real node would report
+      // it. Reading the courier is the only way to observe that path end to end.
+      window.__courier = live.courier;
       setTxChannelFn = live.setTxChannel ?? (() => {});
 
       if (role === "salon") {
@@ -467,6 +498,16 @@ import { wallAt } from "./domain/time.js";
       {linkState.text}
       {#if region && region !== "UNSET"}<span class="dim"> · {region}</span>{/if}
     </p>
+    {#if airtimeBlocked}
+      <p class="airtime" data-testid="airtime-blocked">
+        <strong>Sendezeit aufgebraucht.</strong>
+        Dieser Knoten hat sein gesetzliches Stundenkontingent ausgeschöpft{#if dutyCycleText}
+          {" "}({region} · {dutyCycleText}){/if} und sendet nichts mehr. Empfangen
+        geht weiter — nur Buchen, Bestätigen und Absagen pausieren. Wieder
+        möglich <strong>{untilFree}</strong>.
+      </p>
+    {/if}
+
     {#if heard.undecryptable > 0 && presence.peers.length === 0}
       <p class="mismatch" data-testid="key-mismatch">
         <strong>{heard.undecryptable} von {heard.total} Paketen sind nicht lesbar.</strong>
@@ -487,7 +528,7 @@ import { wallAt } from "./domain/time.js";
             onchange={() => {
               setTxChannelFn(txChannel);
               const ch = channels.find((c) => c.index === txChannel);
-              pushLog(`Sendekanal → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint}`);
+              pushLog(`Sendekanal → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint} — grüße neu`);
             }}
           >
             {#each channels as ch (ch.index)}
@@ -601,11 +642,15 @@ import { wallAt } from "./domain/time.js";
         <div class="row cta">
           <button
             class="btn"
-            disabled={slotIndex == null || !handle.trim() || busyAction}
+            disabled={slotIndex == null || !handle.trim() || busyAction || airtimeBlocked}
             onclick={book}
             data-testid="book"
           >
-            {state.shop.mode === "auto" ? "Termin buchen" : "Termin anfragen"}
+            {airtimeBlocked
+              ? "Sendezeit aufgebraucht"
+              : state.shop.mode === "auto"
+                ? "Termin buchen"
+                : "Termin anfragen"}
           </button>
         </div>
       </div>
@@ -642,7 +687,7 @@ import { wallAt } from "./domain/time.js";
                 </button>
               {/if}
               {#if entry.status === CONFIRMED || entry.status === PENDING}
-                <button class="btn ghost sm" onclick={() => cancel(tokenOf(entry.id))}>Absagen</button>
+                <button class="btn ghost sm" disabled={airtimeBlocked} onclick={() => cancel(tokenOf(entry.id))}>Absagen</button>
               {/if}
             </div>
           </div>
@@ -690,10 +735,10 @@ import { wallAt } from "./domain/time.js";
                 {serviceById(state.shop, entry.serviceId)?.label}
               </p>
               <div class="row">
-                <button class="btn ok sm" disabled={busyAction} onclick={() => decide(entry.id, CONFIRMED)} data-testid="confirm">
+                <button class="btn ok sm" disabled={busyAction || airtimeBlocked} onclick={() => decide(entry.id, CONFIRMED)} data-testid="confirm">
                   Bestätigen
                 </button>
-                <button class="btn ghost sm" disabled={busyAction} onclick={() => decide(entry.id, DECLINED)} data-testid="decline">
+                <button class="btn ghost sm" disabled={busyAction || airtimeBlocked} onclick={() => decide(entry.id, DECLINED)} data-testid="decline">
                   Ablehnen
                 </button>
               </div>
@@ -881,6 +926,11 @@ import { wallAt } from "./domain/time.js";
   .led.waiting { background: #a86412; }
   .led.live { background: #12855a; }
   .awake { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .airtime {
+    margin: 0; padding: 10px 12px; font-size: 0.84rem; line-height: 1.5;
+    border: 1px solid #a86412; background: #fbf0dd; color: #6b5426;
+    border-radius: 9px;
+  }
   .mismatch {
     margin: 0; padding: 10px 12px; font-size: 0.84rem; line-height: 1.5;
     border: 1px solid #a86412; background: #fbf0dd; color: #6b5426;
