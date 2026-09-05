@@ -58,11 +58,11 @@ export function horizonFor(fromISO, days) {
  * gesture. But the book itself should survive a reload without asking the mesh
  * to send it all again, which on a duty-cycled link is not free.
  */
-export async function createStack({ room, fromISO, days = DEFAULT_SHOP.horizonDays, onError }) {
+export async function createStack({ room, days = DEFAULT_SHOP.horizonDays, pinnedToday = null, onError }) {
   const doc = new Y.Doc();
   const log = createClaimLog();
   const store = await attachPersistence({ room, doc, log, Y, onError });
-  return { doc, log, fromISO, days, store, restored: store.restored };
+  return { doc, log, days, pinnedToday, store, restored: store.restored };
 }
 
 /**
@@ -72,8 +72,11 @@ export async function createStack({ room, fromISO, days = DEFAULT_SHOP.horizonDa
  * tabs play salon and customer with no hardware at all.
  */
 export async function connectCourier({ stack, mode, onEvent, onChange, onStatus, onRegion, onChannel, onMyNodeInfo, onError, onReconnecting, onReconnected, onGaveUp }) {
-  const { doc, log, fromISO, days } = stack;
-  const horizon = () => horizonFor(fromISO, days);
+  const { doc, log, days, pinnedToday } = stack;
+  // Recomputed per call, not frozen at load: a salon tablet left running over
+  // a night would otherwise keep a horizon that starts yesterday, and quietly
+  // stop agreeing with everyone else about which days exist.
+  const horizon = () => horizonFor(todayISO(DEFAULT_SHOP.tz, pinnedToday), days);
 
   const start = (courier, kind, region) => {
     // Rules over Yjs: a handful of stable writers, where merge earns its keep.

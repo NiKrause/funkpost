@@ -243,7 +243,7 @@ import { wallAt } from "./domain/time.js";
     // reload should not cost airtime asking for a book we already have.
     stack = await createStack({
       room,
-      fromISO,
+      pinnedToday,
       onError: (e) => pushLog(`! Speicher: ${e?.message ?? e}`),
     });
     if (stack.restored > 0) pushLog(`${stack.restored} Einträge aus dem Gerät geladen`);

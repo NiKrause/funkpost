@@ -477,3 +477,54 @@ describe("the salon's identity lives in one place", () => {
     assert.deepEqual([...again], [...token]);
   });
 });
+
+describe("finding each other on a broadcast channel", () => {
+  test("the greeting repeats, so a lost one is not the end of it", async () => {
+    const sent = [];
+    const courier = {
+      send(bytes) { sent.push(bytes[0]); return Promise.resolve(); },
+      onPayload() { return () => {}; },
+    };
+    const sync = createClaimSync({
+      log: createClaimLog(),
+      courier,
+      horizon,
+      searchIntervalMs: 25, // nobody has answered, so it looks harder
+      announceIntervalMs: 5_000,
+    });
+
+    assert.equal(sent.length, 1, "one greeting on start");
+    await settle(90);
+    assert.ok(sent.length >= 3, `only ${sent.length} greetings — a lost one would end it`);
+    assert.ok(sent.every((tag) => tag === 0x10), "and every one is a digest");
+
+    sync.close();
+    const settled = sent.length;
+    await settle(60);
+    assert.equal(sent.length, settled, "closing stops it");
+  });
+
+  test("two peers that agree fall silent after finding each other", async () => {
+    const couriers = meshPair();
+    const salonLog = createClaimLog();
+    const guestLog = createClaimLog();
+    const a = createClaimSync({ log: salonLog, courier: couriers.a, horizon, searchIntervalMs: 30 });
+    const b = createClaimSync({ log: guestLog, courier: couriers.b, horizon, searchIntervalMs: 30 });
+
+    // They hear each other, so the fast search cadence gives way to the slow one.
+    await until(() => a.presence().peers.length === 1 && b.presence().peers.length === 1);
+    await settle(120);
+    const quiet = a.stats.payloadsSent + b.stats.payloadsSent;
+    await settle(200);
+
+    assert.equal(
+      a.stats.payloadsSent + b.stats.payloadsSent,
+      quiet,
+      "agreement must not cost a conversation",
+    );
+
+    a.close();
+    b.close();
+    couriers.close();
+  });
+});
