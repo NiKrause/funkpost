@@ -18,6 +18,7 @@
     "./pacing": "./lib/pacing.js",
     "./regions": "./lib/regions.js",
     "./courier": "./lib/meshtastic-courier.js",
+    "./yjs": "./lib/yjs/provider.js",
     "./links/memory-mesh": "./lib/links/memory-mesh.js",
     "./links/meshtastic-device": "./lib/links/meshtastic-device-link.js"
   },
@@ -29,6 +30,14 @@
     "@meshtastic/core": "^2.6.7",
     "@meshtastic/transport-web-bluetooth": "^0.1.5"
   },
+  "peerDependencies": {
+    "yjs": "^13.6.0"
+  },
+  "peerDependenciesMeta": {
+    "yjs": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@chainsafe/libp2p-noise": "^16.1.5",
     "@chainsafe/libp2p-yamux": "^7.0.4",
@@ -39,7 +48,8 @@
     "datastore-core": "^10.0.4",
     "helia": "^5.5.1",
     "libp2p": "^2.10.0",
-    "orbitdb-storacha-bridge": "github:NiKrause/orbitdb-storacha-bridge#main"
+    "orbitdb-storacha-bridge": "github:NiKrause/orbitdb-storacha-bridge#main",
+    "yjs": "^13.6.27"
   },
   "workspaces": [
     "examples/*"
