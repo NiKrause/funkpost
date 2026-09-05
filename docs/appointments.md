@@ -392,9 +392,17 @@ link is for.
   hash collision *and* an equal count would read as agreement. The odds are
   negligible at these sizes and the failure is silent divergence, so if this
   ever runs somewhere that matters, widen it.
-- **A request is not signed.** Anyone in radio range can create bookings on a
-  public channel. That is already true of the medium; a private Meshtastic
-  channel is the answer, not a signature.
+- **A request is not signed, and that is worse than it sounds.** The trade was
+  "forging one only creates a booking, which anyone within radio range can
+  already do". Measured, it is not one booking: a neighbour with no key, no
+  capability and no invitation took **516 of 516 slots** over the default
+  three-week horizon, superseding the real customer's confirmed booking, because
+  a forged request may claim any timestamp it likes and arbitration correctly
+  awards the earliest claim. See
+  [#55](https://github.com/NiKrause/funkpost/issues/55). A private channel
+  removes the anonymous attacker; it is not authorisation.
+- **Every accepted record is written to storage**, so a flood is also a way to
+  fill a stranger's disk. Nothing bounds the log.
 
 Solved by the substrate change, and no longer open: unbounded document growth,
 and a booking's meaning depending on the horizon it was made in.

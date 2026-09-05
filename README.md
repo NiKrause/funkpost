@@ -19,6 +19,31 @@ difference gets a table, not a footnote:
 The announcement page for both, written for humans:
 [lora.le-space.de](https://lora.le-space.de/).
 
+> ### ⚠ Experimental — not for production use
+>
+> This is a research project. It is **not audited**, and its purpose is to
+> evaluate what a LoRa mesh can carry and how two devices reconcile data over
+> it — throughput, airtime, convergence. Nothing more.
+>
+> **Authorisation has not been designed.** That is not an oversight to be found
+> later; it is a gap that is known, measured, and stated here:
+>
+> - In `mesh-todo` the database is opened with `write: ["*"]`. **Anyone who
+>   hears an invite may write to the list.**
+> - In `mesh-appointments` a booking request carries no signature. A neighbour
+>   with no key, no capability and no invitation can inject them — measured on
+>   the demo's own default shop: **516 of 516 slots taken, all three weeks
+>   gone, and the real customer's booking superseded**, because a forged
+>   request may claim any timestamp it likes.
+>
+> The only boundary today is the **channel key**: whoever can decrypt the
+> channel can write. On a public Meshtastic channel that is no boundary at all.
+> A private channel is the difference between a demo and a toy, and it is still
+> not authorisation.
+>
+> The examples are **demonstrators**, meant to be read and measured — not
+> deployed, and not pointed at anybody's real calendar.
+
 **Try it now.** Both demos are live, one per data plane, and every push to main
 redeploys both:
 

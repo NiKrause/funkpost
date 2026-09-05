@@ -81,6 +81,25 @@ lose the same afternoon.
 - Web Bluetooth support and spec:
   [WebBluetoothCG/web-bluetooth](https://github.com/WebBluetoothCG/web-bluetooth).
 
+## Authorisation, measured rather than assumed
+
+Asked whether anyone on the mesh could flood a salon's calendar. They can, and
+it is not marginal: a neighbour with no key, no capability and no invitation
+took **516 of 516 slots** across the default three-week horizon and superseded
+the real customer's confirmed booking. Nothing was bypassed — a booking request
+carries no signature, and a forged one may claim any timestamp, which
+arbitration correctly honours.
+
+`mesh-todo` is the same from the other side: `write: ["*"]`, with the address
+broadcast in an invite.
+
+The lesson is about the shape of the argument, not the code. The source justified
+unsigned requests with "forging one only creates a booking, which anyone in radio
+range can already do" — true, and the conclusion drawn from it was too generous.
+*Creating a booking* and *taking every slot for three weeks* are not the same
+act, and the sentence hid the difference. Recorded in
+[#55](https://github.com/NiKrause/funkpost/issues/55).
+
 ---
 
 ← [funkpost](../README.md) · [ROADMAP](../ROADMAP.md)
