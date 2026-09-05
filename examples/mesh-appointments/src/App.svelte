@@ -14,6 +14,7 @@
     downloadFile,
   } from "./stack.js";
   import { DEFAULT_SHOP, serviceById } from "./domain/slots.js";
+import { wallAt } from "./domain/time.js";
   import { CONFIRMED, PENDING, DECLINED, CANCELLED, SUPERSEDED } from "./domain/arbitration.js";
   import { toBase64Url, fromBase64Url } from "./domain/capability.js";
   import { bookingLink, parseBookingLink } from "./domain/link.js";
@@ -63,6 +64,59 @@
   let showRadio = $state(false);
   let totals = $state({ framesTx: 0, framesRx: 0, retransmitRounds: 0, airtimeSpentMs: 0 });
   let syncStats = $state({ payloadsSent: 0, payloadsReceived: 0 });
+  let presence = $state({ peers: [], lastHeardAgoMs: null });
+
+  // Phones sleep their screen, and Web Bluetooth pauses with it — the quiet
+  // killer of a bench session. Desktops do not take the radio down with them,
+  // so the box only appears on handhelds. The detection deliberately does not
+  // trust `userAgentData.mobile` alone: an unfolded Samsung Fold reports false
+  // while still being a battery device that sleeps under you.
+  const isHandheld =
+    navigator.userAgentData?.mobile === true ||
+    /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
+  const wakeLockSupported = "wakeLock" in navigator;
+  let keepAwake = $state(false);
+  let wakeSentinel = null;
+
+  async function acquireWakeLock() {
+    try {
+      wakeSentinel = await navigator.wakeLock.request("screen");
+      wakeSentinel.addEventListener("release", () => {
+        wakeSentinel = null;
+        if (keepAwake) pushLog("Bildschirmsperre vom System wieder freigegeben");
+      });
+      pushLog("Bildschirm bleibt an");
+    } catch (e) {
+      keepAwake = false;
+      pushLog(`! Bildschirmsperre abgelehnt: ${e.message}`);
+    }
+  }
+
+  async function toggleAwake() {
+    if (keepAwake) await acquireWakeLock();
+    else {
+      await wakeSentinel?.release();
+      wakeSentinel = null;
+      pushLog("Bildschirm darf wieder schlafen");
+    }
+  }
+
+  const reacquireOnReturn = () => {
+    if (keepAwake && document.visibilityState === "visible" && !wakeSentinel) acquireWakeLock();
+  };
+
+  /** Grey: no radio. Amber: radio up, nobody heard. Green: somebody is there. */
+  const linkState = $derived.by(() => {
+    if (phase !== "ready") return { level: "off", text: "kein Funk" };
+    const ago = presence.lastHeardAgoMs;
+    if (ago == null) return { level: "waiting", text: "Funk offen, noch niemand gehört" };
+    if (ago > 120_000) return { level: "waiting", text: `zuletzt gehört vor ${Math.round(ago / 60000)} min` };
+    const n = presence.peers.length;
+    return {
+      level: "live",
+      text: n === 0 ? "Mesh antwortet" : `${n} ${n === 1 ? "Gerät" : "Geräte"} in Reichweite`,
+    };
+  });
 
   const stamp = () => new Date().toLocaleTimeString(undefined, { hour12: false });
   const pushLog = (text) => {
@@ -85,7 +139,7 @@
     localStorage.setItem(myKey(), JSON.stringify(mine));
   };
 
-  const stack = createStack({ fromISO });
+  let stack = null;
 
   const refresh = async () => {
     if (!live) return;
@@ -142,6 +196,19 @@
   const timeOf = (slot) =>
     `${String(Math.floor(slot.minuteOfDay / 60)).padStart(2, "0")}:${String(slot.minuteOfDay % 60).padStart(2, "0")}`;
 
+  /**
+   * A booking's own time, read from the instant it stored. Deliberately NOT
+   * looked up in the grid: a booking that today's grid does not happen to
+   * contain must still be shown, not silently omitted.
+   */
+  const whenOf = (booking) => {
+    const w = wallAt(booking.startMs, state?.shop?.tz ?? DEFAULT_SHOP.tz);
+    const weekday = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][
+      new Date(Date.UTC(w.year, w.month - 1, w.day)).getUTCDay()
+    ];
+    return `${weekday}, ${w.day}.${w.month}. ${String(w.hour).padStart(2, "0")}:${String(w.minute).padStart(2, "0")}`;
+  };
+
   const dayLabel = (iso) => {
     const [y, m, d] = iso.split("-").map(Number);
     const at = new Date(Date.UTC(y, m - 1, d));
@@ -159,8 +226,16 @@
     [SUPERSEDED]: "Zeit war vergeben",
   };
 
-  onMount(() => {
+  onMount(async () => {
     loadMine();
+    // Put back what this device already knew, before touching the radio: a
+    // reload should not cost airtime asking for a book we already have.
+    stack = await createStack({
+      room,
+      fromISO,
+      onError: (e) => pushLog(`! Speicher: ${e?.message ?? e}`),
+    });
+    if (stack.restored > 0) pushLog(`${stack.restored} Einträge aus dem Gerät geladen`);
     // A link may hand us a booking this device has never seen. Adopt the
     // capability so it shows up as ours and can be changed or cancelled —
     // that is the whole point of the token being a key rather than a lookup.
@@ -173,8 +248,13 @@
     const ticker = setInterval(() => {
       if (live?.courier?.stats) totals = { ...live.courier.stats };
       if (live?.sync?.stats) syncStats = { ...live.sync.stats };
+      if (live?.sync?.presence) presence = live.sync.presence();
     }, 1000);
-    return () => clearInterval(ticker);
+    document.addEventListener("visibilitychange", reacquireOnReturn);
+    return () => {
+      clearInterval(ticker);
+      document.removeEventListener("visibilitychange", reacquireOnReturn);
+    };
   });
 
   function chooseRole(next) {
@@ -197,7 +277,18 @@
           if (event.kind === "rejected") pushLog(`⊘ Eintrag verworfen — Signatur passt nicht`);
           if (event.kind === "sent" && event.tag === 0x10) pushLog(`→ Digest ${event.bytes} B`);
           if (event.kind === "sent" && event.tag === 0x12) pushLog(`→ Buchung ${event.bytes} B`);
-          if (event.kind === "error") pushLog(`! ${event.error?.message ?? event.error}`);
+          if (event.kind === "error") {
+            const text = event.error?.message ?? String(event.error);
+            // The node reports its region a second after connecting; until then
+            // the courier refuses to transmit because it does not know the
+            // local airtime law. Expected, brief, and not the user's problem —
+            // it reads as a fault only because it was worded as one.
+            pushLog(
+              /region is UNSET/i.test(text)
+                ? "Knoten meldet seine Region noch nicht — warte damit (Funkrecht)"
+                : `! ${text}`,
+            );
+          }
         },
         onChange: () => refresh(),
         onRegion: (name) => {
@@ -310,6 +401,20 @@
     <h1>{state?.shop?.name ?? DEFAULT_SHOP.name}</h1>
     <p class="tag">Terminbuchung über ein LoRa-Mesh — ohne Server, ohne Internet</p>
   </header>
+
+  {#if phase === "ready"}
+    <p class="link-state" data-testid="link-state" data-level={linkState.level}>
+      <span class="led {linkState.level}"></span>
+      {linkState.text}
+      {#if region && region !== "UNSET"}<span class="dim"> · {region}</span>{/if}
+    </p>
+    {#if wakeLockSupported && isHandheld}
+      <label class="awake dim">
+        <input type="checkbox" bind:checked={keepAwake} onchange={toggleAwake} data-testid="wake-lock" />
+        Bildschirm anlassen — Bluetooth pausiert, wenn das Display schläft
+      </label>
+    {/if}
+  {/if}
 
   {#if !role}
     <section class="card pick">
@@ -430,9 +535,7 @@
           <div class="mine" data-testid="booking" data-status={entry.status}>
             <div>
               <p class="when">
-                {dayLabel(state.grid[entry.slotIndex].iso).weekday},
-                {timeOf(state.grid[entry.slotIndex])} Uhr ·
-                {serviceById(state.shop, entry.serviceId)?.label}
+                {whenOf(entry)} Uhr · {serviceById(state.shop, entry.serviceId)?.label}
               </p>
               <p class="dim">
                 <span class="pill {entry.status}">{STATUS_TEXT[entry.status] ?? entry.status}</span>
@@ -490,9 +593,7 @@
           {#each pending as entry (entry.id)}
             <div class="ask">
               <p class="when">
-                <strong>{entry.handle}</strong> möchte
-                {dayLabel(state.grid[entry.slotIndex].iso).weekday},
-                {timeOf(state.grid[entry.slotIndex])} Uhr ·
+                <strong>{entry.handle}</strong> möchte {whenOf(entry)} Uhr ·
                 {serviceById(state.shop, entry.serviceId)?.label}
               </p>
               <div class="row">
@@ -678,6 +779,15 @@
   .radio-head .chev { color: #5dd39e; }
   .radio-log { padding: 6px 14px 12px; font-size: 0.72rem; line-height: 1.7; color: #e8eaf0; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
   .radio-log .ts { color: #9aa3b5; }
+
+  .link-state {
+    display: flex; align-items: center; gap: 8px;
+    margin: 0; font-size: 0.85rem; color: #5b6478;
+  }
+  .led { width: 9px; height: 9px; border-radius: 50%; background: #8b93a5; flex: none; }
+  .led.waiting { background: #a86412; }
+  .led.live { background: #12855a; }
+  .awake { display: flex; align-items: center; gap: 8px; margin: 0; }
 
   footer { color: #8b93a5; font-size: 0.8rem; }
   footer a { color: #2d4ad0; }

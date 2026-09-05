@@ -389,3 +389,66 @@ describe("joining a room that already has a book", () => {
     couriers.close();
   });
 });
+
+describe("a booking is a fact, not a row in today's grid", () => {
+  test("it stays visible even when the shown grid does not contain its time", async () => {
+    const { book } = await makeBook();
+    const grid = book.grid(MONDAY, DAYS);
+    // Thursday AFTERNOON — the part the shortened hours below will remove.
+    const thursday = grid.findIndex((s) => s.iso === "2026-09-10" && s.minuteOfDay === 14 * 60);
+    const { id } = await book.request(ask(book, { slotIndex: thursday, serviceId: "cut", handle: "Nico", at: 1 }));
+
+    // The salon shortens its day; that Thursday afternoon is no longer a slot
+    // on the grid at all. The appointment did not stop existing.
+    book.setShop({ hours: { 1: [["09:00", "10:00"]], 4: [["09:00", "10:00"]] } });
+    const state = await book.state(MONDAY, DAYS);
+
+    const booking = state.bookings.find((b) => b.id === id);
+    assert.ok(booking, "a booking must never vanish because the view changed");
+    assert.equal(booking.onGrid, false);
+    assert.equal(booking.slotIndex, null);
+    assert.equal(booking.status, CONFIRMED);
+    assert.equal(state.offGrid.length, 1, "and it is reported as off-grid, not lost");
+  });
+
+  test("off-grid bookings do not block slots that are on it", async () => {
+    const { book } = await makeBook();
+    const grid = book.grid(MONDAY, DAYS);
+    const thursday = grid.findIndex((s) => s.iso === "2026-09-10" && s.minuteOfDay === 14 * 60);
+    await book.request(ask(book, { slotIndex: thursday, serviceId: "cut", handle: "Nico", at: 1 }));
+    book.setShop({ hours: { 1: [["09:00", "10:00"]] } });
+
+    const state = await book.state(MONDAY, DAYS);
+    assert.equal(state.busy.size, 0, "an appointment off the grid occupies nothing on it");
+  });
+});
+
+describe("presence", () => {
+  test("each side hears the other, and never counts itself", async () => {
+    const couriers = meshPair();
+    const salonLog = createClaimLog();
+    const guestLog = createClaimLog();
+    const salonSync = createClaimSync({ log: salonLog, courier: couriers.a, horizon });
+    const guestSync = createClaimSync({ log: guestLog, courier: couriers.b, horizon });
+
+    await until(() => salonSync.presence().peers.length === 1 && guestSync.presence().peers.length === 1);
+    assert.equal(salonSync.presence().peers.length, 1, "one peer, not two — our own digest is ours");
+    assert.ok(salonSync.presence().lastHeardAgoMs != null);
+
+    salonSync.close();
+    guestSync.close();
+    couriers.close();
+  });
+
+  test("nothing heard means nothing claimed", () => {
+    const sync = createClaimSync({
+      log: createClaimLog(),
+      courier: { send: () => Promise.resolve(), onPayload: () => () => {} },
+      horizon,
+    });
+    const seen = sync.presence();
+    assert.deepEqual(seen.peers, []);
+    assert.equal(seen.lastHeardAgoMs, null, "silence must not read as company");
+    sync.close();
+  });
+});

@@ -284,6 +284,45 @@ full parse-back round trip, `SEQUENCE` behaviour. Whether **Apple Calendar,
 Google Calendar and Thunderbird** each accept the file is a manual check, and
 until someone has done it on all three this gate is only half met.
 
+## What the device keeps
+
+Everything used to live in memory: a reload, or a phone discarding the tab, lost
+the whole book — and the only way back was to greet the mesh and hope somebody
+answered, which on a duty-cycled link is not a recovery strategy.
+
+Both halves are now stored in IndexedDB, in one place and with no dependency.
+`y-indexeddb` is the obvious answer and covers only half the problem: since the
+substrate change the bookings are not in the Yjs document at all, so it would
+faithfully persist the opening hours and lose every appointment.
+
+The claim log is unusually easy to persist, and not by accident — records are
+immutable and self-describing, so there is no migration, no merge on load, and
+nothing half-written to guard against.
+
+## Saying whether anybody is there
+
+A digest carries four random bytes naming its sender. On a broadcast medium
+there is no such thing as a connection, so *"is anybody there?"* can only be
+answered by having heard from them recently — and without a name, two peers and
+one chatty peer look identical. Four bytes on a message that was going out
+anyway buys an honest answer to the question every user asks first.
+
+The indicator is grey with no radio, amber when the radio is open but nobody has
+been heard, green with a count when they have. It never claims company it cannot
+back up.
+
+## A booking is a fact, not a row in today's grid
+
+Bookings carry an absolute start time, and the view maps those onto whatever
+grid is on screen. That mapping used to **drop** anything it could not place —
+so a booking whose time the current rules no longer contain simply vanished from
+the device that made it, silently, because a filtered record cannot report
+itself missing.
+
+Now such a record keeps its status, is reported as off-grid rather than lost,
+and the screen renders it from its own instant. It occupies nothing on a grid it
+is not on.
+
 ## Open, and deliberately so
 
 - **Nobody prunes yet.** `log.forgetBefore(day)` exists and is tested, but no

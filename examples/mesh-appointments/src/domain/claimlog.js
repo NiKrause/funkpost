@@ -190,6 +190,8 @@ export function createClaimLog({ salonKey = null, now = () => Date.now() } = {})
   /** epochDay → Map<recordKey, record> */
   const days = new Map();
   let shopKey = salonKey;
+  const putCbs = new Set();
+  const forgetCbs = new Set();
 
   const bucketFor = (day, create = false) => {
     let bucket = days.get(day);
@@ -236,8 +238,23 @@ export function createClaimLog({ salonKey = null, now = () => Date.now() } = {})
       const day = record.day;
       const bucket = bucketFor(day, true);
       const key = recordId(record);
-      bucket.set(key, preferred(bucket.get(key), record));
+      const kept = preferred(bucket.get(key), record);
+      const changed = bucket.get(key) !== kept;
+      bucket.set(key, kept);
+      if (changed) for (const cb of putCbs) cb(kept, key);
       return record;
+    },
+
+    /** Called whenever a record is stored — how persistence keeps up. */
+    onPut(cb) {
+      putCbs.add(cb);
+      return () => putCbs.delete(cb);
+    },
+
+    /** Called with the keys dropped by {@link forgetBefore}. */
+    onForget(cb) {
+      forgetCbs.add(cb);
+      return () => forgetCbs.delete(cb);
     },
 
     /**
@@ -298,14 +315,15 @@ export function createClaimLog({ salonKey = null, now = () => Date.now() } = {})
      * and every device drops it at the same boundary.
      */
     forgetBefore(day) {
-      let dropped = 0;
+      const gone = [];
       for (const key of [...days.keys()]) {
         if (key < day) {
-          dropped += days.get(key).size;
+          gone.push(...days.get(key).keys());
           days.delete(key);
         }
       }
-      return dropped;
+      if (gone.length > 0) for (const cb of forgetCbs) cb(gone);
+      return gone.length;
     },
 
     /** The three shapes arbitration wants, over a horizon. */

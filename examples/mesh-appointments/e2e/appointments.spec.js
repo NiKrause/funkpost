@@ -265,3 +265,53 @@ test("the app shell survives the network going away", async ({ context }) => {
 
   await page.close();
 });
+
+test("a booking survives a reload — the book is on the device, not in the air", async ({ context }) => {
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+  await salon.page.getByTestId("mode-auto").click();
+
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+  await bookSlot(guest.page, { time: "16:00", handle: "Gerd" });
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 20_000,
+  });
+
+  // Close the salon so nothing can re-send it: what comes back must come from
+  // this device's own storage, not from the mesh.
+  await salon.page.close();
+  await guest.page.reload();
+
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 20_000,
+  });
+  await expect(guest.page.getByTestId("my-bookings")).toContainText("16:00");
+  // And the salon's own book comes back too, on its own.
+  const again = await open(context, { room: id, role: "salon" });
+  await expect(again.page.getByTestId("salon")).toContainText("Gerd", { timeout: 20_000 });
+
+  await guest.page.close();
+  await again.page.close();
+});
+
+test("the indicator says whether anybody is out there", async ({ context }) => {
+  const id = nextRoom();
+  const alone = await open(context, { room: id, role: "customer" });
+  await ready(alone.page);
+
+  const led = alone.page.getByTestId("link-state");
+  await expect(led).toBeVisible();
+  // Alone in the room: the radio is open, but claiming company would be a lie.
+  await expect(led).toHaveAttribute("data-level", "waiting", { timeout: 15_000 });
+
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+
+  await expect(led).toHaveAttribute("data-level", "live", { timeout: 25_000 });
+  await expect(led).toContainText(/Gerät/);
+
+  await alone.page.close();
+  await salon.page.close();
+});
