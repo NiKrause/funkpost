@@ -104,6 +104,11 @@ Keeping a node connected through a phone's Bluetooth is its own job, and the
 library does it: `connectMeshtasticDevice` holds the reconnect policy every
 field session paid for — see **[docs/links.md](docs/links.md)**.
 
+The Yjs plane's demo is an **appointment book for a local business** — its core
+is built: availability travels as a rule rather than a list, and two customers
+racing for one slot resolve identically on both phones without a single packet
+spent deciding. See **[docs/appointments.md](docs/appointments.md)**.
+
 ### One bootstrap, end to end
 
 No WebRTC anywhere in this picture — that is the point of the plane:

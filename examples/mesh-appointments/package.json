@@ -1,0 +1,15 @@
+{
+  "name": "@le-space/mesh-appointments-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Appointment book for a local business, over a LoRa mesh — the Yjs plane's demo (issue #38).",
+  "license": "GPL-3.0-only",
+  "scripts": {
+    "test": "node --test --test-force-exit test/*.test.js"
+  },
+  "dependencies": {
+    "@le-space/funkpost": "file:../..",
+    "yjs": "^13.6.27"
+  }
+}

@@ -20,6 +20,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm test -w @le-space/mesh-appointments-example
       - run: npm run build -w @le-space/mesh-todo-example
       - run: npx playwright install --with-deps chromium
         working-directory: examples/mesh-todo

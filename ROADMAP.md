@@ -27,7 +27,7 @@ roadmap is built to keep testing.
 | **#1** | OrbitDB data plane | **First over-the-air replication 2026-09-04** — two desktop browsers, two nodes, no IP path. Open: first-contact reliability on a busy public channel, and the phone Bluetooth lottery. |
 | **#36** | Yjs data plane | **Built** (S1–S2) — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss. Not yet run on hardware. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
 | **#37** | Hoist demo scaffolding into the lib | **Built** — the device supervisor and the error humaniser are library code; `mesh-todo` is a consumer. Not yet re-run on hardware. [docs](docs/links.md) |
-| **#38** | `mesh-appointments` demo | Designed, not started. The Yjs plane's demo app: a Calendly-shaped booking book for a hairdresser, over LoRa. |
+| **#38** | `mesh-appointments` demo | **Core built** (A1–A3) — slot engine, busy mask, arbitration, capability keys. No UI, no `.ics`, no hardware yet. [docs](docs/appointments.md) |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -77,16 +77,32 @@ worth keeping visible: the e2e suite runs the BroadcastChannel fake, so the
 **BLE path is unit-tested, not yet re-confirmed on hardware** — that is P7's
 job, and the next field run should watch for it.
 
-### P3 · Appointment core — #38 A1–A3
+### P3 · Appointment core — #38 A1–A3 ✅
 
-The two-document model, the slot engine (rules → grid, never enumerations), the
-busy mask, capability keypairs, and the deterministic arbitration that makes two
+The document model, the slot engine (rules → grid, never enumerations), the busy
+mask, capability keys, and the deterministic arbitration that makes two
 customers racing for one slot resolve identically on both sides **without
 exchanging a packet**.
 
-*Gate:* a property test — apply concurrent bookings in every merge order, assert
-every replica computes the same winner. Then the race over the lossy in-memory
-mesh: one winner, the loser told, no arbitration traffic.
+Measured, rather than asserted: three weeks of availability travel as **422
+bytes of rules** (516 slots would have been kilobytes), and busy time as a
+**72-byte** bitmap — one frame, the same size empty or full.
+
+*Gate met:* 200 shuffles of twelve contested claims give one identical verdict,
+and so do three Yjs replicas fed the same updates in different orders. Over a
+20 %-loss mesh two customers race for one slot: both sides name the same winner,
+the loser is told why and offered alternatives, and the payload counter **does
+not move** while arbitration happens.
+
+Two bugs the tests caught and the code would not have shown: a `Y.Map` is not an
+`instanceof Map`, so decisions were silently never read — invisible in auto mode,
+which never consults them; and a comparator read the decision timestamp off the
+claim instead of the decision, falling through to the id. Deterministic, but the
+wrong policy.
+
+Deliberately deferred and written down rather than forgotten: **document
+compaction** (a salon books for years and Yjs keeps history) and the fact that
+changing `slotMinutes` shifts the whole grid index space.
 
 ### P4 · `.ics` and the serverless Calendly link — #38 A4
 
