@@ -100,6 +100,10 @@ const provider = createYjsProvider({ doc, courier });
 `yjs` is an optional peer dependency behind its own subpath, so the byte
 courier stays dependency-light for everyone else.
 
+Keeping a node connected through a phone's Bluetooth is its own job, and the
+library does it: `connectMeshtasticDevice` holds the reconnect policy every
+field session paid for — see **[docs/links.md](docs/links.md)**.
+
 ### One bootstrap, end to end
 
 No WebRTC anywhere in this picture — that is the point of the plane:

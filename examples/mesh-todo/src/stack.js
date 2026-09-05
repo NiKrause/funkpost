@@ -23,13 +23,8 @@ import { createCourierSync } from "orbitdb-storacha-bridge/courier-sync";
 import * as dagCbor from "@ipld/dag-cbor";
 import {
   createMeshtasticCourier,
-  createMeshtasticDeviceLink,
-  watchDeviceRegion,
-  watchAirUtilTx,
-  watchDeviceStatus,
-  watchNodeInfo,
-  watchChannels,
-  watchMyNodeInfo,
+  connectMeshtasticDevice,
+  describeMeshtasticError,
 } from "@le-space/funkpost";
 import { createBroadcastChannelLink } from "./fake-bc-link.js";
 
@@ -59,7 +54,6 @@ export async function createDatabaseStack() {
  * which must be called from a user gesture.
  */
 const MESHTASTIC_BLE_SERVICE = "6ba1b218-15a8-461f-9fa8-5dcae273eafd";
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp }) {
   if (mode.kind === "bc") {
@@ -87,146 +81,54 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   ]);
   // Request the device ourselves (rather than TransportWebBluetooth.create,
   // which hides it) so we hold the BluetoothDevice and can reconnect to it
-  // later without a chooser — the phone's BLE stack drops the GATT link under
-  // load, and we must be able to bring it straight back.
+  // later without a chooser — the supervisor needs a repeatable createDevice.
   const bleDevice = await navigator.bluetooth.requestDevice({
     filters: [{ services: [MESHTASTIC_BLE_SERVICE] }],
   });
-  const newMeshDevice = async () =>
-    new MeshDevice(await TransportWebBluetooth.createFromDevice(bleDevice));
 
-  let device = await newMeshDevice();
-  const link = createMeshtasticDeviceLink({ device, destination: "broadcast" });
-  // The courier starts UNSET and adopts the real region live (below). Nothing
-  // transmits until the user acts, so a brief UNSET window costs nothing.
-  // minFrameGapMs paces BLE writes so a multi-fragment payload (e.g. the
-  // bootstrap blocks) does not burst and flood the phone's BLE stack.
-  // maxRounds 12 (vs the lib default 8): the first-contact bootstrap is the
-  // biggest payload and the public channel is lossy, so give the selective-ACK
-  // ARQ plenty of rounds to fill the gaps before it gives up.
-  const courier = createMeshtasticCourier({
-    link,
-    region: "UNSET",
-    onEvent,
-    minFrameGapMs: 150,
-    maxRounds: 12,
+  // Everything about surviving a phone's Bluetooth — subscribe-before-configure,
+  // the generation guard, teardown-first reconnect, backoff, the stability
+  // timer, the give-up cap — now lives in the library (issue #37). The courier
+  // is built through the supervisor so it exists BEFORE configure() runs and
+  // cannot miss the config stream; region and airtime are wired into it there.
+  const managed = await connectMeshtasticDevice({
+    createDevice: async () =>
+      new MeshDevice(await TransportWebBluetooth.createFromDevice(bleDevice)),
+    // minFrameGapMs paces BLE writes so a multi-fragment payload (the bootstrap
+    // blocks) does not burst and flood the phone's stack. maxRounds 12 (vs the
+    // lib default 8): first contact is the biggest payload and the public
+    // channel is lossy, so give the selective-ACK ARQ room to fill the gaps.
+    createCourier: (link) =>
+      createMeshtasticCourier({
+        link,
+        region: "UNSET", // provisional — the node reports the real one live
+        onEvent,
+        minFrameGapMs: 150,
+        maxRounds: 12,
+      }),
+    on: {
+      region: onRegion,
+      airUtilTx: onTelemetry,
+      status: onStatus,
+      nodeInfo: onNodeInfo,
+      channel: onChannel,
+      myNodeInfo: onMyNodeInfo,
+      reconnecting: onReconnecting,
+      reconnected: onReconnected,
+      gaveUp: onGaveUp,
+      error: (e) => onError && onError(describeMeshtasticError(e)),
+    },
   });
 
-  const MAX_ATTEMPTS = 5;
-  let closedByUser = false;
-  let reconnecting = false;
-  let attempts = 0;
-  let currentDevice = null; // only THIS device's events may drive a reconnect
-  let stableTimer = null; // reset the backoff only after the link stays up
-
-  // Attach every watcher to a device and configure it. Run once at connect
-  // and again on each reconnect (a fresh MeshDevice each time). Watchers
-  // subscribe BEFORE configure() — the config stream delivers region,
-  // channels, identity and neighbours in its first second and does not
-  // replay, so a late subscription races it (sixth field report). Region is
-  // watched CONTINUOUSLY, not once: a node that just rebooted reports it late
-  // (seventh field report), and the courier adopts it whenever it lands.
-  const attach = (dev) => {
-    currentDevice = dev;
-    watchDeviceRegion(dev, (name) => {
-      if (dev !== currentDevice) return;
-      courier.setRegion(name);
-      if (onRegion) onRegion(name);
-    });
-    watchAirUtilTx(dev, (value) => {
-      if (dev !== currentDevice) return;
-      courier.reconcileNodeAirtime(value);
-      if (onTelemetry) onTelemetry(value);
-    });
-    if (onNodeInfo) watchNodeInfo(dev, (n) => dev === currentDevice && onNodeInfo(n));
-    if (onChannel) watchChannels(dev, (c) => dev === currentDevice && onChannel(c));
-    if (onMyNodeInfo) watchMyNodeInfo(dev, (i) => dev === currentDevice && onMyNodeInfo(i));
-    watchDeviceStatus(dev, (name) => {
-      // Ignore events from a device we have already replaced — otherwise the
-      // zombie watchers of every past reconnect pile up and each fires its own
-      // reconnect, and the teardown disconnect of the old device would itself
-      // trigger a new cycle. Only the current device speaks.
-      if (dev !== currentDevice) return;
-      if (onStatus) onStatus(name);
-      if (name === "disconnected" && !closedByUser) reconnect();
-    });
-    // Keep the BLE session alive: browsers drop an idle GATT link after a few
-    // minutes (first field report). The official clients ping for this reason.
-    dev.setHeartbeatInterval(30_000);
-    dev.configure().catch((e) => {
-      if (onError) onError(`configure() failed: ${e?.message ?? e}`);
-    });
-  };
-
-  // A phone drops the GATT link under load — a write and a notification-read
-  // overlap and one fails. Reconnect and let the courier's ARQ resume rather
-  // than end the run. Correctness rules learned the hard way (the reconnect
-  // busy-loop): tear the OLD device down first (its disconnect() clears the
-  // heartbeat timer and closes the GATT, so we never run two connections to
-  // one device — the "GATT operation already in progress" storm); back off
-  // exponentially and DON'T reset the backoff on a connect that immediately
-  // drops again (only after it stays up a while); and give up after a cap
-  // instead of looping forever.
-  const reconnect = async () => {
-    if (reconnecting || closedByUser) return;
-    reconnecting = true;
-    if (stableTimer) {
-      clearTimeout(stableTimer);
-      stableTimer = null;
-    }
-
-    const dying = currentDevice;
-    currentDevice = null; // silence the dying device's watchers from here on
-    try {
-      await dying?.disconnect();
-    } catch {
-      /* best effort — we are replacing it anyway */
-    }
-
-    attempts += 1;
-    if (attempts > MAX_ATTEMPTS) {
-      reconnecting = false;
-      if (onGaveUp) onGaveUp();
-      return;
-    }
-    if (onReconnecting) onReconnecting(attempts);
-    await sleep(Math.min(1000 * 2 ** (attempts - 1), 15000));
-    if (closedByUser) {
-      reconnecting = false;
-      return;
-    }
-    try {
-      device = await newMeshDevice();
-      attach(device); // sets currentDevice = device
-      link.rebind(device);
-      reconnecting = false;
-      if (onReconnected) onReconnected();
-      // Only call the link healthy — and reset the backoff — once it has
-      // survived a few seconds. A connect that drops again immediately keeps
-      // climbing the backoff toward the cap.
-      stableTimer = setTimeout(() => {
-        attempts = 0;
-      }, 8000);
-    } catch (e) {
-      reconnecting = false;
-      if (onError) onError(`reconnect failed: ${e?.message ?? e}`);
-      if (!closedByUser) reconnect();
-    }
-  };
-
-  attach(device);
-
   return {
-    courier,
+    courier: managed.courier,
     kind: "Meshtastic node (Web Bluetooth)",
     region: "UNSET", // provisional; onRegion carries the live value
     get device() {
-      return device;
+      return managed.device;
     },
-    setTxChannel: (index) => link.setChannel(index),
-    close: () => {
-      closedByUser = true;
-    },
+    setTxChannel: (index) => managed.setChannel(index),
+    close: () => managed.close(),
   };
 }
 

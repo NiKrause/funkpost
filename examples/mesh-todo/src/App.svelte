@@ -16,6 +16,7 @@
     watchInvites,
     probeMeshtasticCore,
   } from "./stack.js";
+  import { describeMeshtasticError } from "@le-space/funkpost";
 
   const build = __BUILD_INFO__;
   const params = new URLSearchParams(location.search);
@@ -122,42 +123,12 @@
     if (log.length > 120) log.pop();
   };
 
-  // Meshtastic Routing.Error codes, so {id, error: 3} reads as TIMEOUT.
-  const ROUTING_ERROR = {
-    0: "NONE",
-    1: "NO_ROUTE",
-    2: "GOT_NAK",
-    3: "TIMEOUT",
-    4: "NO_INTERFACE",
-    5: "MAX_RETRANSMIT",
-    6: "NO_CHANNEL",
-    7: "TOO_LARGE",
-    8: "NO_RESPONSE",
-    9: "DUTY_CYCLE_LIMIT",
-    32: "BAD_REQUEST",
-    33: "NOT_AUTHORIZED",
-  };
-
   // Turn anything — Error, a rejection object, the Meshtastic queue's
   // {id, error} shape — into a readable line. A bare `${obj}` prints the
-  // useless "[object Object]" that hid the real cause on the bench.
-  const describeError = (v) => {
-    if (v == null) return String(v);
-    if (v instanceof Error) return v.message || v.name || "Error";
-    if (typeof v === "object") {
-      if ("reason" in v && v.reason != null) return describeError(v.reason); // event wrapper
-      if (typeof v.error === "number") {
-        const name = ROUTING_ERROR[v.error] ?? `routing ${v.error}`;
-        return v.id != null ? `${name} (packet ${v.id})` : name;
-      }
-      try {
-        return JSON.stringify(v);
-      } catch {
-        return Object.prototype.toString.call(v);
-      }
-    }
-    return String(v);
-  };
+  // useless "[object Object]" that hid the real cause on the bench. The
+  // routing-code table used to be hand-copied here; it now comes from the
+  // firmware enum via the library (issue #37).
+  const describeError = describeMeshtasticError;
 
   const onCourierEvent = (event) => {
     if (event.kind === "payload-rx") pushLog(`⇠ payload ${event.bytes} B (msg ${event.msgId})`);

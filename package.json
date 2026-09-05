@@ -20,7 +20,8 @@
     "./courier": "./lib/meshtastic-courier.js",
     "./yjs": "./lib/yjs/provider.js",
     "./links/memory-mesh": "./lib/links/memory-mesh.js",
-    "./links/meshtastic-device": "./lib/links/meshtastic-device-link.js"
+    "./links/meshtastic-device": "./lib/links/meshtastic-device-link.js",
+    "./links/meshtastic-supervisor": "./lib/links/meshtastic-supervisor.js"
   },
   "scripts": {
     "test": "node --test --test-force-exit test/*.test.js",
