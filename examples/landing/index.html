@@ -40,6 +40,9 @@
           --accent-soft: #1a2140;
           --good: #5dd39e;
           --good-soft: #12291f;
+          --warn-line: #6b5320;
+          --warn-bg: #221b0c;
+          --warn-ink: #d9bd7a;
         }
       }
       * { box-sizing: border-box; }
@@ -98,6 +101,16 @@
         font-size: 0.78rem; color: var(--accent);
       }
 
+      .warn {
+        border: 1px solid var(--warn-line, #d9a441);
+        background: var(--warn-bg, #fdf6e7);
+        border-radius: 12px;
+        padding: 18px 20px;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .warn h2 { font-size: 1rem; }
+      .warn p { font-size: 0.9rem; color: var(--warn-ink, #6b5426); }
+
       .note {
         border: 1px solid var(--line);
         border-radius: 12px;
@@ -140,6 +153,24 @@
         </p>
       </header>
 
+      <section class="warn">
+        <h2>⚠ Demonstrators, not products</h2>
+        <p>
+          A research project, <strong>not audited</strong> and not for
+          production use. Its purpose is to measure what a LoRa mesh can carry
+          and how two devices reconcile data over it.
+        </p>
+        <p>
+          <strong>Authorisation has not been designed</strong> — a known gap,
+          not an undiscovered one. The todo list is opened for anyone to write
+          to; a booking request carries no signature, so a neighbour on the same
+          channel can fill an entire three-week calendar and supersede the real
+          bookings in it. The only boundary is the channel key, and on a public
+          Meshtastic channel that is no boundary at all.
+        </p>
+        <p>Open them, read them, measure them — do not point them at a real calendar.</p>
+      </section>
+
       <section class="demos">
         <a class="demo" href="./mesh-todo/">
           <span class="head">
@@ -149,9 +180,11 @@
           </span>
           <p>
             A todo list replicating between two phones with no IP path anywhere.
-            Signed entries, an access controller, a verifiable log — and a sync
-            pane that prices every frame. This is the demo that first crossed the
-            air, on 4 September 2026.
+            Signed entries and a verifiable log — and a sync pane that prices
+            every frame. It <em>has</em> an access controller, and this demo sets
+            it to allow anyone, which is the honest default for something with no
+            identities in it. This is the demo that first crossed the air, on
+            4 September 2026.
           </p>
           <span class="path">/funkpost/mesh-todo/</span>
         </a>
