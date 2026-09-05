@@ -154,7 +154,15 @@ export function createClaimSync({
     stats.payloadsSent++;
     stats.bytesSent += bytes.length;
     emit({ kind: "sent", tag: bytes[0], bytes: bytes.length });
-    return Promise.resolve(courier.send(bytes)).catch((error) => emit({ kind: "error", error }));
+    // A greeting is sent once. Nobody acknowledges a digest, so the ARQ has
+    // nothing to work with and simply retransmits it to exhaustion — eight
+    // waves of airtime, every heartbeat, for a message that repeats anyway.
+    // Everything else is an answer to a peer who has demonstrably spoken, and
+    // keeps the ARQ that gets it there.
+    const options = bytes[0] === MSG_DIGEST ? { rounds: 1 } : undefined;
+    return Promise.resolve(courier.send(bytes, options)).catch((error) =>
+      emit({ kind: "error", error }),
+    );
   };
 
   /** Publish one fingerprint per day. Constant size; the whole point. */
