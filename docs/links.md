@@ -181,3 +181,32 @@ telemetry, relaying for the mesh — not just this app. The duty cycle binds the
 device, so the device's number wins over any local estimate. Feeding it to
 `courier.reconcileNodeAirtime()` is what makes the airtime budget survive page
 reloads and multiple clients for free.
+
+## The quietest failure in the stack
+
+A packet the node cannot decrypt — the peer transmitting on a channel whose key
+this node does not hold — is dropped inside `@meshtastic/core` with
+
+```js
+case "encrypted":
+  this.log.debug("🔐 Device received encrypted data packet, ignoring.");
+  break;
+```
+
+and nothing else. It never reaches a port, so `onPrivatePacket` never fires and
+the app's received-frame count stays at **zero — exactly as if nobody were
+there at all**.
+
+Two very different situations with one indistinguishable symptom:
+
+- nobody is in range, and
+- somebody is in range and we cannot read a word they say.
+
+`watchMeshTraffic(device, cb)` reports **every** packet the node hands over,
+before the decrypt decision, so the two can be told apart. A screen can then say
+*"12 packets heard, 12 of them unreadable"* instead of showing a silence that
+means the opposite of what it looks like.
+
+This is worth a UI element rather than a log line: it is the failure most likely
+to waste an afternoon, and the fix — compare the channel key fingerprint on both
+devices — is thirty seconds once you know that is the question.
