@@ -79,3 +79,28 @@ describe("token bucket", () => {
     assert.throws(() => createTokenBucket({ dutyCycle: -1 }));
   });
 });
+
+describe("saying when, not only that it is not now", () => {
+  test("delayFor answers without spending anything", () => {
+    let clock = 0;
+    const bucket = createTokenBucket({ dutyCycle: 0.1, windowMs: 10_000, now: () => clock });
+    // Capacity 1000 ms. A 400 ms transmission is affordable right away.
+    assert.equal(bucket.delayFor(400), 0);
+    assert.equal(bucket.remainingMs(), 1000, "asking must not reserve");
+
+    bucket.take(1000);
+    assert.equal(bucket.remainingMs(), 0);
+    // 400 ms more needs 400/0.1 = 4000 ms of refill.
+    assert.equal(bucket.delayFor(400), 4000);
+    assert.equal(bucket.delayFor(0), 0);
+  });
+
+  test("it sees debt, which remainingMs cannot", () => {
+    let clock = 0;
+    const bucket = createTokenBucket({ dutyCycle: 0.1, windowMs: 10_000, now: () => clock });
+    // The node reports it has overspent — relaying counts too.
+    bucket.setRemainingMs(-500);
+    assert.equal(bucket.remainingMs(), 0, "clamped, so it cannot answer this");
+    assert.equal(bucket.delayFor(100), 6000, "500 ms of debt plus 100 ms wanted");
+  });
+});

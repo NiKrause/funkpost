@@ -324,6 +324,17 @@ export function createClaimSync({
     announce() {
       announce();
     },
+
+    /**
+     * Forget who we have heard from. Called when the world changes underneath
+     * us — a transmit-channel switch, say: the peers heard on the old channel
+     * are not reachable on the new one, and while they are still remembered the
+     * heartbeat stays on its slow "in company" cadence and the screen keeps
+     * claiming company that is no longer there.
+     */
+    forgetPeers() {
+      peers.clear();
+    },
     /** Publish them regardless — after a reconnect, or when the horizon moves. */
     resync() {
       announce({ force: true });

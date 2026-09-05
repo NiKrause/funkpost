@@ -528,3 +528,23 @@ describe("finding each other on a broadcast channel", () => {
     couriers.close();
   });
 });
+
+describe("a channel switch is a fresh start", () => {
+  test("forgetting peers puts the greeting back on its searching cadence", async () => {
+    const couriers = meshPair();
+    const a = createClaimSync({ log: createClaimLog(), courier: couriers.a, horizon });
+    const b = createClaimSync({ log: createClaimLog(), courier: couriers.b, horizon });
+
+    await until(() => a.presence().peers.length === 1);
+
+    // The transmit channel changes: whoever was heard is not reachable there,
+    // and keeping them remembered would leave the heartbeat on its slow "in
+    // company" cadence while the screen claims company that is gone.
+    a.forgetPeers();
+    assert.deepEqual(a.presence().peers, []);
+
+    a.close();
+    b.close();
+    couriers.close();
+  });
+});

@@ -176,7 +176,16 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
     get device() {
       return managed.device;
     },
-    setTxChannel: (index) => managed.setChannel(index),
+    setTxChannel: (index) => {
+      managed.setChannel(index);
+      // A channel switch changes who can hear us, so it is a fresh start, not
+      // a setting. Whoever was heard on the old channel is not there any more,
+      // and waiting out a heartbeat — up to five minutes on the slow cadence —
+      // would look exactly like the switch having failed.
+      started?.sync.forgetPeers();
+      started?.sync.resync();
+      started?.provider.resync();
+    },
     close: () => managed.close(),
   };
 }

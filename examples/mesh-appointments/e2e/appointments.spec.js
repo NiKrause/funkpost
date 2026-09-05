@@ -315,3 +315,24 @@ test("the indicator says whether anybody is out there", async ({ context }) => {
   await alone.page.close();
   await salon.page.close();
 });
+
+test("when the airtime is spent it says so, and says when", async ({ context }) => {
+  const id = nextRoom();
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+
+  // Drain the node's hourly allowance the way the radio would: the courier
+  // reconciles against the device's own measurement, and 100 % spent is what
+  // a node reports when it has nothing left.
+  await guest.page.evaluate(() => window.__courier?.reconcileNodeAirtime?.(100));
+  await expect(guest.page.getByTestId("airtime-blocked")).toBeVisible({ timeout: 8_000 });
+  await expect(guest.page.getByTestId("airtime-blocked")).toContainText(/Wieder\s+möglich/);
+  // And it does not merely warn — the action that cannot happen is not offered.
+  await expect(guest.page.getByTestId("book")).toBeDisabled();
+
+  // The hour moves on.
+  await guest.page.evaluate(() => window.__courier?.reconcileNodeAirtime?.(0));
+  await expect(guest.page.getByTestId("airtime-blocked")).toHaveCount(0, { timeout: 8_000 });
+
+  await guest.page.close();
+});
