@@ -88,6 +88,10 @@ const readKeys = (body) => {
  * @param {() => { fromDay: number, days: number }} options.horizon What we
  *   currently care about — moves forward as days pass, which is how the log
  *   forgets
+ * @param {boolean} [options.announceOnStart] Publish our fingerprints on
+ *   construction (default true). Without it a peer joining an existing room —
+ *   somebody opening a calendar link on a phone that has never seen the book —
+ *   would wait in silence for ever, because nothing else prompts it to ask.
  * @param {number} [options.minAnnounceGapMs]
  * @param {() => number} [options.now]
  * @param {(event: Object) => void} [options.onEvent]
@@ -98,6 +102,7 @@ export function createClaimSync({
   log,
   courier,
   horizon,
+  announceOnStart = true,
   minAnnounceGapMs = 1000,
   now = () => Date.now(),
   onEvent = null,
@@ -253,6 +258,10 @@ export function createClaimSync({
       emit({ kind: "error", error });
     }
   });
+
+  // Say hello. A digest is one frame, and it is the only thing that makes a
+  // late joiner's empty log fill itself.
+  if (announceOnStart) announce({ force: true });
 
   return {
     /** Publish our day fingerprints, honouring the announce floor. */
