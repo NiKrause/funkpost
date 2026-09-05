@@ -83,10 +83,39 @@ The courier reads the preset from the node and paces to it — the figures above
 come from `PRESET_DATA_RATES_BPS`. If it did not, pacing would be wrong by that
 same factor of twenty, which is why it is read rather than assumed.
 
-## 5. Turn the transmitter down
+## 5. Turn the transmitter down — but do not expect a short range
 
-Three devices within a metre do not need full power. Lower `tx_power` shrinks
-your footprint on everyone else's receiver without affecting the bench at all.
+Lower `tx_power` is worth setting: three devices within a metre do not need full
+power, and it shrinks your footprint on everyone else's receiver.
+
+What it will **not** do is confine you to the desk. The arithmetic, at 868 MHz:
+
+| | |
+|---|---|
+| free-space path loss at 2 m | **37 dB** |
+| link budget at minimum power (0 dBm) and the *least* sensitive preset | **117 dB** |
+| surplus | **80 dB** — about 19 km of free space |
+
+Even turned all the way down and running SHORT_TURBO, a LoRa link has roughly
+**eighty decibels more than it needs** to cross a room. That is the whole point
+of the modulation, and it is not a setting you can undo. `LONG_FAST` at 0 dBm
+has ninety.
+
+If you genuinely need a short link — to stop bench traffic reaching a mesh you
+are also observing, say — the only honest way is to **throw the power away in a
+cable**: screw-on SMA attenuators between radio and antenna, roughly 60–80 dB
+total. They cost a few euros each and are the tool laboratories use.
+
+Do **not** simply unscrew the antenna. It attenuates far less than people
+expect, it radiates unpredictably, and transmitting into an open port reflects
+power back into the amplifier. It is neither controlled nor kind to the
+hardware.
+
+And the conclusion that matters: **range is the wrong lever for being a good
+neighbour.** Even a well-attenuated bench still lands in everyone's receiver
+with margin to spare, and the duty cycle binds you regardless of how far you
+reach. What actually spares the neighbourhood is being somewhere else in the
+spectrum (§2) and not relaying its traffic (§3).
 
 ## 6. Watch what you are actually spending
 
