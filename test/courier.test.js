@@ -43,6 +43,26 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     close();
   });
 
+  test("adopts the node's modem preset — twentyfold, not a rounding error", async () => {
+    const pair = createMemoryMeshPair({ mtu: 60, delayMs: 1 });
+    // Region without a duty cycle, so the bucket never masks the difference.
+    const a = createMeshtasticCourier({ link: pair.a, ...FAST, preset: "LONG_FAST" });
+    assert.equal(a.budget().preset, "LONG_FAST");
+
+    await a.send(bytesOf(300), { rounds: 1 });
+    const slow = a.stats.airtimeSpentMs;
+
+    a.setPreset("SHORT_TURBO");
+    assert.equal(a.budget().preset, "SHORT_TURBO");
+    await a.send(bytesOf(300), { rounds: 1 });
+    const fast = a.stats.airtimeSpentMs - slow;
+
+    // Same bytes, same frames — the estimate must follow the radio, not a
+    // guess made at construction time.
+    assert.ok(fast * 5 < slow, `LONG_FAST ${slow.toFixed(0)}ms vs SHORT_TURBO ${fast.toFixed(0)}ms`);
+    a.close();
+  });
+
   test("a send may cap its own rounds — a greeting nobody will answer", async () => {
     // Into a room with no listener: the ARQ has no STATUS to work with and
     // would otherwise retransmit to exhaustion, paying full airtime for a

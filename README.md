@@ -93,6 +93,7 @@ what is built and what is not:
 | **[The Yjs plane](docs/yjs-provider.md)** | tiny, loss-tolerant updates — and reusable outside this project |
 | **[The appointment book](docs/appointments.md)** | the Yjs plane's demo: rules not lists, and who got the slot |
 | **[The signalling plane](docs/signalling.md)** | designed, not built — LoRa carries the handshake, not the connection |
+| **[Bench etiquette](docs/bench-etiquette.md)** | developing on a shared, legally rationed medium without ruining it for the neighbours |
 | **[Field notes](docs/field-notes.md)** | what broke on real hardware, and why |
 | **[Why a separate repository](docs/why-separate-repository.md)** | a licence decision, and a one-way door |
 
