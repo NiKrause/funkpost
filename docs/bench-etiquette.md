@@ -117,6 +117,32 @@ with margin to spare, and the duty cycle binds you regardless of how far you
 reach. What actually spares the neighbourhood is being somewhere else in the
 spectrum (§2) and not relaying its traffic (§3).
 
+## The firmware enforces this, and will tell you
+
+You are not the only one counting. The node measures its own transmit airtime
+and **refuses to exceed the regional limit itself** — the client gets routing
+error **`DUTY_CYCLE_LIMIT`** back, and the packet does not go out. There is a
+`override_duty_cycle` flag in the LoRa config; in the EU, setting it is
+unlawful, and it exists for regions without a limit.
+
+So there are two limiters, and they are not redundant:
+
+- **The firmware's** is the authority and counts *everything* the radio does,
+  including beacons, telemetry and relaying for the mesh.
+- **The courier's** paces ahead of it, so traffic is spread out instead of
+  arriving in a burst that gets refused.
+
+The courier reconciles its budget against the device's own `air_util_tx`
+figure, because a local model cannot see the airtime the radio spends on its
+own behalf.
+
+When a refusal does arrive, it is treated as *"not yet"* rather than a failure:
+the frame stays outstanding, the local budget is emptied so pacing backs off,
+and the wave is not counted as a delivery attempt. That last part matters —
+without it the ARQ exhausts its rounds waiting for a budget that recovers more
+slowly than the retransmit timer ticks, and the payload is dropped over a limit
+that expires by itself.
+
 ## 6. Watch what you are actually spending
 
 Both demos show the node's **own measured** airtime utilisation (`air_util_tx`)

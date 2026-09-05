@@ -289,6 +289,8 @@ import { wallAt } from "./domain/time.js";
         stack,
         mode,
         onEvent: (event) => {
+          if (event.kind === "duty-cycle-exhausted")
+            pushLog("Sendezeit für diese Stunde aufgebraucht — wartet, bis wieder Budget da ist");
           if (event.kind === "giveup") pushLog(`✗ ${event.msgId} nach ${event.rounds} Runden aufgegeben`);
           if (event.kind === "accepted") pushLog(`⇠ Eintrag übernommen (${event.id})`);
           if (event.kind === "rejected") pushLog(`⊘ Eintrag verworfen — Signatur passt nicht`);
