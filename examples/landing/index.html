@@ -1,0 +1,209 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>funkpost — demos</title>
+    <meta
+      name="description"
+      content="Two demos, one per data plane: a todo list and an appointment book, both replicating over a LoRa mesh with no IP path."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
+    <style>
+      :root {
+        --bg: #f4f6f9;
+        --panel: #fff;
+        --ink: #14171f;
+        --ink-2: #5b6478;
+        --ink-3: #8b93a5;
+        --line: #e3e7ee;
+        --accent: #2d4ad0;
+        --accent-soft: #eaeeff;
+        --good: #12855a;
+        --good-soft: #e4f4ec;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0e15;
+          --panel: #131826;
+          --ink: #e8eaf0;
+          --ink-2: #9aa3b5;
+          --ink-3: #6f7a8f;
+          --line: #232a3a;
+          --accent: #8fa5ff;
+          --accent-soft: #1a2140;
+          --good: #5dd39e;
+          --good-soft: #12291f;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Public Sans", system-ui, -apple-system, sans-serif;
+        line-height: 1.6;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 56px 20px 72px;
+        display: flex;
+        flex-direction: column;
+        gap: 30px;
+      }
+      .eyebrow {
+        margin: 0;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      h1 { margin: 4px 0 0; font-size: clamp(1.8rem, 5vw, 2.4rem); letter-spacing: -0.02em; }
+      .lede { margin: 10px 0 0; color: var(--ink-2); max-width: 60ch; }
+      h2 { margin: 0; font-size: 1.1rem; }
+      p { margin: 0; }
+
+      .demos { display: grid; gap: 16px; }
+      .demo {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px 22px;
+        transition: border-color 0.15s ease, transform 0.15s ease;
+      }
+      .demo:hover, .demo:focus-visible { border-color: var(--accent); transform: translateY(-1px); }
+      .demo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+      .plane {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.68rem; letter-spacing: 0.05em;
+        padding: 2px 8px; border-radius: 5px;
+        background: var(--accent-soft); color: var(--accent);
+      }
+      .demo p { margin-top: 8px; color: var(--ink-2); font-size: 0.94rem; }
+      .path {
+        display: inline-block; margin-top: 12px;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.78rem; color: var(--accent);
+      }
+
+      .note {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 18px 20px;
+        background: var(--panel);
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .note p, .note li { font-size: 0.9rem; color: var(--ink-2); }
+      ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 6px; }
+      code {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.85em;
+        background: var(--accent-soft);
+        color: var(--accent);
+        padding: 1px 5px; border-radius: 4px;
+      }
+      .pill {
+        font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+        background: var(--good-soft); color: var(--good); white-space: nowrap;
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        padding-top: 18px;
+        color: var(--ink-3);
+        font-size: 0.84rem;
+        display: flex; flex-wrap: wrap; gap: 6px 16px;
+      }
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">funkpost</p>
+        <h1>Post über Funk</h1>
+        <p class="lede">
+          A byte courier for local-first applications over LoRa mesh radios. Two
+          demos run here — one per <strong>data plane</strong>, sharing the same
+          courier underneath and nothing else.
+        </p>
+      </header>
+
+      <section class="demos">
+        <a class="demo" href="./mesh-todo/">
+          <span class="head">
+            <h2>mesh-todo</h2>
+            <span class="plane">OrbitDB</span>
+            <span class="pill">on hardware</span>
+          </span>
+          <p>
+            A todo list replicating between two phones with no IP path anywhere.
+            Signed entries, an access controller, a verifiable log — and a sync
+            pane that prices every frame. This is the demo that first crossed the
+            air, on 4 September 2026.
+          </p>
+          <span class="path">/funkpost/mesh-todo/</span>
+        </a>
+
+        <a class="demo" href="./termine/">
+          <span class="head">
+            <h2>Termine über Funk</h2>
+            <span class="plane">Yjs</span>
+          </span>
+          <p>
+            An appointment book for a shop around the corner, in the shape of
+            Calendly. Availability travels as a rule rather than a list, two
+            customers racing for one slot resolve identically on both phones
+            without a packet spent deciding, and the <code>.ics</code> you take
+            away carries a link that still works over the mesh.
+          </p>
+          <span class="path">/funkpost/termine/</span>
+        </a>
+      </section>
+
+      <section class="note">
+        <h2>Trying them without a radio</h2>
+        <p>
+          Append <code>?mesh=bc</code> and two browser tabs play the two devices,
+          using a BroadcastChannel where the LoRa link would be. It has to be two
+          tabs in the <em>same</em> browser profile — that channel does not cross
+          profiles.
+        </p>
+        <ul>
+          <li>
+            <strong>mesh-todo:</strong> open it twice with
+            <code>?mesh=bc</code>.
+          </li>
+          <li>
+            <strong>Termine:</strong> one tab with
+            <code>?mesh=bc&amp;room=test&amp;role=salon</code>, the other with
+            <code>role=customer</code>.
+          </li>
+        </ul>
+        <p>
+          With a Meshtastic node over Web Bluetooth, drop the parameter and press
+          <em>Connect</em> — Chrome or Edge, and an HTTPS page, because Web
+          Bluetooth refuses anything less.
+        </p>
+      </section>
+
+      <footer>
+        <span>GPL-3.0</span>
+        <a href="https://github.com/NiKrause/funkpost">source</a>
+        <a href="https://github.com/NiKrause/funkpost/blob/main/ROADMAP.md">roadmap</a>
+        <a href="https://lora.le-space.de/">lora.le-space.de</a>
+      </footer>
+    </main>
+  </body>
+</html>
