@@ -1,0 +1,11 @@
+{
+  "name": "Termine über Funk",
+  "short_name": "Termine",
+  "description": "Terminbuchung für den Laden um die Ecke, über ein LoRa-Mesh — ohne Server.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#2d4ad0",
+  "icons": []
+}

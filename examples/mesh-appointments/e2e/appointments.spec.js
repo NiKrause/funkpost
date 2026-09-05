@@ -183,3 +183,85 @@ test("converges over a mesh that eats a fifth of all frames", async ({ context }
   await salon.page.close();
   await guest.page.close();
 });
+
+test("the calendar link opens the booking on a device that never made it", async ({ context }) => {
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+  await salon.page.getByTestId("mode-auto").click();
+
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+  await bookSlot(guest.page, { time: "09:45", handle: "Elif" });
+  await expect(guest.page.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 20_000,
+  });
+
+  const link = (await guest.page.getByTestId("change-link").textContent()).trim();
+  expect(link).toContain("#/b/salon-funkpost/");
+  await guest.page.close();
+
+  // Forget it locally, so the next page knows nothing but what the link says.
+  // The token in that fragment IS the capability — not a lookup key — which is
+  // what lets a booking be cancelled from a phone that never made it.
+  const wipe = await context.newPage();
+  await wipe.goto("/");
+  await wipe.evaluate((key) => localStorage.removeItem(key), `bookings:${id}:customer`);
+  await wipe.close();
+
+  const fragment = link.slice(link.indexOf("#"));
+  const arriving = await context.newPage();
+  await arriving.goto(`/?mesh=bc&room=${id}&today=${MONDAY}${fragment}`);
+
+  // The record itself is not in this page's log yet; it comes over the mesh.
+  await expect(arriving.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 30_000,
+  });
+  await expect(arriving.getByTestId("my-bookings")).toContainText("09:45");
+
+  // And the capability really works: cancel from here, and the salon sees it.
+  await arriving.getByRole("button", { name: "Absagen" }).click();
+  await expect(arriving.getByTestId("booking")).toHaveAttribute("data-status", "cancelled", {
+    timeout: 20_000,
+  });
+  // The salon's agenda shows the time as free again — a cancelled booking must
+  // not leave a name on a slot that can be sold.
+  await expect(salon.page.getByTestId("salon")).not.toContainText("Elif", { timeout: 20_000 });
+
+  await arriving.close();
+  await salon.page.close();
+});
+
+test("a stale or foreign fragment is ignored, not obeyed", async ({ context }) => {
+  const id = nextRoom();
+  const page = await context.newPage();
+  // A booking nobody has, with a well-formed but unknown token.
+  await page.goto(`/?mesh=bc&room=${id}&today=${MONDAY}#/b/salon-funkpost/ZZZZZZZZZZZ/${"A".repeat(43)}`);
+  await expect(page.getByTestId("awaiting-link")).toBeVisible({ timeout: 20_000 });
+  // It waits, and shows nothing it cannot back up.
+  await expect(page.getByTestId("booking")).toHaveCount(0);
+  await page.close();
+});
+
+test("the app shell survives the network going away", async ({ context }) => {
+  const id = nextRoom();
+  const page = await context.newPage();
+  await page.goto(`/?mesh=bc&room=${id}&role=customer&today=${MONDAY}`);
+  await expect(page.getByTestId("customer")).toBeVisible({ timeout: 30_000 });
+
+  // Wait for the shell to be STORED, not merely for a worker to be in charge:
+  // a service worker takes control long before the cache is filled, and only
+  // the second of those means the page will open without a network.
+  await expect(page.locator("html")).toHaveAttribute("data-offline-ready", "true", {
+    timeout: 20_000,
+  });
+
+  // Now take the network away entirely — the case of a calendar link tapped in
+  // a village with no signal. Everything the page then does is radio anyway.
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByTestId("customer")).toBeVisible({ timeout: 30_000 });
+  await context.setOffline(false);
+
+  await page.close();
+});

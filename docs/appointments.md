@@ -261,11 +261,18 @@ the host, a CDN, or anything in between. Opening the link fetches **static
 files only**; the change itself then travels over the mesh, signed with the key
 the token derives.
 
-**The sharpest edge, stated plainly:** the *link* needs the app, and the app
-arrives over HTTPS the first time. Installed as a PWA it works offline
-afterwards; a stranger tapping a cold link needs one moment of internet to
-fetch the page — after which the booking itself is pure radio. The QR code at
-the counter is the offline-native path and should be the primary one.
+Opening such a link adopts the capability and fetches the booking **over the
+mesh** — so a calendar entry opens on a phone that has never seen the book, and
+can be cancelled from there, because the token is a key rather than a lookup.
+
+A service worker keeps the app shell, so all of that works with **no network at
+all** — for anyone who has opened the app before, which is everybody who booked
+through it.
+
+**The sharpest edge, stated plainly:** a stranger tapping a cold link on a
+device that has *never* loaded the page still needs the network once. No service
+worker can change that, which is why the QR code at the counter is the
+offline-native path and should be the primary one.
 
 The deploy path is a **one-way door**: every `.ics` ever downloaded points at
 it, and a calendar entry from last spring must still lead somewhere useful.

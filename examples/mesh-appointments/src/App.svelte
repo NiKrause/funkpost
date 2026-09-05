@@ -33,9 +33,16 @@
   const room = mode.kind === "bc" ? mode.room : "ble";
   const SHOP_ID = "salon-funkpost";
 
+  // The link out of a calendar note. Everything after `#` stayed in this
+  // browser — it was never sent to the host serving this page — so the token
+  // arriving here is the capability itself, not a reference to one.
+  const arriving = parseBookingLink(location.hash);
+
   const fromISO = todayISO(DEFAULT_SHOP.tz, pinnedToday);
 
-  let role = $state(params.get("role") ?? localStorage.getItem(`role:${room}`) ?? "");
+  let role = $state(
+    arriving ? "customer" : (params.get("role") ?? localStorage.getItem(`role:${room}`) ?? ""),
+  );
   let phase = $state("idle"); // idle → connecting → ready
   let error = $state("");
   let linkKind = $state("");
@@ -119,7 +126,14 @@
 
   const agenda = $derived.by(() => {
     if (!state || !day) return [];
-    const byIndex = new Map(state.bookings.map((b) => [b.slotIndex, b]));
+    // Only bookings that actually HOLD their slot get a row. A cancelled or
+    // declined one leaves a name on a time the salon can sell again, which
+    // reads as booked and is not.
+    const byIndex = new Map(
+      state.bookings
+        .filter((b) => b.status === CONFIRMED || b.status === PENDING)
+        .map((b) => [b.slotIndex, b]),
+    );
     return state.grid
       .filter((slot) => slot.iso === day)
       .map((slot) => ({ slot, booking: byIndex.get(slot.index) ?? null }));
@@ -147,6 +161,13 @@
 
   onMount(() => {
     loadMine();
+    // A link may hand us a booking this device has never seen. Adopt the
+    // capability so it shows up as ours and can be changed or cancelled —
+    // that is the whole point of the token being a key rather than a lookup.
+    if (arriving && !mine.some((m) => m.id === arriving.bookingId)) {
+      mine = [...mine, { id: arriving.bookingId, token: toBase64Url(arriving.token) }];
+      localStorage.setItem(myKey(), JSON.stringify(mine));
+    }
     window.addEventListener("error", (e) => pushLog(`! ${e.message ?? e.type}`));
     if (mode.kind === "bc" && role) connect();
     const ticker = setInterval(() => {
@@ -391,6 +412,16 @@
         </div>
       </div>
     </section>
+
+    {#if arriving && myBookings.length === 0}
+      <section class="card" data-testid="awaiting-link">
+        <h2>Termin wird gesucht</h2>
+        <p class="dim">
+          Der Link hat den Termin mitgebracht — er wird jetzt über Funk geholt.
+          Diese Seite kam von einem Webserver; alles Weitere läuft über das Mesh.
+        </p>
+      </section>
+    {/if}
 
     {#if myBookings.length > 0}
       <section class="card" data-testid="my-bookings">

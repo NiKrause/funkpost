@@ -355,3 +355,37 @@ describe("the gate: two customers race for one slot over a lossy mesh", () => {
     couriers.close();
   });
 });
+
+describe("joining a room that already has a book", () => {
+  test("a fresh peer greets first, and the book comes to it", async () => {
+    const couriers = meshPair();
+    const salonDoc = new Y.Doc();
+    const salonLog = createClaimLog();
+    const salonWire = wire(salonDoc, salonLog, couriers.a);
+    const salon = createBookingBook({ doc: salonDoc, log: salonLog, sync: salonWire.sync });
+    await salon.becomeSalon();
+    await salon.request(ask(salon, { slotIndex: 8, serviceId: "cut", handle: "Anna", at: 1 }));
+
+    // Nobody was listening while all of that happened — the case of a calendar
+    // link opened months later on a phone that has never seen this book.
+    await settle(60);
+
+    const guestDoc = new Y.Doc();
+    const guestLog = createClaimLog();
+    const guestWire = wire(guestDoc, guestLog, couriers.b);
+
+    // Without a greeting on start, this waits for ever: the salon has no reason
+    // to speak, and the guest has nothing to publish.
+    await until(() => guestLog.size === 1);
+    const guest = createBookingBook({ doc: guestDoc, log: guestLog, sync: guestWire.sync });
+    const state = await guest.state(MONDAY, DAYS);
+    assert.equal(state.bookings.length, 1);
+    assert.equal(state.bookings[0].handle, "Anna");
+
+    salonWire.provider.destroy();
+    guestWire.provider.destroy();
+    salonWire.sync.close();
+    guestWire.sync.close();
+    couriers.close();
+  });
+});

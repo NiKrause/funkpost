@@ -137,15 +137,34 @@ than a flicker; and a BroadcastChannel does not cross browser contexts, so
 isolating the two roles the way two real phones are isolated cut the very wire
 under test. Local storage is namespaced by role instead.
 
-### P6 · Deploy both demos — #38 A6 ◐
+### P6 · Deploy both demos, and make the link work — #38 A6 ✅
 
-`pages.yml` now builds both: `mesh-todo` stays at `/funkpost/`, the booking demo
+`pages.yml` builds both: `mesh-todo` stays at `/funkpost/`, the booking demo
 lands at `/funkpost/termine/`, matching `DEFAULT_BASE` in `link.js`. **The path
 is a one-way door** — every `.ics` ever downloaded points at it.
 
-*Still missing:* the service worker, so a link opened cold on a phone with no
-signal does not yet work offline. Until it lands, the QR code at the counter is
-the only offline-native path — which the docs already say it should be anyway.
+The link is now also *read*, which it was not: opening `#/b/<shop>/<booking>/
+<token>` adopts the capability and fetches the booking over the mesh, so a
+calendar entry opens on a phone that has never seen the book — and can cancel
+from there, because the token is a key rather than a lookup. A service worker
+keeps the shell, so that works with no network at all.
+
+*Gate met:* eight e2e runs, including the link opening on a wiped device and
+cancelling from it, a foreign fragment being ignored rather than obeyed, and a
+reload with the network switched off.
+
+Three bugs the browser found that nothing else would have:
+
+- **The claim sync never greeted on start.** A peer joining a room with an empty
+  log waited in silence for ever — which is precisely what a calendar link is.
+  Earlier tests passed only because the other side happened to publish.
+- **The service worker registration hung off `load`**, an event that has usually
+  already fired by the time a module runs.
+- **The Cache API honours `Vary`, and the server answers `Vary: Origin`.** Every
+  lookup missed while the cache visibly held exactly the right URLs.
+
+Also fixed on the way: the salon's agenda kept a customer's name on a slot that
+a cancellation had freed.
 
 ### P7 · Hardware bench — #38 A7
 
