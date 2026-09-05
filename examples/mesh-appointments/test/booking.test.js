@@ -452,3 +452,28 @@ describe("presence", () => {
     sync.close();
   });
 });
+
+describe("the salon's identity lives in one place", () => {
+  test("a second device may not quietly take the shop over", async () => {
+    const doc = new Y.Doc();
+    const first = createBookingBook({ doc, log: createClaimLog() });
+    await first.becomeSalon();
+
+    // Another laptop opens the same shop: the rules already carry a key.
+    const second = createBookingBook({ doc, log: createClaimLog() });
+    await assert.rejects(() => second.becomeSalon(), /already has a salon key/);
+
+    // Deliberate hand-over is possible, and says what it costs.
+    const token = await second.becomeSalon(newToken(), { takeOver: true });
+    assert.ok(token);
+  });
+
+  test("the same device reopening its own shop is not a take-over", async () => {
+    const doc = new Y.Doc();
+    const book = createBookingBook({ doc, log: createClaimLog() });
+    const token = await book.becomeSalon();
+    // Same token, second run — this must simply work.
+    const again = await book.becomeSalon(token);
+    assert.deepEqual([...again], [...token]);
+  });
+});

@@ -110,10 +110,25 @@ export function createBookingBook({ doc, log, sync = null, now = () => Date.now(
      * Salon: adopt an identity. Its public half goes into the rules, so every
      * device can check that a decision really came from the salon; the token
      * stays on the salon's own device and is the only thing that can decide.
+     *
+     * Refuses to replace a *different* key already in the rules. The salon's
+     * identity lives in one browser, so opening the salon on a second laptop
+     * would otherwise mint a new key, publish it, and quietly strip the first
+     * device of its authority — every decision it had signed would stop
+     * verifying, on every device, with nothing on screen to explain it. Pass
+     * `takeOver` to do it deliberately.
      */
-    async becomeSalon(token = newToken()) {
+    async becomeSalon(token = newToken(), { takeOver = false } = {}) {
       const { publicKey } = await keysFromToken(token);
-      this.setShop({ salonKey: toBase64Url(publicKey) });
+      const encoded = toBase64Url(publicKey);
+      const existing = shopMap.get("salonKey");
+      if (existing && existing !== encoded && !takeOver) {
+        throw new Error(
+          "this shop already has a salon key on another device — pass takeOver to replace it, " +
+            "which invalidates every decision the other device has signed",
+        );
+      }
+      this.setShop({ salonKey: encoded });
       log.setSalonKey(publicKey);
       return token;
     },
