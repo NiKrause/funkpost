@@ -69,6 +69,30 @@ courier in
 and this repository binds it to the radio. The licence section below says why
 that direction is the only one that works.
 
+### Two data planes, one courier
+
+The courier moves opaque bytes, so what sits on top is a choice — and both
+choices ship:
+
+| | **OrbitDB plane** | **Yjs plane** |
+|---|---|---|
+| gives you | signed entries, an access controller, verifiable history | tiny, loss-tolerant, order-independent updates |
+| first contact | ~2 KB for a two-item list | tens of bytes |
+| pick it when | who wrote what must be provable | the channel key is trust enough |
+| docs | [issue #1](https://github.com/NiKrause/funkpost/issues/1) | **[docs/yjs-provider.md](docs/yjs-provider.md)** |
+
+**The Yjs provider is reusable outside this project.** It needs only a courier
+— any object with `send(bytes)` and `onPayload(cb)` — so a WebSocket, a
+`BroadcastChannel` or your own transport works as well as a LoRa mesh:
+
+```js
+import { createYjsProvider } from "@le-space/funkpost/yjs";
+const provider = createYjsProvider({ doc, courier });
+```
+
+`yjs` is an optional peer dependency behind its own subpath, so the byte
+courier stays dependency-light for everyone else.
+
 ### One bootstrap, end to end
 
 No WebRTC anywhere in this picture — that is the point of the plane:
