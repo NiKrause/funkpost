@@ -20,9 +20,11 @@
 
 import * as Y from "yjs";
 import { DEFAULT_SHOP, slotGrid, serviceById, stepsFor, bookableSlots } from "./slots.js";
-import { arbitrate, busyIndices, CONFIRMED, PENDING, DECLINED } from "./arbitration.js";
+import { arbitrate, busyIndices, CONFIRMED, PENDING, DECLINED, CANCELLED, SUPERSEDED } from "./arbitration.js";
 import { encodeMask, decodeMask, maskMatchesGrid } from "./mask.js";
 import { newToken, keysFromToken, actionMessage, verifiedCancels, toBase64Url } from "./capability.js";
+import { buildICS, icsFilename } from "./ics.js";
+import { bookingLink, DEFAULT_BASE } from "./link.js";
 
 const randomId = () => toBase64Url(globalThis.crypto.getRandomValues(new Uint8Array(8)));
 
@@ -174,6 +176,60 @@ export function createBookingBook({ doc, now = () => Date.now() }) {
         statusOf(id) {
           return verdict.get(id) ?? null;
         },
+      };
+    },
+
+    /**
+     * The calendar file for one booking — the artefact that outlives the radio
+     * session, and the only part of this system a customer still holds when
+     * the app is long forgotten.
+     *
+     * Both sides generate the *same* `UID`, so the salon's copy and the
+     * customer's are one event rather than two. `SEQUENCE` counts the changes
+     * the document records, so a cancelled or re-decided booking **replaces**
+     * the earlier entry in a calendar instead of appearing beside it.
+     *
+     * The link is only included when a token is supplied: the salon holds no
+     * capability and must not publish a link that implies otherwise.
+     */
+    async icsFor(id, { fromISO, days, token = null, shopId = "salon", base = DEFAULT_BASE, stampMs, role = "customer" } = {}) {
+      const request = requestMap.get(id);
+      if (!request) throw new Error(`no such booking: ${id}`);
+
+      const current = shop();
+      const grid = slotGrid(current, { fromISO, days });
+      const slot = grid[request.slotIndex];
+      if (!slot) throw new Error(`booking ${id} is outside the horizon starting ${fromISO}`);
+
+      const service = serviceById(current, request.serviceId);
+      const state = await this.state(fromISO, days);
+      const status = state.statusOf(id)?.status;
+      const cancelled = status === CANCELLED || status === DECLINED || status === SUPERSEDED;
+
+      // Every recorded change bumps the sequence, so calendars replace rather
+      // than duplicate. Derived, not stored — two devices must agree on it.
+      const sequence = (decisionMap.has(id) ? 1 : 0) + (cancelMap.has(id) ? 1 : 0);
+
+      const text = buildICS({
+        uid: `${id}@funkpost`,
+        startMs: slot.startMs,
+        endMs: slot.startMs + service.minutes * 60_000,
+        summary: `${service.label} — ${current.name}`,
+        location: current.location ?? null,
+        url: token ? bookingLink({ shopId, bookingId: id, token, base }) : null,
+        note: role === "salon" ? `Kundin/Kunde: ${request.handle}` : null,
+        sequence,
+        stampMs,
+        method: cancelled ? "CANCEL" : "PUBLISH",
+        organizer: current.name,
+        attendee: request.handle,
+      });
+
+      return {
+        text,
+        filename: icsFilename({ summary: service.label, startMs: slot.startMs }),
+        sequence,
+        cancelled,
       };
     },
 
