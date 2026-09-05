@@ -49,6 +49,13 @@ Honest about what is not settled yet:
   rounds. Block compression and a more patient ARQ are the planned fix; live
   edits after the bootstrap are small and cross readily.
 
+**Where this is going:** a **second data plane** on the same courier — a Yjs
+(CRDT) provider ([#36](https://github.com/NiKrause/funkpost/issues/36)) whose
+updates are tens of bytes rather than kilobytes, demonstrated by a
+Calendly-shaped appointment book for a local business
+([#38](https://github.com/NiKrause/funkpost/issues/38)). Sequencing, phases and
+gates are in **[ROADMAP.md](ROADMAP.md)**.
+
 ## The data plane — built
 
 Two peers whose *only* link is the mesh cannot have a WebRTC channel — but
