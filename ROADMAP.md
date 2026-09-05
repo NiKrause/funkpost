@@ -25,8 +25,8 @@ roadmap is built to keep testing.
 | | Thread | State |
 |---|---|---|
 | **#1** | OrbitDB data plane | **First over-the-air replication 2026-09-04** — two desktop browsers, two nodes, no IP path. Open: first-contact reliability on a busy public channel, and the phone Bluetooth lottery. |
-| **#36** | Yjs data plane | Designed, not started. No LoRa/Meshtastic Yjs provider exists anywhere — this would be the first. |
-| **#37** | Hoist demo scaffolding into the lib | Designed, not started. Half the field bugs from #1 live in the demo's reconnect supervisor; a second app must not re-derive them. |
+| **#36** | Yjs data plane | **Built** (S1–S2) — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss. Not yet run on hardware. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
+| **#37** | Hoist demo scaffolding into the lib | **Built** — the device supervisor and the error humaniser are library code; `mesh-todo` is a consumer. Not yet re-run on hardware. [docs](docs/links.md) |
 | **#38** | `mesh-appointments` demo | Designed, not started. The Yjs plane's demo app: a Calendly-shaped booking book for a hairdresser, over LoRa. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
@@ -39,32 +39,43 @@ the application needs to be true** — the tradeoff table lives in #36.
 Ordered so that every phase is testable when it lands, and nothing waits on
 hardware that does not have to.
 
-### P0 · Error humaniser into the lib — #37 B
+### P0 · Error humaniser into the lib — #37 B ✅
 
-The Meshtastic routing-code table and `describeError()` are duplicated in the
-demo. One source of truth in the lib; the demo imports it.
+Names now come from the **firmware enum** rather than a hand-copied table, so a
+code this build does not know degrades to `"routing 41"` instead of `undefined`.
 
-*Gate:* `routingErrorName(5) === "MAX_RETRANSMIT"`; the hand-copied map is gone
-from `App.svelte`.
+*Gate met:* `routingErrorName(5) === "MAX_RETRANSMIT"`; the hand-copied map is
+gone from `App.svelte`.
 
-### P1 · Yjs provider core — #36 S1–S2
+### P1 · Yjs provider core — #36 S1–S2 ✅
 
-`FunkpostProvider` over `courier.send` / `courier.onPayload`, speaking stock
-`y-protocols/sync`. Then the adaptations the radio forces: coalescing local
-edits into one payload, echo suppression, `resync()`, awareness off by default.
+`createYjsProvider` over `courier.send` / `courier.onPayload`. Built on **core
+Yjs only** — no y-protocols, no lib0 — because state vectors and diffs are the
+whole vocabulary needed. Plus the adaptations the radio forces: coalescing local
+edits into one payload, echo suppression, `resync()`.
 
-*Gate:* two docs converge to an equal state vector across a 20 % frame-loss run
-on the in-memory mesh, with no manual retries. A ten-keystroke burst produces
-**one** payload, not ten. No hardware needed.
+Two scope notes against the original plan: **awareness was dropped**, not
+deferred within S2 — it is built for WebSocket cadence and would spend the
+entire duty-cycle budget announcing who is looking at the document. And the
+provider takes **any** `{ send, onPayload }`, so it is reusable outside this
+repository; a test runs it with no framing, ARQ or radio to keep that honest.
 
-### P2 · Reconnect supervisor into the lib — #37 A
+*Gate met:* two docs converge across a 20 % frame-loss run with no manual
+retries; a ten-keystroke burst produces **one** payload. No hardware needed.
 
-The device-lifecycle state machine — subscribe-before-configure, the generation
-guard, teardown-first reconnect, exponential backoff, the stability timer, the
-give-up cap, `link.rebind`.
+### P2 · Reconnect supervisor into the lib — #37 A ✅
 
-*Gate:* tests against a stub `MeshDevice` with injected disconnects assert each
-clause; `mesh-todo` is repointed at the lib and behaves identically.
+`connectMeshtasticDevice` holds the device-lifecycle state machine —
+subscribe-before-configure, the generation guard, teardown-first reconnect,
+exponential backoff, the stability timer, the give-up cap, `link.rebind`. The
+transport stays the caller's business: it asks for a `createDevice` factory and
+imports no transport itself, so it works over TCP or serial too.
+
+*Gate met:* each clause is asserted against a stub `MeshDevice` with injected
+disconnects; `mesh-todo` is repointed and its BLE branch lost ~100 lines. Caveat
+worth keeping visible: the e2e suite runs the BroadcastChannel fake, so the
+**BLE path is unit-tested, not yet re-confirmed on hardware** — that is P7's
+job, and the next field run should watch for it.
 
 ### P3 · Appointment core — #38 A1–A3
 
