@@ -19,11 +19,21 @@ difference gets a table, not a footnote:
 The announcement page for both, written for humans:
 [lora.le-space.de](https://lora.le-space.de/).
 
-**Try it now:** the demo — a todo list crossing a LoRa mesh — runs at
-**[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)**. Open
-it twice with `?mesh=bc` and two browser tabs play the two phones; with a
-Meshtastic node over Web Bluetooth, *Connect node* makes it real. Every push
-to main redeploys it.
+**Try it now.** Both demos are live, one per data plane, and every push to main
+redeploys both:
+
+| | | |
+|---|---|---|
+| **[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)** | `mesh-todo` | a todo list over LoRa — the **OrbitDB** plane |
+| **[…/funkpost/termine/](https://nikrause.github.io/funkpost/termine/)** | `mesh-appointments` | a hairdresser's appointment book — the **Yjs** plane |
+
+Open either twice with `?mesh=bc` and two browser tabs play the two devices
+(the booking demo wants `&role=salon` in one and `&role=customer` in the
+other); with a Meshtastic node over Web Bluetooth, *Connect node* makes it
+real.
+
+The `/termine/` path is a **one-way door** — every `.ics` the booking demo has
+ever produced carries a change link pointing at it.
 
 ## Status — first over-the-air replication, 2026-09-04
 

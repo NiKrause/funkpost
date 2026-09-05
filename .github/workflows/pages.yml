@@ -1,8 +1,15 @@
-name: Deploy mesh-todo to GitHub Pages
+name: Deploy the demos to GitHub Pages
 
 # The phones need an HTTPS address — Web Bluetooth refuses insecure origins.
-# Every push to main puts the demo at https://nikrause.github.io/funkpost/
-# until it gets a le-space.de home.
+# Every push to main publishes both demos:
+#
+#   https://nikrause.github.io/funkpost/          mesh-todo   (OrbitDB plane)
+#   https://nikrause.github.io/funkpost/termine/  appointments (Yjs plane)
+#
+# The /termine/ path is a ONE-WAY DOOR: every .ics ever downloaded carries a
+# change/cancel link pointing at it, and a calendar entry from last spring must
+# still lead somewhere. It matches DEFAULT_BASE in the appointment demo's
+# link.js — change one and you must change the other, and break old links.
 
 on:
   push:
@@ -34,6 +41,13 @@ jobs:
       - run: npm run build -w @le-space/mesh-todo-example
         env:
           PAGES_BASE: /funkpost/
+      - run: npm run build -w @le-space/mesh-appointments-example
+        env:
+          PAGES_BASE: /funkpost/termine/
+      # One artefact, two demos: the booking app rides along under /termine/.
+      - run: |
+          mkdir -p examples/mesh-todo/dist/termine
+          cp -R examples/mesh-appointments/dist/. examples/mesh-todo/dist/termine/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

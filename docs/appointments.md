@@ -3,8 +3,12 @@
 # The appointment core
 
 Status: **built and tested** ([#38](https://github.com/NiKrause/funkpost/issues/38)
-A1–A4) — the domain and the calendar file. No UI yet (P5), never run on
-hardware (P7). Tests: `examples/mesh-appointments/test/`.
+A1–A6) — domain, calendar file, both screens, and the deploy. Never run on
+hardware (P7). Tests: `examples/mesh-appointments/test/` and `e2e/`.
+
+Try it: **`/funkpost/termine/`**, or locally with `?mesh=bc&room=x&role=salon`
+in one tab and `role=customer` in another — two tabs play the two devices with
+no hardware at all.
 
 Bookings no longer live in the CRDT: see **Two substrates** below, and
 [#45](https://github.com/NiKrause/funkpost/issues/45) for the measurement that
@@ -14,6 +18,28 @@ An appointment book for a local business, on the Yjs plane. It is the demo that
 proves the plane, and it was chosen because it exercises what a lossy,
 duty-cycled, high-latency link is *worst* at: contention for a scarce resource
 that two people want at once.
+
+## The two screens
+
+One page, two roles, chosen once and remembered.
+
+**The customer** gets a Calendly-shaped booking pane: service, a strip of open
+days, and time pills. A slot is offered only if the service actually *fits* —
+a 45-minute cut is refused at 17:30 on a day that shuts at 18:00, and refused
+at 13:30 if 14:00 is taken, because it would run into it.
+
+**The salon** gets the day's agenda, the mode switch, and — in Rückfrage mode —
+the request as a popup with *Bestätigen* / *Ablehnen*. Its answer is signed;
+the customer's device verifies it rather than taking it on trust.
+
+Along the bottom, collapsed by default, sits the **radio strip**: frames out and
+in, retransmit rounds, payloads. The product surface stays calm and the
+transport stays one click away, because a demo that hides the radio is lying
+about what it is.
+
+The whole script is covered end to end in `e2e/` over the fake mesh — request,
+decide, converge, download the `.ics`, parse it back and check every line is
+inside 75 octets — including a run where a fifth of all frames are dropped.
 
 ## Two substrates, and why
 
