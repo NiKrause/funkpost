@@ -14,9 +14,20 @@ import {
 import { bookingLink, parseBookingLink, shopLink, parseShopLink, DEFAULT_BASE } from "../src/domain/link.js";
 import { newToken, TOKEN_BYTES } from "../src/domain/capability.js";
 import { createBookingBook } from "../src/domain/booking.js";
+import { createClaimLog } from "../src/domain/claimlog.js";
 import { CONFIRMED, DECLINED } from "../src/domain/arbitration.js";
 
 const MONDAY = "2026-09-07";
+const DAYS = 21;
+
+/** Rules in Yjs, bookings in a claim log — see docs/appointments.md. */
+const makeBook = async (patch = {}) => {
+  const book = createBookingBook({ doc: new Y.Doc(), log: createClaimLog() });
+  const salonToken = await book.becomeSalon();
+  if (Object.keys(patch).length) book.setShop(patch);
+  return { book, salonToken };
+};
+const ask = (extra) => ({ fromISO: MONDAY, days: DAYS, ...extra });
 const octets = (text) => new TextEncoder().encode(text).length;
 
 const contentLines = (ics) => ics.split("\r\n").filter(Boolean);
@@ -238,17 +249,11 @@ describe("the serverless link", () => {
 
 describe("the gate: a real booking becomes a real file", () => {
   test("the customer's file carries the link; the salon's does not", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    const { id, token } = await book.request({
-      slotIndex: 20,
-      serviceId: "cut",
-      handle: "Nico",
-      at: 1_000,
-    });
+    const { book } = await makeBook();
+    const { id, token } = await book.request(ask({ slotIndex: 20, serviceId: "cut", handle: "Nico", at: 1_000 }));
 
-    const customer = await book.icsFor(id, { fromISO: MONDAY, days: 1, token, shopId: "salon-funkpost", stampMs: 0 });
-    const salon = await book.icsFor(id, { fromISO: MONDAY, days: 1, role: "salon", stampMs: 0 });
+    const customer = await book.icsFor(id, { fromISO: MONDAY, days: DAYS, token, shopId: "salon-funkpost", stampMs: 0 });
+    const salon = await book.icsFor(id, { fromISO: MONDAY, days: DAYS, role: "salon", stampMs: 0 });
 
     const c = parseICS(customer.text);
     const s = parseICS(salon.text);
@@ -266,23 +271,22 @@ describe("the gate: a real booking becomes a real file", () => {
     assert.ok(!icsValue(c, "DESCRIPTION").includes("Kundin"), "the customer's copy does not");
 
     // 14:00 on the Monday, 45 minutes, as the grid says.
-    const grid = book.grid(MONDAY, 1);
+    const grid = book.grid(MONDAY, DAYS);
     assert.equal(icsValue(c, "DTSTART"), toICSDate(grid[20].startMs));
     assert.equal(icsValue(c, "DTEND"), toICSDate(grid[20].startMs + 45 * 60_000));
     assert.equal(customer.filename, `haarschnitt-fohnen-${toICSDate(grid[20].startMs).slice(0, 8)}.ics`);
   });
 
   test("a cancellation re-issues the same event, replacing it", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    const { id, token } = await book.request({ slotIndex: 12, serviceId: "trim", handle: "Anna", at: 1 });
+    const { book } = await makeBook();
+    const { id, token } = await book.request(ask({ slotIndex: 12, serviceId: "trim", handle: "Anna", at: 1 }));
 
-    const before = await book.icsFor(id, { fromISO: MONDAY, days: 1, token, stampMs: 0 });
+    const before = await book.icsFor(id, { fromISO: MONDAY, days: DAYS, token, stampMs: 0 });
     assert.equal(before.sequence, 0);
     assert.equal(icsValue(parseICS(before.text), "METHOD"), "PUBLISH");
 
     await book.cancel(id, token, { at: 2 });
-    const after = await book.icsFor(id, { fromISO: MONDAY, days: 1, token, stampMs: 0 });
+    const after = await book.icsFor(id, { fromISO: MONDAY, days: DAYS, token, stampMs: 0 });
 
     assert.equal(after.sequence, 1, "the change is counted, so calendars replace");
     assert.ok(after.cancelled);
@@ -293,38 +297,34 @@ describe("the gate: a real booking becomes a real file", () => {
   });
 
   test("a declined request produces a CANCEL, not a confirmation", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    book.setShop({ mode: "ask" });
-    const { id, token } = await book.request({ slotIndex: 12, serviceId: "trim", handle: "Anna", at: 1 });
-    book.decide(id, DECLINED, { at: 2, note: "leider voll" });
+    const { book, salonToken } = await makeBook({ mode: "ask" });
+    const { id, token } = await book.request(ask({ slotIndex: 12, serviceId: "trim", handle: "Anna", at: 1 }));
+    await book.decide(id, DECLINED, { salonToken, at: 2, note: "leider voll" });
 
-    const file = await book.icsFor(id, { fromISO: MONDAY, days: 1, token, stampMs: 0 });
+    const file = await book.icsFor(id, { fromISO: MONDAY, days: DAYS, token, stampMs: 0 });
     assert.ok(file.cancelled);
     assert.equal(icsValue(parseICS(file.text), "STATUS"), "CANCELLED");
   });
 
   test("a confirmed request in ask mode publishes normally", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    book.setShop({ mode: "ask" });
-    const { id, token } = await book.request({ slotIndex: 12, serviceId: "trim", handle: "Anna", at: 1 });
-    book.decide(id, CONFIRMED, { at: 2 });
+    const { book, salonToken } = await makeBook({ mode: "ask" });
+    const { id, token } = await book.request(ask({ slotIndex: 12, serviceId: "trim", handle: "Anna", at: 1 }));
+    await book.decide(id, CONFIRMED, { salonToken, at: 2 });
 
-    const file = await book.icsFor(id, { fromISO: MONDAY, days: 1, token, stampMs: 0 });
+    const file = await book.icsFor(id, { fromISO: MONDAY, days: DAYS, token, stampMs: 0 });
     assert.ok(!file.cancelled);
     assert.equal(file.sequence, 1);
     assert.equal(icsValue(parseICS(file.text), "STATUS"), "CONFIRMED");
   });
 
   test("refuses a booking outside the horizon rather than inventing a time", async () => {
-    const doc = new Y.Doc();
-    const book = createBookingBook({ doc });
-    const { id, token } = await book.request({ slotIndex: 5000, serviceId: "trim", handle: "X", at: 1 });
+    const { book } = await makeBook();
+    // A slot index the horizon does not contain is refused at request time now:
+    // a booking carries an absolute start, so there is no invalid one to store.
     await assert.rejects(
-      () => book.icsFor(id, { fromISO: MONDAY, days: 1, token }),
+      () => book.request(ask({ slotIndex: 99_999, serviceId: "trim", handle: "X", at: 1 })),
       /outside the horizon/,
     );
-    await assert.rejects(() => book.icsFor("nope", { fromISO: MONDAY, days: 1 }), /no such booking/);
+    await assert.rejects(() => book.icsFor("nope", { fromISO: MONDAY, days: DAYS }), /no such booking/);
   });
 });
