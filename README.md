@@ -22,10 +22,13 @@ The announcement page for both, written for humans:
 **Try it now.** Both demos are live, one per data plane, and every push to main
 redeploys both:
 
+Both live at **[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)**,
+which is a menu:
+
 | | | |
 |---|---|---|
-| **[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)** | `mesh-todo` | a todo list over LoRa — the **OrbitDB** plane |
-| **[…/funkpost/termine/](https://nikrause.github.io/funkpost/termine/)** | `mesh-appointments` | a hairdresser's appointment book — the **Yjs** plane |
+| **[…/mesh-todo/](https://nikrause.github.io/funkpost/mesh-todo/)** | `mesh-todo` | a todo list over LoRa — the **OrbitDB** plane |
+| **[…/termine/](https://nikrause.github.io/funkpost/termine/)** | `mesh-appointments` | a hairdresser's appointment book — the **Yjs** plane |
 
 Open either twice with `?mesh=bc` and two browser tabs play the two devices
 (the booking demo wants `&role=salon` in one and `&role=customer` in the
@@ -236,7 +239,7 @@ first contact and demos.
 bench instrument in one: a todo list on OrbitDB, replicating over the courier,
 with a sync pane that prices every protocol message in packets and airtime —
 the hardware gates are read off exactly that pane. It is deployed at
-**[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)**; for
+**[nikrause.github.io/funkpost/mesh-todo/](https://nikrause.github.io/funkpost/mesh-todo/)**; for
 local development:
 
 ```sh

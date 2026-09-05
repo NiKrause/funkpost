@@ -1,15 +1,20 @@
 name: Deploy the demos to GitHub Pages
 
 # The phones need an HTTPS address — Web Bluetooth refuses insecure origins.
-# Every push to main publishes both demos:
+# Every push to main publishes an index and both demos:
 #
-#   https://nikrause.github.io/funkpost/          mesh-todo   (OrbitDB plane)
-#   https://nikrause.github.io/funkpost/termine/  appointments (Yjs plane)
+#   https://nikrause.github.io/funkpost/           the menu
+#   https://nikrause.github.io/funkpost/mesh-todo/ mesh-todo    (OrbitDB plane)
+#   https://nikrause.github.io/funkpost/termine/   appointments (Yjs plane)
 #
 # The /termine/ path is a ONE-WAY DOOR: every .ics ever downloaded carries a
 # change/cancel link pointing at it, and a calendar entry from last spring must
 # still lead somewhere. It matches DEFAULT_BASE in the appointment demo's
 # link.js — change one and you must change the other, and break old links.
+#
+# /mesh-todo/ is new: that demo used to sit at the root. It has no permanent
+# links pointing into it, so moving it costs an old bookmark one click through
+# the menu — which is why only this one was allowed to move.
 
 on:
   push:
@@ -40,17 +45,20 @@ jobs:
       - run: npm ci
       - run: npm run build -w @le-space/mesh-todo-example
         env:
-          PAGES_BASE: /funkpost/
+          PAGES_BASE: /funkpost/mesh-todo/
       - run: npm run build -w @le-space/mesh-appointments-example
         env:
           PAGES_BASE: /funkpost/termine/
-      # One artefact, two demos: the booking app rides along under /termine/.
+      # Assemble the site rather than nesting one demo inside another's build
+      # output: each demo owns its directory, and the index owns the root.
       - run: |
-          mkdir -p examples/mesh-todo/dist/termine
-          cp -R examples/mesh-appointments/dist/. examples/mesh-todo/dist/termine/
+          mkdir -p site/mesh-todo site/termine
+          cp examples/landing/index.html site/index.html
+          cp -R examples/mesh-todo/dist/. site/mesh-todo/
+          cp -R examples/mesh-appointments/dist/. site/termine/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: examples/mesh-todo/dist
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4
