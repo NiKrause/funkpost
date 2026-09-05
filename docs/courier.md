@@ -38,6 +38,21 @@ the only transport that fits a phone). One BLE client per node is a firmware
 rule, so each side brings its own. Chrome/Edge on Android and desktop; no iOS,
 no Firefox; the page must be foreground with the screen on.
 
+
+## A greeting is not worth an ARQ
+
+`send(payload, { rounds: 1 })` caps a single payload's transmission rounds.
+
+It exists because a **broadcast into a room that may be empty** gets no STATUS
+back, so the selective-ACK ARQ has nothing to work with and simply retransmits
+to exhaustion — the full airtime, every time, for a message whose whole point is
+that it repeats later anyway. On a bench where nothing was being heard, that
+showed up as 85 frames and 80 retransmit rounds in twenty seconds.
+
+The rule that follows: **greet once, answer properly.** A digest or an announce
+goes out with `rounds: 1`; anything sent *to* a peer who has demonstrably spoken
+keeps the default, because there the ARQ is doing exactly what it is for.
+
 ---
 
 ← [funkpost](../README.md) · [ROADMAP](../ROADMAP.md)

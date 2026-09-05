@@ -43,6 +43,32 @@ describe("meshtastic courier (over the in-memory mesh)", () => {
     close();
   });
 
+  test("a send may cap its own rounds — a greeting nobody will answer", async () => {
+    // Into a room with no listener: the ARQ has no STATUS to work with and
+    // would otherwise retransmit to exhaustion, paying full airtime for a
+    // message whose whole point is that it repeats later anyway.
+    const pair = createMemoryMeshPair({ mtu: 60, delayMs: 1 });
+    const a = createMeshtasticCourier({ link: pair.a, ...FAST });
+
+    await a.send(bytesOf(200), { rounds: 1 });
+    const framesAfterOnce = a.stats.framesTx;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(a.stats.framesTx, framesAfterOnce, "one wave, then silence");
+    assert.equal(a.stats.retransmitRounds, 0);
+
+    // The default still tries hard. Its own pair must have nobody listening
+    // either, or the peer answers on the first wave and there is nothing to
+    // retry — which is what a listening courier on pair.b would have done.
+    const lonely = createMemoryMeshPair({ mtu: 60, delayMs: 1 });
+    const b = createMeshtasticCourier({ link: lonely.a, ...FAST, maxRounds: 4 });
+    await b.send(bytesOf(200));
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.ok(b.stats.retransmitRounds > 0, "the default keeps retrying");
+
+    a.close();
+    b.close();
+  });
+
   test("heals fragment loss by retransmitting exactly the gaps", async () => {
     const droppedOnce = new Set();
     const { a, b, close } = pairOfCouriers({
