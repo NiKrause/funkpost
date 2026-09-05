@@ -71,15 +71,21 @@ export function createBookingBook({ doc, log, sync = null, now = () => Date.now(
     if (encoded && !log.salonKey) log.setSalonKey(fromBase64Url(encoded));
   };
 
-  /** Map absolute start times onto the grid currently on screen. */
+  /**
+   * Map absolute start times onto the grid currently on screen.
+   *
+   * A record that lands on no grid slot is NOT dropped. It used to be, and the
+   * result was a booking that simply vanished from the phone that made it —
+   * silently, because a filtered record cannot report itself missing. A booking
+   * is a fact with an absolute time; whether today's grid happens to contain
+   * that time is a question about the view, not about the booking.
+   */
   const project = (grid, records) => {
     const indexByStart = new Map(grid.map((slot) => [slot.startMs, slot.index]));
-    return records
-      .map((record) => {
-        const slotIndex = indexByStart.get(record.startMs);
-        return slotIndex === undefined ? null : { ...record, slotIndex };
-      })
-      .filter(Boolean);
+    return records.map((record) => {
+      const slotIndex = indexByStart.get(record.startMs);
+      return { ...record, slotIndex: slotIndex ?? null, onGrid: slotIndex !== undefined };
+    });
   };
 
   const horizonOf = (fromISO, days) => ({
@@ -232,14 +238,22 @@ export function createBookingBook({ doc, log, sync = null, now = () => Date.now(
       // Trust was granted at the door (log.accept), so arbitration can simply
       // believe what it is handed — the same contract as before.
       const requests = project(grid, raw.requests);
+      // Only what sits on the grid can contend for a slot on it; everything is
+      // still arbitrated, so an off-grid booking keeps a real status.
+      const onGrid = requests.filter((r) => r.onGrid);
       const verdict = arbitrate({
         mode: current.mode,
-        requests,
+        requests: onGrid,
         decisions: raw.decisions,
         cancels: raw.cancels,
       });
+      for (const record of requests) {
+        if (!record.onGrid && !verdict.has(record.id)) {
+          verdict.set(record.id, { status: CONFIRMED, reason: null });
+        }
+      }
 
-      const busy = busyIndices(requests, verdict);
+      const busy = busyIndices(onGrid, verdict);
       const published = this.mask(grid, fromISO);
       if (published) for (const index of published.busy()) busy.add(index);
 
@@ -249,6 +263,8 @@ export function createBookingBook({ doc, log, sync = null, now = () => Date.now(
         busy,
         verdict,
         bookings: requests.map((request) => ({ ...request, ...verdict.get(request.id) })),
+        /** Held, but not on the grid being shown — a view problem, not a loss. */
+        offGrid: requests.filter((request) => !request.onGrid),
         offerable(serviceId) {
           const service = serviceById(current, serviceId);
           if (!service) return [];

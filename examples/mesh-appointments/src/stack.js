@@ -22,6 +22,7 @@ import {
 } from "@le-space/funkpost";
 import { createYjsProvider } from "@le-space/funkpost/yjs";
 import { createClaimLog } from "./domain/claimlog.js";
+import { attachPersistence } from "./domain/persistence.js";
 import { createClaimSync } from "./domain/claimsync.js";
 import { createBookingBook } from "./domain/booking.js";
 import { DEFAULT_SHOP } from "./domain/slots.js";
@@ -51,13 +52,17 @@ export function horizonFor(fromISO, days) {
 }
 
 /**
- * Build the local state. No radio yet — the user has to act for that, because
- * Web Bluetooth demands a gesture.
+ * Build the local state and put back whatever this device already knew.
+ *
+ * No radio yet — the user has to act for that, because Web Bluetooth demands a
+ * gesture. But the book itself should survive a reload without asking the mesh
+ * to send it all again, which on a duty-cycled link is not free.
  */
-export function createStack({ fromISO, days = DEFAULT_SHOP.horizonDays }) {
+export async function createStack({ room, fromISO, days = DEFAULT_SHOP.horizonDays, onError }) {
   const doc = new Y.Doc();
   const log = createClaimLog();
-  return { doc, log, fromISO, days };
+  const store = await attachPersistence({ room, doc, log, Y, onError });
+  return { doc, log, fromISO, days, store, restored: store.restored };
 }
 
 /**
@@ -119,7 +124,18 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
         maxRounds: 12,
       }),
     on: {
-      region: onRegion,
+      region: (name) => {
+        if (onRegion) onRegion(name);
+        // A node reports its region a moment AFTER it connects, and until then
+        // the courier refuses to transmit — correctly, since it does not yet
+        // know the local airtime law. Anything attempted in that window was
+        // dropped, so re-greet as soon as the region lands rather than leaving
+        // the user staring at a book that never filled.
+        if (name && name !== "UNSET" && started) {
+          started.sync.resync();
+          started.provider.resync();
+        }
+      },
       status: onStatus,
       reconnecting: onReconnecting,
       reconnected: () => {

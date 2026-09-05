@@ -21,6 +21,13 @@
  *
  * Tags start at 0x10 so this can share a courier with the Yjs provider (which
  * uses 0x00–0x02 and ignores what it does not recognise, as does this).
+ *
+ * A digest also carries four random bytes naming the sender. On a broadcast
+ * medium there is no such thing as a connection, so "is anybody there?" can
+ * only be answered by having heard from them recently — and without a name, two
+ * peers and one chatty peer look identical. Four bytes on a message that was
+ * going out anyway buys an honest answer to the one question every user asks
+ * first: is this thing on?
  */
 
 import {
@@ -102,6 +109,8 @@ export function createClaimSync({
   log,
   courier,
   horizon,
+  peerId = globalThis.crypto.getRandomValues(new Uint8Array(4)),
+  peerTimeoutMs = 120_000,
   announceOnStart = true,
   minAnnounceGapMs = 1000,
   now = () => Date.now(),
@@ -116,6 +125,8 @@ export function createClaimSync({
 
   let closed = false;
   let lastAnnounceAt = null;
+  let lastHeardAt = null;
+  const peers = new Map(); // hex id → last heard
   const stats = { payloadsSent: 0, payloadsReceived: 0, recordsAccepted: 0, recordsRejected: 0, bytesSent: 0 };
 
   const emit = (event) => {
@@ -142,9 +153,10 @@ export function createClaimSync({
     lastAnnounceAt = at;
     const { fromDay, days } = horizon();
     const digest = encodeDigest(log, fromDay, days);
-    const payload = new Uint8Array(1 + digest.length);
+    const payload = new Uint8Array(1 + peerId.length + digest.length);
     payload[0] = MSG_DIGEST;
-    payload.set(digest, 1);
+    payload.set(peerId, 1);
+    payload.set(digest, 1 + peerId.length);
     send(payload);
   };
 
@@ -183,8 +195,14 @@ export function createClaimSync({
     flush();
   };
 
+  const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+
   const handleDigest = (body) => {
-    const theirs = decodeDigest(body);
+    if (body.length < 4) return;
+    const from = hex(body.subarray(0, 4));
+    // Ignore our own broadcast coming back to us on a shared channel.
+    if (from !== hex(peerId)) peers.set(from, now());
+    const theirs = decodeDigest(body.subarray(4));
     if (!theirs) return;
     const differing = divergentDays(log, theirs);
     emit({ kind: "digest-rx", days: theirs.days, differing: differing.length });
@@ -249,6 +267,7 @@ export function createClaimSync({
     const tag = payload[0];
     if (tag !== MSG_DIGEST && tag !== MSG_HAVE && tag !== MSG_RECORDS) return; // not ours
     stats.payloadsReceived++;
+    lastHeardAt = now();
     const body = payload.subarray(1);
     try {
       if (tag === MSG_DIGEST) handleDigest(body);
@@ -288,6 +307,20 @@ export function createClaimSync({
       const theirs = encodeDigest(otherLog, fromDay, days);
       return mine.length === theirs.length && mine.every((byte, i) => byte === theirs[i]);
     },
+    /**
+     * Who we have heard from lately, and when we last heard anything at all.
+     * Not a connection count — there is no such thing here — but the honest
+     * version of the question: these peers said something recently.
+     */
+    presence() {
+      const at = now();
+      for (const [id, seen] of peers) if (at - seen > peerTimeoutMs) peers.delete(id);
+      return {
+        peers: [...peers.entries()].map(([id, seen]) => ({ id, agoMs: at - seen })),
+        lastHeardAgoMs: lastHeardAt == null ? null : at - lastHeardAt,
+      };
+    },
+
     stats,
     close() {
       if (closed) return;
