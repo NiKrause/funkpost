@@ -3,7 +3,8 @@
 # The Yjs provider
 
 Status: **built and tested** ([#36](https://github.com/NiKrause/funkpost/issues/36)
-S1–S2) — not yet run over real hardware.
+S1–S2) — and on air: it carried a shop's rules across a real LoRa mesh on
+2026-09-06.
 
 A [Yjs](https://yjs.dev) provider that syncs a `Y.Doc` over a **byte courier**
 — on a LoRa mesh through funkpost, or over any transport you already have.

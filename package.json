@@ -51,7 +51,7 @@
     "datastore-core": "^10.0.4",
     "helia": "^5.5.1",
     "libp2p": "^2.10.0",
-    "orbitdb-storacha-bridge": "github:NiKrause/orbitdb-storacha-bridge#main",
+    "orbitdb-storacha-bridge": "^0.5.0",
     "yjs": "^13.6.27"
   },
   "workspaces": [

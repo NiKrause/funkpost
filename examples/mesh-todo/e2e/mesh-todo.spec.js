@@ -33,14 +33,17 @@ async function runTheScript(context, extra) {
   await expect(b.getByText(/0 entries/)).toBeVisible({ timeout: 60_000 });
   await expect(b.locator(".addr")).toHaveText(address, { timeout: 15_000 });
 
-  // Gate 1, direction A → B.
+  // Gate 1, direction A → B. Writing is local; the radio waits to be asked,
+  // so each direction now ends with the press that spends the airtime.
   await a.getByLabel("new todo").fill("Milch kaufen");
-  await a.getByRole("button", { name: "Add" }).click();
+  await a.getByRole("button", { name: "Add", exact: true }).click();
   await expect(a.getByText("Milch kaufen")).toBeVisible({ timeout: 15_000 });
+  await a.getByTestId("send-changes").click();
   await expect(b.getByText("Milch kaufen")).toBeVisible({ timeout: 60_000 });
 
-  // Direction B → A: the toggle comes back.
+  // Direction B → A: the toggle comes back, once B sends it.
   await b.getByRole("checkbox").check();
+  await b.getByTestId("send-changes").click();
   await expect(a.locator("span.done")).toHaveText("Milch kaufen", { timeout: 60_000 });
 
   return { a, b, address };
@@ -178,4 +181,44 @@ test("the experimental notice can be dismissed for good", async ({ context }) =>
   await expect(page.getByTestId("experimental-notice")).toHaveCount(0);
 
   await page.close();
+});
+
+test("changes wait for the button, and then they cross", async ({ context }) => {
+  const roomId = room();
+  const a = await openPhone(context, roomId);
+  const b = await openPhone(context, roomId);
+
+  await a.getByRole("button", { name: "Create a list" }).click();
+  await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
+  await a.getByRole("button", { name: "Invite again" }).click();
+  await b.getByRole("button", { name: "Join this list" }).click();
+  await expect(b.getByText(/0 entries/)).toBeVisible({ timeout: 60_000 });
+
+  // Three writes, nothing sent. The button counts what is waiting, which is
+  // the honest signal: "send" alone would not say whether anything is pending.
+  for (const text of ["Milch", "Brot", "Butter"]) {
+    await a.getByLabel("new todo").fill(text);
+    await a.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(a.getByText(text)).toBeVisible({ timeout: 15_000 });
+  }
+  await expect(a.getByTestId("send-changes")).toHaveText(/Send 3 changes/);
+
+  // The peer must still be empty — and stay empty for long enough that this is
+  // a fact about the app rather than a race we happened to win.
+  await b.waitForTimeout(3_000);
+  await expect(b.getByText("Milch")).toHaveCount(0);
+  await expect(b.getByText(/0 entries/)).toBeVisible();
+
+  // One press carries all three: the batching this exists for.
+  await a.getByTestId("send-changes").click();
+  await expect(b.getByText("Milch")).toBeVisible({ timeout: 60_000 });
+  await expect(b.getByText("Brot")).toBeVisible({ timeout: 20_000 });
+  await expect(b.getByText("Butter")).toBeVisible({ timeout: 20_000 });
+
+  // Nothing left waiting, and the control says so rather than staying armed.
+  await expect(a.getByTestId("send-changes")).toHaveText(/Nothing to send/);
+  await expect(a.getByTestId("send-changes")).toBeDisabled();
+
+  await a.close();
+  await b.close();
 });
