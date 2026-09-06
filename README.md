@@ -72,8 +72,9 @@ paced ARQ courier, the LoRa hop, `joinEntry` on the other, both lists
 converged. Two desktop browsers, each driving its own node over Web Bluetooth.
 
 Since then a **second data plane** landed on the same courier — a Yjs provider
-whose updates are tens of bytes rather than kilobytes — demonstrated by an
-appointment book for a local business. The courier needed no changes for it,
+whose updates are tens of bytes rather than kilobytes — demonstrated by
+**mesh-calendar**, an appointment book for a local business. The courier needed
+no changes for it,
 which was the claim worth testing.
 
 What is *not* settled, and what each bench session cost, is kept honestly in
@@ -91,7 +92,7 @@ what is built and what is not:
 | **[Links to a node](docs/links.md)** | Web Bluetooth reality, the reconnect policy, reading what the radio says |
 | **[The OrbitDB plane](docs/data-plane-orbitdb.md)** | signed entries and an access controller; the bootstrap, end to end |
 | **[The Yjs plane](docs/yjs-provider.md)** | tiny, loss-tolerant updates — and reusable outside this project |
-| **[The appointment book](docs/appointments.md)** | the Yjs plane's demo: rules not lists, who got the slot — and how to run its tests in a browser you can watch |
+| **[mesh-calendar](docs/mesh-calendar.md)** | the Yjs plane's demo — a shop's appointment book: rules not lists, who got the slot — and how to run its tests in a browser you can watch |
 | **[The signalling plane](docs/signalling.md)** | designed, not built — LoRa carries the handshake, not the connection |
 | **[Bench etiquette](docs/bench-etiquette.md)** | developing on a shared, legally rationed medium without ruining it for the neighbours |
 | **[Field notes](docs/field-notes.md)** | what broke on real hardware, and why |

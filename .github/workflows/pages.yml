@@ -5,11 +5,11 @@ name: Deploy the demos to GitHub Pages
 #
 #   https://nikrause.github.io/funkpost/           the menu
 #   https://nikrause.github.io/funkpost/mesh-todo/ mesh-todo    (OrbitDB plane)
-#   https://nikrause.github.io/funkpost/termine/   appointments (Yjs plane)
+#   https://nikrause.github.io/funkpost/termine/   mesh-calendar (Yjs plane)
 #
 # The /termine/ path is a ONE-WAY DOOR: every .ics ever downloaded carries a
 # change/cancel link pointing at it, and a calendar entry from last spring must
-# still lead somewhere. It matches DEFAULT_BASE in the appointment demo's
+# still lead somewhere. It matches DEFAULT_BASE in mesh-calendar's
 # link.js — change one and you must change the other, and break old links.
 #
 # /mesh-todo/ is new: that demo used to sit at the root. It has no permanent

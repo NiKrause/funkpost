@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Appointment book for a local business, over a LoRa mesh — the Yjs plane's demo (issue #38).",
+  "description": "mesh-calendar: an appointment book for a local business over a LoRa mesh — the Yjs plane's demo (issue #38).",
   "license": "GPL-3.0-only",
   "scripts": {
     "dev": "vite",

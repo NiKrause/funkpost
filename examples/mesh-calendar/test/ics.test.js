@@ -20,7 +20,7 @@ import { CONFIRMED, DECLINED } from "../src/domain/arbitration.js";
 const MONDAY = "2026-09-07";
 const DAYS = 21;
 
-/** Rules in Yjs, bookings in a claim log — see docs/appointments.md. */
+/** Rules in Yjs, bookings in a claim log — see docs/mesh-calendar.md. */
 const makeBook = async (patch = {}) => {
   const book = createBookingBook({ doc: new Y.Doc(), log: createClaimLog() });
   const salonToken = await book.becomeSalon();
