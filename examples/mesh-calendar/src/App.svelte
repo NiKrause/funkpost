@@ -786,8 +786,17 @@ import { wallAt } from "./domain/time.js";
   {#if error}<p class="error">{error}</p>{/if}
 
   <footer>
+    <a href="https://github.com/NiKrause/funkpost">Quelltext</a> ·
     <a href="https://github.com/NiKrause/funkpost/issues/38">Entwurf #38</a> · GPL-3.0 ·
-    <span class="build">{build.version} · {build.commit} · {build.builtAt}</span>
+    <span class="build">
+      {build.version} ·
+      <!-- The build already knew which commit it is; now it can be opened. A
+           version string nobody can look up is decoration. -->
+      {#if build.commit && build.commit !== "local"}
+        <a href="https://github.com/NiKrause/funkpost/commit/{build.commit}">{build.commit}</a>
+      {:else}{build.commit}{/if}
+      · {build.builtAt}
+    </span>
   </footer>
 </main>
 
@@ -795,7 +804,7 @@ import { wallAt } from "./domain/time.js";
   :global(body) {
     margin: 0;
     background: #f4f6f9;
-    color: #14171f;
+    color: #141B2E;
     font-family: "Public Sans", system-ui, sans-serif;
     line-height: 1.55;
   }
@@ -815,7 +824,7 @@ import { wallAt } from "./domain/time.js";
   }
   .tag { margin: 4px 0 0; color: #5b6478; font-size: 0.92rem; }
   .dim { color: #5b6478; font-size: 0.86rem; margin: 0; }
-  .error { color: #b3261e; font-size: 0.9rem; }
+  .error { color: #E8503F; font-size: 0.9rem; }
 
   .card {
     background: #fff; border: 1px solid #e3e7ee; border-radius: 12px;
@@ -841,11 +850,11 @@ import { wallAt } from "./domain/time.js";
   .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 0.84rem; color: #5b6478; }
   .field select, .field input {
     padding: 7px 9px; border: 1px solid #d5dae4; border-radius: 8px;
-    font: inherit; font-size: 0.92rem; color: #14171f; background: #fff;
+    font: inherit; font-size: 0.92rem; color: #141B2E; background: #fff;
   }
   .note {
-    margin: 14px 0 10px; padding: 10px 11px; border: 1px solid #c3ceff;
-    background: #eaeeff; border-radius: 9px; font-size: 0.78rem; color: #5b6478;
+    margin: 14px 0 10px; padding: 10px 11px; border: 1px solid #A9D9EF;
+    background: #E6F3FA; border-radius: 9px; font-size: 0.78rem; color: #5b6478;
   }
 
   .days { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
@@ -855,35 +864,35 @@ import { wallAt } from "./domain/time.js";
   }
   .day span { display: block; font-size: 0.66rem; text-transform: uppercase; color: #8b93a5; letter-spacing: 0.06em; }
   .day b { font-size: 0.98rem; font-variant-numeric: tabular-nums; }
-  .day[aria-pressed="true"] { border-color: #2d4ad0; background: #eaeeff; }
-  .day[aria-pressed="true"] b { color: #2d4ad0; }
+  .day[aria-pressed="true"] { border-color: #0E86C4; background: #E6F3FA; }
+  .day[aria-pressed="true"] b { color: #0E86C4; }
   .day:disabled { opacity: 0.35; cursor: not-allowed; }
 
   .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 7px; }
   .slot {
-    border: 1px solid #c3ceff; background: #fff; color: #2d4ad0;
+    border: 1px solid #A9D9EF; background: #fff; color: #0E86C4;
     border-radius: 8px; padding: 8px 4px; cursor: pointer;
     font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.88rem;
   }
-  .slot:hover:not(:disabled) { background: #eaeeff; }
-  .slot[aria-pressed="true"] { background: #2d4ad0; color: #fff; border-color: #2d4ad0; }
+  .slot:hover:not(:disabled) { background: #E6F3FA; }
+  .slot[aria-pressed="true"] { background: #0E86C4; color: #fff; border-color: #0E86C4; }
   .slot:disabled {
     border-color: #e3e7ee; color: #8b93a5; background: #eef1f6;
     cursor: not-allowed; text-decoration: line-through; font-weight: 400;
   }
 
   .btn {
-    border: 1px solid #2d4ad0; background: #2d4ad0; color: #fff;
+    border: 1px solid #0E86C4; background: #0E86C4; color: #fff;
     padding: 9px 18px; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer;
   }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn.ghost { background: transparent; color: #2d4ad0; }
+  .btn.ghost { background: transparent; color: #0E86C4; }
   .btn.ok { background: #12855a; border-color: #12855a; }
   .btn.sm { padding: 6px 12px; font-size: 0.85rem; }
 
   .switch { display: flex; border: 1px solid #e3e7ee; border-radius: 8px; overflow: hidden; }
   .switch button { border: 0; background: #fff; color: #5b6478; font: inherit; font-size: 0.82rem; padding: 6px 11px; cursor: pointer; }
-  .switch button[aria-pressed="true"] { background: #2d4ad0; color: #fff; font-weight: 600; }
+  .switch button[aria-pressed="true"] { background: #0E86C4; color: #fff; font-weight: 600; }
 
   .mine { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid #eef1f6; }
   .when { margin: 0; font-size: 0.95rem; font-weight: 600; }
@@ -892,7 +901,7 @@ import { wallAt } from "./domain/time.js";
   .pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #eef1f6; color: #5b6478; }
   .pill.confirmed { background: #e4f4ec; color: #12855a; }
   .pill.pending { background: #fbf0dd; color: #a86412; }
-  .pill.declined, .pill.superseded, .pill.cancelled { background: #fbe4e2; color: #b3261e; }
+  .pill.declined, .pill.superseded, .pill.cancelled { background: #FBE7E4; color: #E8503F; }
 
   .popup { border: 1px solid #a86412; background: #fbf0dd; border-radius: 10px; padding: 14px 15px; margin: 12px 0; }
   .ask { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
@@ -907,16 +916,16 @@ import { wallAt } from "./domain/time.js";
   .slotrow .who { font-size: 0.9rem; font-weight: 600; }
   .slotrow .who.dim { font-weight: 400; }
 
-  .radio { background: #0b0e15; border-radius: 12px; overflow: hidden; font-family: "IBM Plex Mono", monospace; }
+  .radio { background: #0B0E15; border-radius: 12px; overflow: hidden; font-family: "IBM Plex Mono", monospace; }
   .radio-head {
     width: 100%; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
     padding: 9px 14px; background: transparent; border: 0; cursor: pointer;
-    color: #9aa3b5; font: inherit; font-size: 0.72rem; text-align: left;
+    color: #A8B3C7; font: inherit; font-size: 0.72rem; text-align: left;
   }
-  .radio-head .title { color: #e8eaf0; margin-right: auto; }
-  .radio-head .chev { color: #5dd39e; }
-  .radio-log { padding: 6px 14px 12px; font-size: 0.72rem; line-height: 1.7; color: #e8eaf0; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
-  .radio-log .ts { color: #9aa3b5; }
+  .radio-head .title { color: #EDF1F8; margin-right: auto; }
+  .radio-head .chev { color: #3EDC97; }
+  .radio-log { padding: 6px 14px 12px; font-size: 0.72rem; line-height: 1.7; color: #EDF1F8; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
+  .radio-log .ts { color: #A8B3C7; }
 
   .link-state {
     display: flex; align-items: center; gap: 8px;
@@ -942,10 +951,10 @@ import { wallAt } from "./domain/time.js";
   }
   .channel select {
     font: inherit; font-size: 0.8rem; padding: 3px 7px;
-    border: 1px solid #d5dae4; border-radius: 6px; background: #fff; color: #14171f;
+    border: 1px solid #d5dae4; border-radius: 6px; background: #fff; color: #141B2E;
   }
 
   footer { color: #8b93a5; font-size: 0.8rem; }
-  footer a { color: #2d4ad0; }
+  footer a { color: #0E86C4; }
   .build { font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; }
 </style>

@@ -128,7 +128,7 @@ export function buildICS({
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//funkpost//mesh-appointments//DE",
+    "PRODID:-//funkpost//mesh-calendar//DE",
     "CALSCALE:GREGORIAN",
     `METHOD:${method}`,
     "BEGIN:VEVENT",
