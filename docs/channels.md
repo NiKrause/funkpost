@@ -57,7 +57,7 @@ npm run channel
 |---|---|
 | `--name <text>` | channel name, **1–11 bytes** (Meshtastic's limit, checked) |
 | `--region <NAME>` | `EU_868`, `US`, … — validated against the firmware enum |
-| `--preset <NAME>` | `LONG_FAST` (default), `SHORT_TURBO`, … |
+| `--preset <NAME>` | `LONG_FAST` (default), `SHORT_FAST`, … — `SHORT_TURBO` has **no slot in EU 868** |
 | `--tx-power <dBm>` | default 14 |
 | `--hop-limit <n>` | default 3 |
 | `--psk <hex>` | reuse a key instead of generating one |
@@ -68,7 +68,7 @@ npm run channel
 A bench channel, off the busy defaults and cheap on airtime:
 
 ```bash
-npm run channel -- --name bench --preset SHORT_TURBO --tx-power 2
+npm run channel -- --name bench --preset SHORT_FAST --tx-power 2
 ```
 
 ### A whole channel set, in one link
@@ -97,10 +97,16 @@ this is what it decides:
 > **A radio has one frequency.** Adding a channel does not add one. You cannot
 > sit on two slots at once, however many channels the device holds — so index 0
 > is really the question *"which group am I reachable in right now?"*
+>
+> **And in EU 868 the question has one answer.** That region is 250 kHz wide,
+> which at `LONG_FAST` is exactly **one slot, 869.525 MHz**. Index 0 still picks
+> the key; it cannot pick a frequency there is only one of. See
+> [bench-etiquette.md](bench-etiquette.md) for what does help instead.
 
 `--channel-num <n>` pins the slot instead, the same number on every device.
 Then index 0 no longer decides it, and the order is free — still one frequency,
-but one you chose rather than one that fell out of a name.
+but one you chose rather than one that fell out of a name. **In EU 868 it
+changes nothing**, since there is one slot to choose from.
 
 ### Getting the same channel back later
 

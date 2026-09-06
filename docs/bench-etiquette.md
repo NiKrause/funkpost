@@ -45,16 +45,34 @@ Your packets still occupy the same air, still collide with theirs, still count
 against the same duty cycle. Everyone in range still pays for your test run;
 they simply cannot see what they are paying for.
 
-To actually get out of the way, move the **frequency slot**. In the LoRa config
-that is `channel_num` — and when it is left at `0`, the slot is derived from a
-hash of the **primary channel's name**. So giving your development channel its
-own name usually moves it off the shared slot as a side effect. Verify rather
-than assume: if the neighbours stop appearing in your node's list, you have
-moved.
+### In EU 868 you cannot get out of the way — there is nowhere to go
 
-Keep the same slot on all three of your devices, obviously, or they will not
-hear each other either — the failure that looks exactly like nobody being there
-(see [links.md](links.md)).
+This section used to say: move the **frequency slot** (`channel_num`, or the
+primary channel's name that derives it when it is 0). That advice is sound in
+regions with room. **In EU 868 it is impossible**, and it took a bench session
+to notice:
+
+> The band range is from 869.40 to 869.65 MHz … **There is one frequency slot**
+> defined with the standard radio preset LongFast.
+> — [Meshtastic radio settings](https://meshtastic.org/docs/overview/radio-settings/)
+
+Two hundred and fifty kilohertz of band. At 250 kHz bandwidth that is exactly
+**one slot: 869.525 MHz** — and the same single slot at `MEDIUM_FAST` and
+`SHORT_FAST`. Every Meshtastic node in Europe is on that frequency. A hundred
+and eighty neighbours in earshot is not a misconfiguration to be fixed; it is
+the band.
+
+So in EU 868 a private channel buys privacy and nothing else, and there is no
+second step. What follows below — not relaying, and sending less — stops being
+the small print and becomes the whole of it.
+
+Regions with a wider band (US has hundreds of slots) keep the original advice:
+set `channel_num` the same on every device, and verify rather than assume —
+if the neighbours stop appearing in your node's list, you moved.
+
+Whatever the region, all your devices must end up on the same slot, or they
+will not hear each other either — the failure that looks exactly like nobody
+being there (see [links.md](links.md)).
 
 `npm run channel` makes one channel and prints it as a link and a QR to scan on
 every device, which is the reliable way to get identical keys — see
@@ -83,6 +101,16 @@ Range is irrelevant across a desk, and the presets differ by a factor of twenty:
 
 The same test run costs **twenty times less air** on `SHORT_TURBO`, and every
 round trip returns twenty times sooner, so the bench is also far less tedious.
+
+> **Not in EU 868, though.** `SHORT_TURBO` needs 500 kHz of bandwidth and the
+> band is 250 kHz wide, so it has **zero** usable slots there — Meshtastic's own
+> [slot calculator](https://meshtastic.org/docs/overview/radio-settings/) says
+> so. `SHORT_FAST` is the fast preset that fits: still ten times quicker than
+> the default, on the one slot the region has.
+>
+> This page recommended `SHORT_TURBO` for a long time without checking. It is
+> right in US and ANZ; it is unavailable in the region most of these benches
+> run in.
 
 The courier reads the preset from the node and paces to it — the figures above
 come from `PRESET_DATA_RATES_BPS`. If it did not, pacing would be wrong by that
@@ -168,8 +196,25 @@ channel and simply watches. It answers the question that costs the most time —
 
 | | |
 |---|---|
-| **Do** | develop with `?mesh=bc` · own frequency slot · `CLIENT_MUTE` · `SHORT_TURBO` · low power |
-| **Do not** | develop on the default public channel · assume a private channel spares the neighbours · leave rebroadcast on |
+| **Do** | develop with `?mesh=bc` · `CLIENT_MUTE` · send less and smaller · low power · a free slot **if your region has one** |
+| **Do not** | assume a private channel spares the neighbours · assume you can move frequency in EU 868 · use `SHORT_TURBO` there · leave rebroadcast on |
+
+### How much room a region actually has
+
+At `LONG_FAST` (250 kHz), slots are the band divided by the bandwidth:
+
+| | slots | band |
+|---|---|---|
+| **EU 868** | **1** | 250 kHz |
+| EU 433 | 4 | 1 MHz |
+| IN · KR · NZ 865 · TW | 8–20 | 2–5 MHz |
+| JP · ANZ | 28 · 52 | 7 · 13 MHz |
+| **US** | **104** | 26 MHz |
+
+So "move off the shared slot" is excellent advice in most of the world and
+meaningless in EU 868. Europe's own way out is **EU 433** with four slots —
+which needs 433 MHz hardware and accepts +10 dBm ERP instead of +27, a fair
+trade across a desk and a poor one across a valley.
 
 ---
 
