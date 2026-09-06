@@ -138,7 +138,7 @@ test("a hand-made channel choice is never overridden", async ({ context }) => {
   await page.evaluate(async () => {
     const psk = (fill) => new Uint8Array(32).fill(fill);
     await window.__nodeChannel({ index: 0, role: 1, settings: { name: "", psk: psk(1) } });
-    await window.__nodeChannel({ index: 1, role: 2, settings: { name: "ROTTAL-MESH", psk: psk(2) } });
+    await window.__nodeChannel({ index: 1, role: 2, settings: { name: "local-mesh", psk: psk(2) } });
   });
 
   const select = page.locator("select");

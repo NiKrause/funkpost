@@ -349,7 +349,7 @@ test("the shared channel is picked by name, wherever the node filed it", async (
   await guest.page.evaluate(async () => {
     const psk = (fill) => new Uint8Array(32).fill(fill);
     await window.__nodeChannel({ index: 0, role: 1, settings: { name: "", psk: psk(1) } });
-    await window.__nodeChannel({ index: 1, role: 2, settings: { name: "ROTTAL-MESH", psk: psk(2) } });
+    await window.__nodeChannel({ index: 1, role: 2, settings: { name: "local-mesh", psk: psk(2) } });
     await window.__nodeChannel({ index: 3, role: 2, settings: { name: "le-space.de", psk: psk(3) } });
   });
 
@@ -372,7 +372,7 @@ test("a hand-made channel choice is never overridden", async ({ context }) => {
   await guest.page.evaluate(async () => {
     const psk = (fill) => new Uint8Array(32).fill(fill);
     await window.__nodeChannel({ index: 0, role: 1, settings: { name: "", psk: psk(1) } });
-    await window.__nodeChannel({ index: 1, role: 2, settings: { name: "ROTTAL-MESH", psk: psk(2) } });
+    await window.__nodeChannel({ index: 1, role: 2, settings: { name: "local-mesh", psk: psk(2) } });
   });
 
   const select = guest.page.getByTestId("channel").locator("select");
