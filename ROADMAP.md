@@ -25,10 +25,12 @@ roadmap is built to keep testing.
 | | Thread | State |
 |---|---|---|
 | **#1** | OrbitDB data plane | **First over-the-air replication 2026-09-04** — two desktop browsers, two nodes, no IP path. Open: first-contact reliability on a busy public channel, and the phone Bluetooth lottery. |
-| **#36** | Yjs data plane | **Built** (S1–S2) — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss. Not yet run on hardware. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
+| **#36** | Yjs data plane | **Built and on air** — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss, and carrying a shop's rules over a real mesh on 2026-09-06. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
 | **#37** | Hoist demo scaffolding into the lib | **Built** — the device supervisor and the error humaniser are library code; `mesh-todo` is a consumer. Not yet re-run on hardware. [docs](docs/links.md) |
-| **#38** | `mesh-calendar` demo | **Core + calendar built** (A1–A4). Bookings moved off the CRDT onto a claim log after #45: the greeting is 111 bytes at any number of writers, and expiry is forgetting. No UI, no hardware yet. [docs](docs/mesh-calendar.md) |
+| **#38** | `mesh-calendar` demo | **Built, deployed, and one booking has crossed real hardware** (A1–A6; A7 half met). Bookings moved off the CRDT onto a claim log after #45: the greeting is 111 bytes at any number of writers, and expiry is forgetting. [docs](docs/mesh-calendar.md) |
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
+| **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
+| **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -169,11 +171,46 @@ Three bugs the browser found that nothing else would have:
 Also fixed on the way: the salon's agenda kept a customer's name on a slot that
 a cancellation had freed.
 
-### P7 · Hardware bench — #38 A7
+### P7 · Hardware bench — #38 A7 ◐
 
 Two nodes, EU_868, both booking modes. Round-trip latency, measured airtime per
 booking, a confirmed end-to-end booking with an `.ics` on both phones — recorded
 in the README the way the first replication was.
+
+*Gate half met (2026-09-06).* Two nodes, `LONG_FAST`, both on `le-space.de`
+⌗3dd3 with the same primary channel, no IP path: the shop's rules crossed and
+rendered fourteen days on a device that had never seen them; a booking crossed
+back and stood in the shop's day plan **31 s** later. The whole session cost
+**9.3 s of airtime** — 2.5 % of the hourly allowance.
+
+**What the gate still wants:** the Rückfrage mode (a human decision crossing the
+mesh, which auto mode never exercises — nobody signs in auto mode, so no
+decision record travels), and an `.ics` on both phones. What the run surfaced
+instead is in #73: `want_ack` on broadcasts may be tripling our airtime, two
+payloads were dropped after 2 rounds, and the store errors on an empty room.
+
+### P8 · The change, not the founding — #75
+
+`mesh-todo` keeps OrbitDB; #75 records why reshaping it would buy nothing. Two
+things it *does* take from `mesh-calendar`, in order:
+
+**P8a · A manual send button.** `mesh-todo` greets on a timer, which spends a
+legal budget on a schedule rather than on news. The button matches the actual
+case — Alice has something and no internet right now — and makes airtime a
+deliberate act. *Gate:* nothing leaves the radio until pressed; the e2e suite
+proves a delta still crosses when it is, and that an idle app is silent.
+
+**P8b · `courier-sync` in-house.** 566 lines importing only `multiformats` and
+`@ipld/dag-cbor` — a clean seam in the wrong repository, since nothing in it is
+Storacha. The gain is the right to shape the wire format for LoRa, which is a
+foreign concern inside a backup project. *Gate:* `mesh-todo` builds and its e2e
+suite passes with the dependency on `orbitdb-storacha-bridge` removed, and the
+OrbitDB plane gets its own tests here rather than borrowing theirs.
+
+**Not in this phase, on purpose:** first contact. Bob without the database costs
+~2 KB, inherent to a hash-linked log, and that belongs off the radio the same
+way the app bundle does — Wi-Fi, a QR, or a pointer (#68). *The mesh carries the
+change, not the founding.*
 
 ### Running alongside: #1 reliability
 
