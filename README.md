@@ -66,17 +66,9 @@ real.
 
 Two radios only hear each other if they carry the **same key**, so trying this
 with someone else needs a shared one. This is ours — **scan the code with the
-phone that holds your node**, from the Meshtastic app's own scanner on Android
-or the camera on iOS.
-
-Not from a desktop. A channel link only means something to the Meshtastic app,
-so clicking it here lands on Meshtastic's page explaining exactly that; their
-web client drops the channel and shows its connection screen. The address, for
-copying to a phone or for the record:
-
-```
-https://meshtastic.org/e/#CjQSIF4IiUrcKwAwd5ZYEhO72Qcrwb6q1IIS1aF4c0YdPoP9GgtsZS1zcGFjZS5kZSXtu8e8EgwIATgDQANIAVAOaAE
-```
+phone that holds your node**: the Meshtastic app's own scanner on Android, the
+camera on iOS. Only the app can import a channel, which is why this is a code
+and not a link.
 
 | | |
 |---|---|
