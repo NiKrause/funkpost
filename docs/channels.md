@@ -229,16 +229,29 @@ matters here, not where the link came from.
 ## What the script does, and why it is written this way
 
 It encodes a `ChannelSet` protobuf — key, name, id, and the LoRa config — as
-URL-safe base64 in the fragment. The protobuf is written by hand: it is four
-fields, `@meshtastic/core` does not export a protobuf runtime, and a dependency
-for forty lines of encoding is a poor trade.
+URL-safe base64 in the fragment, using **Meshtastic's own schema**
+(`Protobuf.AppOnly.ChannelSetSchema`) and the official protobuf runtime.
+Nothing about the wire format is reimplemented.
 
-The cost of hand-encoding is the risk of emitting something malformed, so the
-script **decodes its own output and verifies it** before printing — key, name
-and id must survive the round trip and the LoRa config must be present. A link
-that fails its own check is never shown. Both of those requirements come from
-comparing against a real, working Meshtastic link: an early version omitted the
-channel `id` and a full `lora_config`, and was rejected on the phone.
+That is worth stating because it briefly was. An earlier version hand-rolled
+the encoding, on the belief that `@meshtastic/core` shipped no runtime. It
+does — bundled, just not re-exported — and `@bufbuild/protobuf` installs
+alongside it and works with the bundled schema. The hand-rolled version
+produced byte-identical output, which is a poor argument for keeping ninety
+lines of varint arithmetic.
+
+**What no library offers is the link.** The `meshtastic.org/e/#…` format lives
+in Meshtastic's *web client*, not in the core package, so the URL wrapper,
+the validation, the key fingerprint and the QR are this script's own work.
+
+The output is still decoded and checked before it is printed — not against a
+hand-rolled encoder any more, but against the parts that are still ours: the
+URL-safe base64, the stripped padding, and the **order** of the channels. An
+index that shifts silently moves the frequency.
+
+Two requirements came from comparing against a real, working Meshtastic link:
+an early version omitted the channel `id` and a full `lora_config`, and was
+rejected on the phone.
 
 One more thing that reads as a detail and is not: `?add=true` goes **before**
 the `#`. Everything after the hash is the payload, so appending there corrupts
