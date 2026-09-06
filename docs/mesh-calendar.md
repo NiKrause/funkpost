@@ -3,8 +3,9 @@
 # mesh-calendar — the appointment book
 
 Status: **built and tested** ([#38](https://github.com/NiKrause/funkpost/issues/38)
-A1–A6) — domain, calendar file, both screens, and the deploy. Never run on
-hardware (P7). Tests: `examples/mesh-calendar/test/` and `e2e/`.
+A1–A6) — domain, calendar file, both screens, and the deploy. **One booking has
+crossed real hardware** (2026-09-06); the Rückfrage mode and an `.ics` on both
+phones have not (P7). Tests: `examples/mesh-calendar/test/` and `e2e/`.
 
 Try it: **`/funkpost/mesh-calendar/`**, or locally with `?mesh=bc&room=x&role=salon`
 in one tab and `role=customer` in another — two tabs play the two devices with
