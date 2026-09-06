@@ -1,12 +1,12 @@
 {
-  "name": "mesh-todo — funkpost",
-  "short_name": "mesh-todo",
-  "description": "A todo list that replicates over a LoRa mesh — no IP path anywhere.",
+  "name": "Termine über Funk — funkpost",
+  "short_name": "Termine",
+  "description": "Terminbuchung für den Laden um die Ecke, über ein LoRa-Mesh — ohne Server.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0B0E15",
-  "theme_color": "#0B0E15",
+  "background_color": "#EDF1F8",
+  "theme_color": "#0E86C4",
   "icons": [
     {
       "src": "./icon-192.png",

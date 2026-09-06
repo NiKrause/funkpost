@@ -46,7 +46,7 @@ jobs:
       - run: npm run build -w @le-space/mesh-todo-example
         env:
           PAGES_BASE: /funkpost/mesh-todo/
-      - run: npm run build -w @le-space/mesh-appointments-example
+      - run: npm run build -w @le-space/mesh-calendar-example
         env:
           PAGES_BASE: /funkpost/termine/
       # Assemble the site rather than nesting one demo inside another's build
@@ -55,7 +55,7 @@ jobs:
           mkdir -p site/mesh-todo site/termine
           cp examples/landing/index.html site/index.html
           cp -R examples/mesh-todo/dist/. site/mesh-todo/
-          cp -R examples/mesh-appointments/dist/. site/termine/
+          cp -R examples/mesh-calendar/dist/. site/termine/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

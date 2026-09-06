@@ -30,7 +30,7 @@ The announcement page for both, written for humans:
 >
 > - In `mesh-todo` the database is opened with `write: ["*"]`. **Anyone who
 >   hears an invite may write to the list.**
-> - In `mesh-appointments` a booking request carries no signature. A neighbour
+> - In `mesh-calendar` a booking request carries no signature. A neighbour
 >   with no key, no capability and no invitation can inject them — measured on
 >   the demo's own default shop: **516 of 516 slots taken, all three weeks
 >   gone, and the real customer's booking superseded**, because a forged
@@ -53,7 +53,7 @@ which is a menu:
 | | | |
 |---|---|---|
 | **[…/mesh-todo/](https://nikrause.github.io/funkpost/mesh-todo/)** | `mesh-todo` | a todo list over LoRa — the **OrbitDB** plane |
-| **[…/termine/](https://nikrause.github.io/funkpost/termine/)** | `mesh-appointments` | a hairdresser's appointment book — the **Yjs** plane |
+| **[…/termine/](https://nikrause.github.io/funkpost/termine/)** | `mesh-calendar` | a hairdresser's appointment book — the **Yjs** plane |
 
 Open either twice with `?mesh=bc` and two browser tabs play the two devices
 (the booking demo wants `&role=salon` in one and `&role=customer` in the
@@ -91,7 +91,7 @@ what is built and what is not:
 | **[Links to a node](docs/links.md)** | Web Bluetooth reality, the reconnect policy, reading what the radio says |
 | **[The OrbitDB plane](docs/data-plane-orbitdb.md)** | signed entries and an access controller; the bootstrap, end to end |
 | **[The Yjs plane](docs/yjs-provider.md)** | tiny, loss-tolerant updates — and reusable outside this project |
-| **[The appointment book](docs/appointments.md)** | the Yjs plane's demo: rules not lists, and who got the slot |
+| **[The appointment book](docs/appointments.md)** | the Yjs plane's demo: rules not lists, who got the slot — and how to run its tests in a browser you can watch |
 | **[The signalling plane](docs/signalling.md)** | designed, not built — LoRa carries the handshake, not the connection |
 | **[Bench etiquette](docs/bench-etiquette.md)** | developing on a shared, legally rationed medium without ruining it for the neighbours |
 | **[Field notes](docs/field-notes.md)** | what broke on real hardware, and why |

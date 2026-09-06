@@ -548,7 +548,11 @@
     · GPL-3.0 ·
     <a href="https://github.com/NiKrause/funkpost">source</a>
     <span class="build" title="version · commit · built (UTC)">
-      funkpost {build.version} · {build.commit} · {build.builtAt}
+      funkpost {build.version} ·
+      {#if build.commit && build.commit !== "local"}
+        <a href="https://github.com/NiKrause/funkpost/commit/{build.commit}">{build.commit}</a>
+      {:else}{build.commit}{/if}
+      · {build.builtAt}
     </span>
   </footer>
 </main>
@@ -556,8 +560,8 @@
 <style>
   :global(body) {
     margin: 0;
-    background: #0b0e15;
-    color: #e8eaf0;
+    background: #0B0E15;
+    color: #EDF1F8;
     font-family:
       system-ui,
       -apple-system,
@@ -574,13 +578,13 @@
   }
   .tag {
     margin: 4px 0 0;
-    color: #9aa3b5;
+    color: #A8B3C7;
     font-size: 0.9rem;
   }
   section {
     margin-top: 28px;
     padding: 14px 16px;
-    border: 1px solid #232a3a;
+    border: 1px solid #232B3D;
     border-radius: 10px;
   }
   h2 {
@@ -588,11 +592,11 @@
     font-size: 1rem;
   }
   .dim {
-    color: #9aa3b5;
+    color: #A8B3C7;
     font-size: 0.85rem;
   }
   .error {
-    color: #ff7a7a;
+    color: #FF6B5B;
   }
   .warn {
     margin: 10px 0 0;
@@ -620,8 +624,8 @@
   select {
     padding: 4px 8px;
     border-radius: 6px;
-    border: 1px solid #3a4358;
-    background: #10141f;
+    border: 1px solid #232B3D;
+    background: #141926;
     color: inherit;
     font-family: ui-monospace, monospace;
     font-size: 0.8rem;
@@ -629,8 +633,8 @@
   button {
     padding: 8px 14px;
     border-radius: 8px;
-    border: 1px solid #3a4358;
-    background: #1a2233;
+    border: 1px solid #232B3D;
+    background: #141926;
     color: inherit;
     font-size: 0.95rem;
     cursor: pointer;
@@ -641,8 +645,8 @@
   }
   .ghost {
     background: none;
-    border-color: #2a3245;
-    color: #9aa3b5;
+    border-color: #232B3D;
+    color: #A8B3C7;
     margin-top: 8px;
     margin-right: 8px;
   }
@@ -656,8 +660,8 @@
     flex: 1;
     padding: 8px 10px;
     border-radius: 8px;
-    border: 1px solid #3a4358;
-    background: #10141f;
+    border: 1px solid #232B3D;
+    background: #141926;
     color: inherit;
   }
   .todos {
@@ -674,25 +678,25 @@
   }
   .done {
     text-decoration: line-through;
-    color: #9aa3b5;
+    color: #A8B3C7;
   }
   .bar {
     height: 8px;
     border-radius: 999px;
-    background: #1a2233;
+    background: #141926;
     overflow: hidden;
     margin: 8px 0 4px;
   }
   .fill {
     height: 100%;
-    background: #5dd39e;
+    background: #3EDC97;
     transition: width 0.5s;
   }
   .neighbours .nn {
     display: inline-block;
     min-width: 4.5ch;
     font-weight: 650;
-    color: #9ab0dd;
+    color: #58C7F3;
   }
   .log {
     max-height: 220px;
@@ -700,17 +704,17 @@
     font-family: ui-monospace, monospace;
     font-size: 0.78rem;
     line-height: 1.5;
-    background: #10141f;
+    background: #141926;
     border-radius: 8px;
     padding: 8px 10px;
   }
   footer {
     margin-top: 28px;
-    color: #9aa3b5;
+    color: #A8B3C7;
     font-size: 0.8rem;
   }
   footer a {
-    color: #9ab0dd;
+    color: #58C7F3;
   }
   .build {
     display: block;

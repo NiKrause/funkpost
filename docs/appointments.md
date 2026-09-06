@@ -4,7 +4,7 @@
 
 Status: **built and tested** ([#38](https://github.com/NiKrause/funkpost/issues/38)
 A1–A6) — domain, calendar file, both screens, and the deploy. Never run on
-hardware (P7). Tests: `examples/mesh-appointments/test/` and `e2e/`.
+hardware (P7). Tests: `examples/mesh-calendar/test/` and `e2e/`.
 
 Try it: **`/funkpost/termine/`**, or locally with `?mesh=bc&room=x&role=salon`
 in one tab and `role=customer` in another — two tabs play the two devices with
@@ -406,6 +406,67 @@ link is for.
 
 Solved by the substrate change, and no longer open: unbounded document growth,
 and a booking's meaning depending on the horizon it was made in.
+
+## Running the tests yourself, with a browser you can watch
+
+All eleven end-to-end tests drive **two roles over the fake mesh** — no radio,
+no hardware. Every one of them can run headed.
+
+```bash
+# everything, in a visible browser
+npm run test:e2e -w @le-space/mesh-calendar-example -- --headed
+```
+
+Watching eleven runs go past is not usually what you want. Pick one by name —
+`-g` matches a substring, so a few words are enough:
+
+```bash
+npm run test:e2e -w @le-space/mesh-calendar-example -- --headed -g "the whole script"
+```
+
+The eleven, and what each is for:
+
+| `-g` fragment | what you will see |
+|---|---|
+| `the whole script` | Rückfrage: request → popup → confirm → `.ics` downloaded and parsed |
+| `auto mode confirms` | a booking confirming itself with the salon idle |
+| `blocks the times` | a 45-minute cut closing 13:30–14:30, not just 14:00 |
+| `a decline frees` | a declined slot genuinely becoming free again |
+| `eats a fifth` | the same script through 20 % frame loss |
+| `calendar link opens` | the `.ics` link opening on a device that never made the booking, and cancelling from there |
+| `stale or foreign fragment` | a bogus link being ignored rather than obeyed |
+| `network going away` | the app reloading with the network switched off |
+| `survives a reload` | the book coming back from storage with the salon closed |
+| `indicator says whether` | the link light going amber → green when a second device appears |
+| `airtime is spent` | the lockout banner and the countdown |
+
+### Better than `--headed` for actually watching
+
+```bash
+# step through, with the inspector: pauses before each action
+npm run test:e2e -w @le-space/mesh-calendar-example -- --debug -g "the whole script"
+
+# the UI runner — pick tests, re-run, scrub a timeline of screenshots
+npm run test:e2e -w @le-space/mesh-calendar-example -- --ui
+```
+
+`--debug` implies `--headed --workers=1`, which is what you want when two pages
+are meant to talk to each other and you are trying to see the order.
+
+Two things worth knowing before the first run:
+
+- The suite **builds and serves the app itself** (`webServer` in
+  `playwright.config.js`), so the first command takes a few seconds longer and
+  needs port 4174 free.
+- Both roles run as **two pages in one browser context**, because a
+  `BroadcastChannel` does not cross contexts. In a headed run they appear as two
+  tabs of the same window — that is the fake mesh, not a mistake.
+
+If Playwright has never run here, install its browser once:
+
+```bash
+npx playwright install --with-deps chromium
+```
 
 ---
 
