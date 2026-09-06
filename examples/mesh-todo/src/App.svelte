@@ -43,6 +43,7 @@
 
   let stack = null;
   let courier = null;
+  let connection = null; // the live link handle, for figures the courier does not carry
   let sync = null;
   let db = $state(null);
   let address = $state("");
@@ -162,6 +163,8 @@
   let log = $state([]);
   let logSeq = 0; // monotonic, unique — the {#each} key
   let totals = $state({ framesTx: 0, framesRx: 0, airtimeSpentMs: 0, retransmitRounds: 0 });
+  // Frames the radio stopped retransmitting — see funkpost issue #73.
+  let refusals = $state({ soft: 0, last: null });
 
   const stamp = () =>
     new Date().toLocaleTimeString(undefined, { hour12: false }) +
@@ -244,6 +247,7 @@
       if (courier) {
         budget = courier.budget();
         totals = { ...courier.stats };
+        if (connection?.refusals) refusals = { ...connection.refusals };
         // One frame is what a single todo costs.
         if (courier.timeUntilAffordable) blockedForMs = courier.timeUntilAffordable();
       }
@@ -300,6 +304,7 @@
         },
       });
       courier = connected.courier;
+      connection = connected;
       linkKind = connected.kind;
       region = connected.region;
       setTxChannelFn = connected.setTxChannel ?? (() => {});
@@ -634,7 +639,7 @@
     <h2>3 · Sync pane <span class="dim">(the bench instrument)</span></h2>
     <p class="dim">
       frames {totals.framesTx} → · ← {totals.framesRx} · retransmit rounds
-      {totals.retransmitRounds} · est. airtime {(totals.airtimeSpentMs / 1000).toFixed(1)} s
+      {totals.retransmitRounds} · est. airtime {(totals.airtimeSpentMs / 1000).toFixed(1)} s{#if refusals.soft > 0} · radio gave up on {refusals.soft} frame{refusals.soft === 1 ? "" : "s"} ({refusals.last}){/if}
     </p>
     <div class="log">
       {#each log as line (line.id)}
