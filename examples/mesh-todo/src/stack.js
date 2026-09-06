@@ -131,6 +131,10 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
     get device() {
       return managed.device;
     },
+    /** Frames the radio gave up retransmitting — see funkpost issue #73. */
+    get refusals() {
+      return managed.link.refusals;
+    },
     setTxChannel: (index) => managed.setChannel(index),
     close: () => managed.close(),
   };

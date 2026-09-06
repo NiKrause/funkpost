@@ -82,6 +82,39 @@ describe("device link routing-error handling", () => {
     }
   });
 
+  test("swallowed refusals are counted, because swallowing is not free", async () => {
+    // Reaching the soft path means the radio spent its retransmissions on a
+    // frame of ours and gave up — airtime, whether or not the ARQ recovers.
+    // #73 asks how much; a number is the only way to answer it.
+    const link = createMeshtasticDeviceLink({ device: rejectingDevice(5), mtu: 200 });
+    assert.deepEqual(link.refusals, { soft: 0, last: null });
+
+    await link.send(new Uint8Array([1]));
+    await link.send(new Uint8Array([2]));
+    assert.equal(link.refusals.soft, 2);
+    assert.equal(link.refusals.last, "MAX_RETRANSMIT");
+  });
+
+  test("a send that succeeds counts nothing", async () => {
+    // The counter must mean "the radio gave up", not "a frame went out" —
+    // otherwise it would measure traffic and answer no question at all.
+    const accepting = {
+      async sendPacket() {},
+      events: { onPrivatePacket: { subscribe: () => () => {} } },
+    };
+    const link = createMeshtasticDeviceLink({ device: accepting, mtu: 200 });
+    await link.send(new Uint8Array([1]));
+    assert.equal(link.refusals.soft, 0);
+  });
+
+  test("a hard refusal is not counted as a soft one", async () => {
+    // NO_CHANNEL throws; it is a configuration fault, not spent airtime, and
+    // folding the two together would inflate the very number #73 turns on.
+    const link = createMeshtasticDeviceLink({ device: rejectingDevice(6), mtu: 200 });
+    await assert.rejects(() => link.send(new Uint8Array([1])));
+    assert.equal(link.refusals.soft, 0);
+  });
+
   test("a hard routing error (NO_CHANNEL) still throws, named", async () => {
     const link = createMeshtasticDeviceLink({ device: rejectingDevice(6), mtu: 200 });
     await assert.rejects(() => link.send(new Uint8Array([1])), /radio refused the packet: NO_CHANNEL/);

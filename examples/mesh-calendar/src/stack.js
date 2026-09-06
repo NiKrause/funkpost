@@ -176,6 +176,10 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
     get device() {
       return managed.device;
     },
+    /** Frames the radio gave up retransmitting — see funkpost issue #73. */
+    get refusals() {
+      return managed.link.refusals;
+    },
     setTxChannel: (index) => {
       managed.setChannel(index);
       // A channel switch changes who can hear us, so it is a fresh start, not

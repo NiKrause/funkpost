@@ -92,6 +92,10 @@ import { wallAt } from "./domain/time.js";
   let logSeq = 0;
   let showRadio = $state(false);
   let totals = $state({ framesTx: 0, framesRx: 0, retransmitRounds: 0, airtimeSpentMs: 0 });
+  // Frames the radio stopped retransmitting. Not a failure — the ARQ still
+  // recovers — but each one spent its retries on air, which is what #73 asks
+  // the size of. Shown only when it happens: a permanent zero is noise.
+  let refusals = $state({ soft: 0, last: null });
   let syncStats = $state({ payloadsSent: 0, payloadsReceived: 0 });
   let presence = $state({ peers: [], lastHeardAgoMs: null });
 
@@ -260,6 +264,7 @@ import { wallAt } from "./domain/time.js";
     state = await live.book.state(fromISO, DEFAULT_SHOP.horizonDays);
     if (!day && state.grid.length > 0) day = state.grid[0].iso;
     if (live.courier?.stats) totals = { ...live.courier.stats };
+    if (live.refusals) refusals = { ...live.refusals };
     if (live.sync?.stats) syncStats = { ...live.sync.stats };
   };
 
@@ -361,6 +366,7 @@ import { wallAt } from "./domain/time.js";
     if (mode.kind === "bc" && role) connect();
     const ticker = setInterval(() => {
       if (live?.courier?.stats) totals = { ...live.courier.stats };
+      if (live?.refusals) refusals = { ...live.refusals };
       if (live?.sync?.stats) syncStats = { ...live.sync.stats };
       if (live?.sync?.presence) presence = live.sync.presence();
       // One frame is what any single action costs — a booking, a decision, a
@@ -857,6 +863,7 @@ import { wallAt } from "./domain/time.js";
         <span class="title">Funkstreifen</span>
         <span>Frames {totals.framesTx}→ ←{totals.framesRx}</span>
         <span>Runden {totals.retransmitRounds}</span>
+        {#if refusals.soft > 0}<span title="Frames, für die das Funkgerät seine Wiederholungen aufgebraucht hat — {refusals.last}">Aufgegeben {refusals.soft}</span>{/if}
         <span>Sendungen {syncStats.payloadsSent}→ ←{syncStats.payloadsReceived}</span>
         <span class="chev">{showRadio ? "▾" : "▸"}</span>
       </button>
