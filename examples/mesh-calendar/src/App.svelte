@@ -13,6 +13,7 @@
     todayISO,
     downloadFile,
   } from "./stack.js";
+  import { preferredChannelIndex, DEFAULT_PREFERRED_CHANNEL } from "@le-space/funkpost";
   import { DEFAULT_SHOP, serviceById } from "./domain/slots.js";
 import { wallAt } from "./domain/time.js";
   import { CONFIRMED, PENDING, DECLINED, CANCELLED, SUPERSEDED } from "./domain/arbitration.js";
@@ -97,6 +98,53 @@ import { wallAt } from "./domain/time.js";
   let myNode = $state("");
   let setTxChannelFn = () => {};
   const channelMap = new Map();
+
+  // Which channel to pick on its own, if the node has it. Index 0 is a poor
+  // default for meeting somebody: the index is per-device, so the same channel
+  // can be 1 here and 3 there. `?channel=` overrides it for a private bench,
+  // and an empty value switches the whole thing off.
+  const preferredChannel = params.has("channel")
+    ? params.get("channel")
+    : DEFAULT_PREFERRED_CHANNEL;
+  let txChannelChosenByHand = false;
+  let preferenceApplied = false;
+
+  /**
+   * Only ever moves off a channel nobody chose. Called once the connection is
+   * up and again whenever a channel arrives — the node reports them one at a
+   * time, and the one we want may not be first.
+   */
+  function applyPreferredChannel() {
+    if (preferenceApplied || txChannelChosenByHand) return;
+    const index = preferredChannelIndex(channels, preferredChannel);
+    if (index == null) return;
+    preferenceApplied = true;
+    txChannel = index;
+    setTxChannelFn(index);
+    const ch = channels.find((c) => c.index === index);
+    pushLog(`Sendekanal → ${index} »${ch?.name}« ⌗${ch?.fingerprint} — automatisch gewählt`);
+  }
+
+  /** One channel as the node reports it. Named, so a test can hand one over. */
+  async function handleChannel(channel) {
+    if (channel.role === 0) return; // DISABLED
+    const psk = channel.settings?.psk ?? new Uint8Array();
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
+    const entry = {
+      index: channel.index,
+      role: channel.role,
+      name: channel.settings?.name || "(Standard)",
+      fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+    };
+    channelMap.set(entry.index, entry);
+    channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
+    if (entry.role === 1) primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
+    pushLog(`Kanal ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primär" : ""}`);
+    // Channels arrive one at a time and the wanted one need not be first.
+    // Before the connection resolves this is a no-op, so the call after it is
+    // the one that lands in the common case.
+    applyPreferredChannel();
+  }
 
   // What the node hears, before it decides whether it can read it. A packet on
   // a channel whose key this node does not hold is dropped inside the client
@@ -342,21 +390,7 @@ import { wallAt } from "./domain/time.js";
           pushLog(`Knoten meldet Region ${name}`);
         },
         onStatus: (name) => pushLog(`Knoten: ${name}`),
-        onChannel: async (channel) => {
-          if (channel.role === 0) return; // DISABLED
-          const psk = channel.settings?.psk ?? new Uint8Array();
-          const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
-          const entry = {
-            index: channel.index,
-            role: channel.role,
-            name: channel.settings?.name || "(Standard)",
-            fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
-          };
-          channelMap.set(entry.index, entry);
-          channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
-          if (entry.role === 1) primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
-          pushLog(`Kanal ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primär" : ""}`);
-        },
+        onChannel: handleChannel,
         onTraffic: (packet) => {
           heard = {
             total: heard.total + 1,
@@ -385,7 +419,14 @@ import { wallAt } from "./domain/time.js";
       // drives the node's own airtime figure the way a real node would report
       // it. Reading the courier is the only way to observe that path end to end.
       window.__courier = live.courier;
+      // Same seam, same reason: the suite has no radio to report its channels,
+      // and channel selection is a path that fails *silently* when it is
+      // wrong — so it is worth exercising rather than reasoning about.
+      window.__nodeChannel = handleChannel;
       setTxChannelFn = live.setTxChannel ?? (() => {});
+      // Now that the switch actually does something, act on whatever the node
+      // already told us while it was still connecting.
+      applyPreferredChannel();
 
       if (role === "salon") {
         const saved = localStorage.getItem(`salon:${room}`);
@@ -526,6 +567,9 @@ import { wallAt } from "./domain/time.js";
           <select
             bind:value={txChannel}
             onchange={() => {
+              // A hand-made choice is final: nothing may move the selector
+              // afterwards, or a late-arriving channel would silently undo it.
+              txChannelChosenByHand = true;
               setTxChannelFn(txChannel);
               const ch = channels.find((c) => c.index === txChannel);
               pushLog(`Sendekanal → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint} — grüße neu`);

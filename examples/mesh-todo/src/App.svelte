@@ -16,7 +16,11 @@
     watchInvites,
     probeMeshtasticCore,
   } from "./stack.js";
-  import { describeMeshtasticError } from "@le-space/funkpost";
+  import {
+    describeMeshtasticError,
+    preferredChannelIndex,
+    DEFAULT_PREFERRED_CHANNEL,
+  } from "@le-space/funkpost";
 
   const build = __BUILD_INFO__;
   const params = new URLSearchParams(location.search);
@@ -57,6 +61,57 @@
   let myNode = $state("");
   let setTxChannelFn = () => {};
   const channelMap = new Map();
+
+  // Which channel to pick on its own, if the node has it. Index 0 is a poor
+  // default for meeting somebody: the index is per-device, so the same channel
+  // can be 1 here and 3 there. `?channel=` overrides it for a private bench,
+  // and an empty value switches the whole thing off.
+  const preferredChannel = params.has("channel")
+    ? params.get("channel")
+    : DEFAULT_PREFERRED_CHANNEL;
+  let txChannelChosenByHand = false;
+  let preferenceApplied = false;
+
+  /**
+   * Only ever moves off a channel nobody chose. Called once the connection is
+   * up and again whenever a channel arrives — the node reports them one at a
+   * time, and the one we want may not be first.
+   */
+  function applyPreferredChannel() {
+    if (preferenceApplied || txChannelChosenByHand) return;
+    const index = preferredChannelIndex(channels, preferredChannel);
+    if (index == null) return;
+    preferenceApplied = true;
+    txChannel = index;
+    setTxChannelFn(index);
+    const ch = channels.find((c) => c.index === index);
+    pushLog(`TX channel → ${index} »${ch?.name}« ⌗${ch?.fingerprint} — chosen automatically`);
+  }
+
+  /** One channel as the node reports it. Named, so a test can hand one over. */
+  async function handleChannel(channel) {
+    if (channel.role === 0) return; // DISABLED
+    const psk = channel.settings?.psk ?? new Uint8Array();
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
+    const entry = {
+      index: channel.index,
+      role: channel.role,
+      name: channel.settings?.name || "(default)",
+      fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+    };
+    channelMap.set(entry.index, entry);
+    channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
+    if (entry.role === 1) {
+      primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
+    }
+    pushLog(
+      `node reports channel ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primary" : ""}`,
+    );
+    // Channels arrive one at a time and the wanted one need not be first.
+    // Before the connection resolves this is a no-op, so the call after it is
+    // the one that lands in the common case.
+    applyPreferredChannel();
+  }
 
   // Screen Wake Lock: phones auto-lock, and Web Bluetooth pauses with the
   // screen — the bench's quiet killer. Desktop screens do not take the radio
@@ -214,27 +269,7 @@
           region = name;
           pushLog(`node reports region: ${name}`);
         },
-        onChannel: async (channel) => {
-          if (channel.role === 0) return; // DISABLED
-          const psk = channel.settings?.psk ?? new Uint8Array();
-          const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
-          const entry = {
-            index: channel.index,
-            role: channel.role,
-            name: channel.settings?.name || "(default)",
-            fingerprint: [...digest.slice(0, 2)]
-              .map((b) => b.toString(16).padStart(2, "0"))
-              .join(""),
-          };
-          channelMap.set(entry.index, entry);
-          channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
-          if (entry.role === 1) {
-            primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
-          }
-          pushLog(
-            `node reports channel ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primary" : ""}`,
-          );
-        },
+        onChannel: handleChannel,
         onMyNodeInfo: (info) => {
           if (info?.myNodeNum) myNode = `!${info.myNodeNum.toString(16).padStart(8, "0")}`;
         },
@@ -268,6 +303,13 @@
       linkKind = connected.kind;
       region = connected.region;
       setTxChannelFn = connected.setTxChannel ?? (() => {});
+      // Deliberate test seam: the e2e suite has no radio to report channels,
+      // and channel selection is a path that fails *silently* when it is wrong
+      // — so it is worth exercising rather than reasoning about.
+      window.__nodeChannel = handleChannel;
+      // Now that the switch actually does something, act on whatever the node
+      // already told us while it was still connecting.
+      applyPreferredChannel();
       budget = courier.budget();
       watchInvites(courier, (addr) => {
         if (!db) invite = addr;
@@ -390,6 +432,9 @@
             <select
               bind:value={txChannel}
               onchange={() => {
+                // A hand-made choice is final: nothing may move the selector
+                // afterwards, or a late-arriving channel would silently undo it.
+                txChannelChosenByHand = true;
                 setTxChannelFn(txChannel);
                 const ch = channels.find((c) => c.index === txChannel);
                 pushLog(`TX channel → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint}`);
