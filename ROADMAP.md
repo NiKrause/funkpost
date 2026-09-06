@@ -178,10 +178,10 @@ booking, a confirmed end-to-end booking with an `.ics` on both phones — record
 in the README the way the first replication was.
 
 *Gate half met (2026-09-06).* Two nodes, `LONG_FAST`, both on `le-space.de`
-⌗3dd3 with the same primary channel, no IP path: the shop's rules crossed and
-rendered fourteen days on a device that had never seen them; a booking crossed
-back and stood in the shop's day plan **31 s** later. The whole session cost
-**9.3 s of airtime** — 2.5 % of the hourly allowance.
+⌗3dd3 with the same primary channel, no IP path: a customer's booking travelled
+to the shop and stood in its day plan **31 s** later — an appointment the shop
+never entered. The whole session cost **9.3 s of airtime** — 2.5 % of the
+hourly allowance.
 
 **What the gate still wants:** the Rückfrage mode (a human decision crossing the
 mesh, which auto mode never exercises — nobody signs in auto mode, so no

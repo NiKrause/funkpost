@@ -37,6 +37,8 @@ sequenceDiagram
 
     Note over CA,CB: every arrow between the couriers is LoRa airtime —<br/>≤200-byte frames, paced to the regional duty cycle.<br/>In the e2e suite, a BroadcastChannel plays this radio.
 
+    Note over A: A todo is written locally and waits. The radio is not a<br/>side effect of typing — see the send button below.
+
     A->>CA: invite { database address }
     CA--)CB: 1 frame over the air
     CB->>B: join prompt — accepted
@@ -52,7 +54,16 @@ sequenceDiagram
     CB--)CA: 1 frame — doubles as the end-to-end acknowledgement
     CA->>A: their heads equal ours → the exchange goes quiet
 
-    Note over A,B: Converged: same address, same hashes, signatures verified.<br/>A todo added on either phone travels the same road —<br/>announce → (want) → blocks → joinEntry.
+    Note over A,B: Converged: same address, same hashes, signatures verified.
+
+    Note over A: later: three more todos, still local
+    A->>CA: Send 3 changes — one announce, one delta
+    CA--)CB: announce { heads }
+    CB--)CA: want { have }
+    CA--)CB: blocks — all three entries in one delta
+    CB->>B: joinEntry(heads)
+
+    Note over A,B: Batching is the whole point of the button: sent one at a time,<br/>three todos are three announce → want → blocks round trips.<br/>createDelta walks from the heads down to theirs, so one carries all.
 ```
 
 ### Deeper: four layers, and two acknowledgements

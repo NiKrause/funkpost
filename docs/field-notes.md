@@ -83,13 +83,30 @@ lose the same afternoon.
 
 ## The first booking, and the two hours before it
 
-**6 September 2026.** A booking crossed a real mesh: the shop's rules reached a
-device that had never seen them and became fourteen days of slots; the booking
-crossed back and stood in the shop's day plan **31 s** later. The whole session
-cost **9.3 s of airtime** — 2.5 % of the hourly allowance, on `LONG_FAST`.
+**6 September 2026.** A booking crossed a real mesh: a customer's booking
+travelled to the shop and stood in its day plan **31 s** later — an appointment
+the shop never entered. The whole session cost **9.3 s of airtime** — 2.5 % of
+the hourly allowance, on `LONG_FAST`.
 
-What it cost to get there is the part worth writing down, because none of it
-was code.
+**A rendered calendar is not evidence, and I reported it as if it were.** The
+first write-up of this run said the shop's rules had crossed and become
+fourteen days of slots on a device that had never seen them. They had not:
+
+```js
+const shop = () => ({ ...DEFAULT_SHOP, ...Object.fromEntries(shopMap.entries()) });
+```
+
+`DEFAULT_SHOP` is the base and the synced map only overrides it, so the demo
+draws a full three-week grid from its own source before a single packet
+arrives. What I watched was the app working offline, and I wrote it down as
+reception.
+
+The booking is the honest evidence, and it always was: the shop's day plan held
+an entry the shop never made. Worth remembering as a rule — **on a link that
+fails silently, only what a device could not have produced by itself counts as
+proof.** Caught by the person reading the sentence, not by me writing it.
+
+What it cost to get there is the rest, because none of it was code.
 
 **Two nodes with the same key still heard nothing.** Both carried `le-space.de`
 ⌗3dd3 and transmitted on it. But the frequency slot is derived from the
