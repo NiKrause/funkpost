@@ -27,7 +27,7 @@ roadmap is built to keep testing.
 | **#1** | OrbitDB data plane | **First over-the-air replication 2026-09-04** — two desktop browsers, two nodes, no IP path. Open: first-contact reliability on a busy public channel, and the phone Bluetooth lottery. |
 | **#36** | Yjs data plane | **Built** (S1–S2) — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss. Not yet run on hardware. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
 | **#37** | Hoist demo scaffolding into the lib | **Built** — the device supervisor and the error humaniser are library code; `mesh-todo` is a consumer. Not yet re-run on hardware. [docs](docs/links.md) |
-| **#38** | `mesh-calendar` demo | **Core + calendar built** (A1–A4). Bookings moved off the CRDT onto a claim log after #45: the greeting is 111 bytes at any number of writers, and expiry is forgetting. No UI, no hardware yet. [docs](docs/appointments.md) |
+| **#38** | `mesh-calendar` demo | **Core + calendar built** (A1–A4). Bookings moved off the CRDT onto a claim log after #45: the greeting is 111 bytes at any number of writers, and expiry is forgetting. No UI, no hardware yet. [docs](docs/mesh-calendar.md) |
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
@@ -78,7 +78,7 @@ worth keeping visible: the e2e suite runs the BroadcastChannel fake, so the
 **BLE path is unit-tested, not yet re-confirmed on hardware** — that is P7's
 job, and the next field run should watch for it.
 
-### P3 · Appointment core — #38 A1–A3 ✅
+### P3 · mesh-calendar core — #38 A1–A3 ✅
 
 The document model, the slot engine (rules → grid, never enumerations), the busy
 mask, capability keys, and the deterministic arbitration that makes two

@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-# The appointment core
+# mesh-calendar — the appointment book
 
 Status: **built and tested** ([#38](https://github.com/NiKrause/funkpost/issues/38)
 A1–A6) — domain, calendar file, both screens, and the deploy. Never run on
