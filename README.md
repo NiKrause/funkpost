@@ -135,6 +135,20 @@ courier stays dependency-light for everyone else.
 No IP path anywhere in that picture. That is the whole point, and everything
 else is detail — which now lives on its own page.
 
+## Related work
+
+The same courier pattern, on the same radios, applied to money:
+
+- **[btcmesh](https://github.com/eddieoz/btcmesh)** — signed Bitcoin
+  transactions over a Meshtastic mesh to a relay that broadcasts them.
+- **[darkwire](https://github.com/cyb3r17/darkwire)** — a Bitcoin 2025
+  hackathon project: an end-to-end Bitcoin transaction over LoRa, with no
+  internet anywhere on the sender's side.
+
+Neither is affiliated with funkpost; they are neighbours worth knowing about
+— living proof that what fits through this pipe is exactly the small signed
+payload.
+
 ## Trademarks
 
 Meshtastic® is a registered trademark of Meshtastic LLC. Meshtastic software
