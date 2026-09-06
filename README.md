@@ -60,12 +60,6 @@ Open either twice with `?mesh=bc` and two browser tabs play the two devices
 other); with a Meshtastic node over Web Bluetooth, *Connect node* makes it
 real.
 
-The booking demo moved from `/termine/`, which every `.ics` it had ever
-produced points at. That path stays for good as a redirect that carries the
-fragment — the capability token lives there — so old calendar entries still
-lead somewhere. **A path this app has issued links from can be left, never
-deleted.**
-
 ## The test channel
 
 <img src="docs/img/channel-le-space.svg" alt="QR code for the le-space.de test channel" width="150" align="right">
