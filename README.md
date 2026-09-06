@@ -249,7 +249,18 @@ written up in the [field notes](docs/field-notes.md). Nothing about it is
 funded, and nothing about it is for sale — it is GPL-3.0 and stays that way.
 
 If it is useful to you, the **Sponsor** button at the top of this repository is
-the least friction.
+the least friction. Prefer to keep it off a platform — all three work:
+
+| | |
+|---|---|
+| **₿ Bitcoin** | `bc1qz7xswl5fsq8qswgphu5vv75qwf99wx6ca6zw57` |
+| **ɱ Monero** | `47L7qyE2GLvDSd4RkVjxy8du78J12Lj4JLvrWBRDakkZGSCpLDmTbY5DRs4BjGdbrySQ35e5wpZfBUwdU5ZcMSUw49E1y7j` |
+| **Bank transfer** | Le Space UG (Nico Krause) · GLS Bank Bochum<br>`DE73 4306 0967 8219 2914 00` |
+
+Each of those was checked against its own checksum before it was published
+here — bech32 for the Bitcoin address, Keccak-256 for the Monero one, mod-97
+for the IBAN. A mistyped crypto address is refused by the wallet; a mistyped
+IBAN can be somebody else's account.
 
 ## Licence
 
