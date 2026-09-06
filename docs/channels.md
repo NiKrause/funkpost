@@ -1,0 +1,183 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+
+# Getting two devices onto the same channel
+
+Status: **a working tool and a procedure** — `npm run channel` is tested, the
+node-side steps are Meshtastic's and have to be done by hand.
+
+Nothing in this project can talk to another device until both radios share one
+channel. That sounds obvious and is the single most expensive thing to get
+wrong here, because **getting it wrong is silent**.
+
+## Why it is silent, and what it looks like
+
+A packet the node cannot decrypt is dropped inside the client library with a
+`log.debug` line and nothing else. It never reaches a port, so the app's
+received-frame count stays at **zero — exactly as if nobody were there at all**
+([links.md](links.md)).
+
+So a key mismatch and an empty room are indistinguishable, and the symptom is:
+
+```
+Frames 85→  ←0      Runden 80      Sendungen 3→ ←0
+```
+
+Both sides transmitting energetically, neither receiving anything. If you ever
+see `←0` on both devices at once, check the channel before you check anything
+else.
+
+**Creating a channel with the same *name* on each device does not work.** The
+names match; the keys do not. Both radios then hear each other perfectly and
+decrypt nothing. One key has to be generated once and carried to every device.
+
+## Make a channel
+
+```bash
+npm run channel
+```
+
+```
+  https://meshtastic.org/e/#CjQSIGJCxytOp0PE281TC9F1o2A0om1yHiH9lyN7BtLG4OrM…
+
+  name          le-space.de
+  fingerprint   ⌗f93e   ← must read the same on every device
+  region        EU_868 · LONG_FAST · 14 dBm · 3 hops
+  key           6242c72b4ea743c4dbcd530bd175a36034a26d721e21fd97237b06d2c6e0eacc
+```
+
+…followed by a QR code in the terminal, if `qrencode` is installed
+(`brew install qrencode`). Scan it with each phone; that is the whole procedure.
+
+| option | |
+|---|---|
+| `--name <text>` | channel name, **1–11 bytes** (Meshtastic's limit, checked) |
+| `--region <NAME>` | `EU_868`, `US`, … — validated against the firmware enum |
+| `--preset <NAME>` | `LONG_FAST` (default), `SHORT_TURBO`, … |
+| `--tx-power <dBm>` | default 14 |
+| `--hop-limit <n>` | default 3 |
+| `--psk <hex>` | reuse a key instead of generating one |
+| `--default` | the public LongFast channel, to put back after a replace |
+| `--add` | add alongside existing channels instead of replacing them |
+| `--no-qr` | skip the code |
+
+A bench channel, off the busy defaults and cheap on airtime:
+
+```bash
+npm run channel -- --name bench --preset SHORT_TURBO --tx-power 2
+```
+
+### Getting the same channel back later
+
+The key is printed, so the channel is reproducible — for a third device that
+turns up next week, or after a factory reset:
+
+```bash
+npm run channel -- --name bench --psk 6242c72b…eacc
+```
+
+Same key in, same link out. There is a test for that.
+
+## Import it, and check
+
+Scan or open the link on **every** device. Then, in either demo, the transmit
+channel selector beside the link indicator shows the name and the first two
+bytes of the key's SHA-256:
+
+```
+Sendekanal: 1 »le-space.de« ⌗f93e
+```
+
+**Compare that fingerprint across devices.** It is the only reliable check —
+a channel can carry a familiar name and a completely different key, and the
+name will not tell you.
+
+## Replace, or add?
+
+The default **replaces** the channel set, which makes your channel the primary
+one. That is usually what you want, because Meshtastic derives the **frequency
+slot** from the primary channel's name (while `channel_num` is 0). A different
+name therefore moves you off the slot the neighbourhood is using — which is the
+part that actually spares them airtime, as opposed to merely encrypting your
+traffic ([bench-etiquette.md](bench-etiquette.md)).
+
+With `--add` the channel lands beside the existing ones, the default stays
+primary, and you are encrypted but still in the same crowd.
+
+**How to tell which happened:** after importing, the neighbours should disappear
+from the node's list. If they are still there, you did not move.
+
+> **Replacing erases every other channel on the device.** Not just moves it
+> aside — the channel set is overwritten. If one of those channels held a key
+> that exists nowhere else, it is gone. Export first, or use `--add`.
+
+## Getting a channel back after a replace
+
+Which is possible depends on where the key came from, and that is the whole
+distinction:
+
+**The public default** always comes back, because nothing about it is
+per-device. Its name is empty — the preset supplies *LongFast* — and its key is
+a single byte, `0x01`, which the firmware reads as *the well-known one*:
+
+```bash
+npm run channel -- --default --add
+```
+
+`--add` keeps whatever you imported over it. Drop it if you want LongFast to be
+the primary again, and with it the shared frequency slot. There is a test
+pinning our output to the canonical `#CgMSAQE`, so this is a rebuild, not an
+imitation.
+
+**A community channel — a regional mesh, say — cannot be rebuilt here.** Its key
+was generated by whoever set it up, and we never had it. Three ways back, in
+order of how well they work:
+
+1. **Another of your own devices.** If it still has the channel, the Meshtastic
+   app's share function exports it: channel settings → share → QR. This is the
+   reliable one, and the reason to do the recovery before touching the second
+   device.
+2. **Whoever runs the mesh.** Regional meshes usually publish their link.
+3. **Guess that it uses the public key.** Many regional meshes are a *name*
+   only — a custom name moves them to their own frequency slot while the key
+   stays the well-known one, so anyone can join. `01` is the firmware's
+   shorthand for that key, so:
+
+   ```bash
+   npm run channel -- --name ROTTAL-MESH --psk 01
+   ```
+
+   **Treat this as a guess and check it against a device that still has the
+   channel.** If the mesh does use a private key, you get a channel with the
+   right name that talks to nobody — exactly the silent failure at the top of
+   this page. We also derive the channel `id` ourselves, which may not match
+   the original's, so the honest test is not the fingerprint but whether a
+   message actually arrives.
+
+## If a link is refused
+
+Use the Meshtastic app's own share function instead: create the channel on one
+device, tap share, scan the QR with the other. It is guaranteed valid because
+the app produced it — and identical keys are the only thing that actually
+matters here, not where the link came from.
+
+## What the script does, and why it is written this way
+
+It encodes a `ChannelSet` protobuf — key, name, id, and the LoRa config — as
+URL-safe base64 in the fragment. The protobuf is written by hand: it is four
+fields, `@meshtastic/core` does not export a protobuf runtime, and a dependency
+for forty lines of encoding is a poor trade.
+
+The cost of hand-encoding is the risk of emitting something malformed, so the
+script **decodes its own output and verifies it** before printing — key, name
+and id must survive the round trip and the LoRa config must be present. A link
+that fails its own check is never shown. Both of those requirements come from
+comparing against a real, working Meshtastic link: an early version omitted the
+channel `id` and a full `lora_config`, and was rejected on the phone.
+
+One more thing that reads as a detail and is not: `?add=true` goes **before**
+the `#`. Everything after the hash is the payload, so appending there corrupts
+the base64 rather than adding a parameter.
+
+---
+
+← [funkpost](../README.md) · [ROADMAP](../ROADMAP.md)

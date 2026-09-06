@@ -94,6 +94,7 @@ what is built and what is not:
 | **[The Yjs plane](docs/yjs-provider.md)** | tiny, loss-tolerant updates — and reusable outside this project |
 | **[mesh-calendar](docs/mesh-calendar.md)** | the Yjs plane's demo — a shop's appointment book: rules not lists, who got the slot — and how to run its tests in a browser you can watch |
 | **[The signalling plane](docs/signalling.md)** | designed, not built — LoRa carries the handshake, not the connection |
+| **[Channels](docs/channels.md)** | getting two devices onto one channel — `npm run channel`, and why a mismatch is silent |
 | **[Bench etiquette](docs/bench-etiquette.md)** | developing on a shared, legally rationed medium without ruining it for the neighbours |
 | **[Field notes](docs/field-notes.md)** | what broke on real hardware, and why |
 | **[Why a separate repository](docs/why-separate-repository.md)** | a licence decision, and a one-way door |
