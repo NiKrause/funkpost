@@ -186,6 +186,22 @@ Neither is affiliated with funkpost; they are neighbours worth knowing about
 — living proof that what fits through this pipe is exactly the small signed
 payload.
 
+The wider scene, with front doors of their own:
+
+- **[Reticulum](https://reticulum.network/)** — the cryptography-first mesh
+  stack; runs over LoRa, packet radio, Wi-Fi and everything in between.
+- **[MeshCore](https://meshcore.co.uk/)** — a leaner LoRa mesh firmware
+  building its own community alongside Meshtastic.
+- **[qaul](https://qaul.net/)** — a messenger for internet shutdowns; devices
+  connect directly over Bluetooth and Wi-Fi.
+
+And the communities within radio range of this project's test channel:
+**[Munich Mesh](https://munichmesh.de/)**,
+**[Berlin Chaos Mesh](https://potatomesh.net/)**,
+**[MeshHessen](https://meshhessen.de/)**, and the
+**[Meshtastic local-groups directory](https://meshtastic.org/docs/community/local-groups/)**
+for everything else.
+
 ## Trademarks
 
 Meshtastic® is a registered trademark of Meshtastic LLC. Meshtastic software
