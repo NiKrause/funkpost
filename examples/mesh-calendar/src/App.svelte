@@ -40,6 +40,27 @@ import { wallAt } from "./domain/time.js";
   // the mesh carried nothing. `?room=` separates them, so one laptop with two
   // nodes can play both sides honestly.
   const room = mode.kind === "bc" ? mode.room : (params.get("room") ?? "ble");
+
+  // Der Hinweis gilt pro Browser, nicht pro Raum — er handelt vom Projekt,
+  // nicht von einem Kalender. Verweigert der Browser den Speicher, erscheint er
+  // jedes Mal wieder: die richtige Richtung, in die eine Warnung ausfallen darf.
+  const NOTICE_KEY = "funkpost:notice-dismissed:v1";
+  const readDismissed = () => {
+    try {
+      return localStorage.getItem(NOTICE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  };
+  let showNotice = $state(!readDismissed());
+  const dismissNotice = () => {
+    showNotice = false;
+    try {
+      localStorage.setItem(NOTICE_KEY, "1");
+    } catch {
+      /* nur für diesen Besuch weggeklickt */
+    }
+  };
   const SHOP_ID = "salon-funkpost";
 
   // The link out of a calendar note. Everything after `#` stayed in this
@@ -540,6 +561,22 @@ import { wallAt } from "./domain/time.js";
     <p class="tag">Terminbuchung über ein LoRa-Mesh — ohne Server, ohne Internet</p>
   </header>
 
+  <!-- Kurz, und einmal weggeklickt bleibt es weg. Die Messaussage aus
+       mesh-todo steht hier bewusst nicht: diese Ebene trägt Regeln und
+       kleine signierte Einträge, nicht ganze Blöcke. -->
+  {#if showNotice}
+    <aside class="notice" data-testid="experimental-notice">
+      <p>
+        <strong>Experimentell.</strong> Ein Forschungs-Demonstrator, nicht
+        auditiert, nicht für den Produktivbetrieb — wer den Funkkanal hört,
+        kann Termine anlegen.
+      </p>
+      <button class="dismiss" onclick={dismissNotice} data-testid="dismiss-notice">
+        Verstanden — nicht mehr zeigen
+      </button>
+    </aside>
+  {/if}
+
   {#if phase === "ready"}
     <p class="link-state" data-testid="link-state" data-level={linkState.level}>
       <span class="led {linkState.level}"></span>
@@ -874,6 +911,22 @@ import { wallAt } from "./domain/time.js";
     letter-spacing: 0.13em; text-transform: uppercase; color: #8b93a5;
   }
   .tag { margin: 4px 0 0; color: #5b6478; font-size: 0.92rem; }
+  /* Koralle als Kante, nicht als Fläche: es ist ein Vorbehalt zur Seite, keine
+     Fehlermeldung der App über sich selbst. */
+  .notice {
+    margin-top: 16px; padding: 12px 14px;
+    background: #fff; border: 1px solid #e3e7ee; border-left: 3px solid #E8503F;
+    border-radius: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .notice p { margin: 0; font-size: 0.86rem; line-height: 1.55; color: #5b6478; }
+  .notice strong { color: #14171f; }
+  .dismiss {
+    align-self: flex-start; padding: 5px 12px;
+    border: 1px solid #e3e7ee; border-radius: 999px;
+    background: transparent; color: #5b6478; font: inherit; font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .dismiss:hover { border-color: #E8503F; color: #14171f; }
   .dim { color: #5b6478; font-size: 0.86rem; margin: 0; }
   .error { color: #E8503F; font-size: 0.9rem; }
 

@@ -425,11 +425,55 @@
     if (!budget || budget.dutyCycle == null) return null;
     return Math.round((budget.remainingAirtimeMs / (budget.dutyCycle * 3_600_000)) * 100);
   };
+
+  // The notice is per browser, not per room: it is about the project, not about
+  // any one list. A browser that refuses storage simply shows it every time,
+  // which is the safe direction for a warning to fail in.
+  const NOTICE_KEY = "funkpost:notice-dismissed:v1";
+  const readDismissed = () => {
+    try {
+      return localStorage.getItem(NOTICE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  };
+  let showNotice = $state(!readDismissed());
+  const dismissNotice = () => {
+    showNotice = false;
+    try {
+      localStorage.setItem(NOTICE_KEY, "1");
+    } catch {
+      /* dismissed for this visit only */
+    }
+  };
 </script>
 
 <main>
   <h1>mesh-todo</h1>
   <p class="tag">no servers · no accounts · no IP path — a todo list over LoRa</p>
+
+  <!-- Dismissible, and it stays dismissed: somebody using this as a bench
+       instrument reads it once and then wants the screen back. -->
+  {#if showNotice}
+    <aside class="notice" data-testid="experimental-notice">
+      <p>
+        <strong>Experimental.</strong> A research demo, not audited, not for
+        production — and anyone who can hear the channel may write to this list.
+      </p>
+      <p>
+        It is also <strong>the measurement, not the product</strong>: this
+        arrangement ships whole OrbitDB blocks, and a three-entry list is
+        noticeably slow over the mesh. That result is the point of the
+        experiment. A lighter shape — a few bytes per event instead of block
+        transfers — is what
+        <a href="https://nikrause.github.io/funkpost/mesh-calendar/">mesh-calendar</a>
+        already does, and where this is heading.
+      </p>
+      <button class="dismiss" onclick={dismissNotice} data-testid="dismiss-notice">
+        Got it — don't show again
+      </button>
+    </aside>
+  {/if}
 
   <section>
     <h2>1 · Node</h2>
@@ -666,6 +710,40 @@
     color: #A8B3C7;
     font-size: 0.9rem;
   }
+  /* Coral rail rather than a filled box: it must read as a caveat on the page,
+     not as an error the app is reporting about itself. */
+  .notice {
+    margin-top: 20px;
+    padding: 14px 16px;
+    border: 1px solid #232B3D;
+    border-left: 3px solid #FF6B5B;
+    border-radius: 10px;
+    background: #141926;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .notice p {
+    margin: 0;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    color: #A8B3C7;
+  }
+  .notice strong { color: #EDF1F8; }
+  .notice a { color: #58C7F3; }
+  .dismiss {
+    align-self: flex-start;
+    margin-top: 2px;
+    padding: 5px 12px;
+    border: 1px solid #232B3D;
+    border-radius: 999px;
+    background: transparent;
+    color: #A8B3C7;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .dismiss:hover { border-color: #58C7F3; color: #EDF1F8; }
   section {
     margin-top: 28px;
     padding: 14px 16px;
