@@ -15,7 +15,7 @@ Bookings no longer live in the CRDT: see **Two substrates** below, and
 [#45](https://github.com/NiKrause/funkpost/issues/45) for the measurement that
 moved them.
 
-An appointment book for a local business, on the Yjs plane. It is the demo that
+An appointment book for a local business, on the **event plane**. It is the demo that
 proves the plane, and it was chosen because it exercises what a lossy,
 duty-cycled, high-latency link is *worst* at: contention for a scarce resource
 that two people want at once.

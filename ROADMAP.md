@@ -2,14 +2,14 @@
 
 # Roadmap
 
-funkpost carries bytes over a LoRa mesh. Above it sit **data planes** — ways of
+funkpost carries bytes over a LoRa mesh. Above it sit **planes** — ways of
 turning an application's state into those bytes — and the point of the project
 is that the plane and the courier are separable. There are two planes now:
 
 ```
   app
   ────────────────────────────────────────────────────────────
-  data plane:   courier-sync (OrbitDB)   │   y-funkpost (Yjs)
+  database plane: courier-sync (OrbitDB) │ event plane: rules in Yjs + a claim log
                         #1               │        #36
   ────────────────────────────────────────────────────────────
   funkpost byte courier — framing · selective-ACK ARQ · duty-cycle pacing
@@ -24,8 +24,8 @@ roadmap is built to keep testing.
 
 | | Thread | State |
 |---|---|---|
-| **#1** | OrbitDB data plane | **First over-the-air replication 2026-09-04** — two desktop browsers, two nodes, no IP path. Open: first-contact reliability on a busy public channel, and the phone Bluetooth lottery. |
-| **#36** | Yjs data plane | **Built and on air** — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss, and carrying a shop's rules over a real mesh on 2026-09-06. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
+| **#1** | Database plane (OrbitDB) | **First over-the-air replication 2026-09-04** — two desktop browsers, two nodes, no IP path. Open: first-contact reliability on a busy public channel, and the phone Bluetooth lottery. |
+| **#36** | Event plane · Yjs provider | **Built and on air** — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss, and carrying a shop's rules over a real mesh on 2026-09-06. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
 | **#37** | Hoist demo scaffolding into the lib | **Built** — the device supervisor and the error humaniser are library code; `mesh-todo` is a consumer. Not yet re-run on hardware. [docs](docs/links.md) |
 | **#38** | `mesh-calendar` demo | **Built, deployed, and one booking has crossed real hardware** (A1–A6; A7 half met). Bookings moved off the CRDT onto a claim log after #45: the greeting is 111 bytes at any number of writers, and expiry is forgetting. [docs](docs/mesh-calendar.md) |
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |

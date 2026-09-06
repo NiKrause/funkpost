@@ -4,19 +4,35 @@
 
 *Post über Funk* — a byte courier for local-first applications over LoRa mesh
 radios; works with Meshtastic® devices. A courier carries what it is handed,
-and this one is handed two very different things: handshakes and databases.
-One radio, two planes — they share the courier and nothing else, so the
-difference gets a table, not a footnote:
+and this one is handed three very different things: **handshakes, databases and
+events.** One radio, three planes — they share the courier and nothing else, so
+the difference gets a table, not a footnote:
 
-| | **signalling plane** | **data plane** |
-|---|---|---|
-| what crosses the mesh | the WebRTC handshake: offer and answer, as small signed payloads | the database itself: OrbitDB entries, as signed blocks |
-| WebRTC | yes — and the connection afterwards still needs an IP path (same Wi-Fi, or both online) | none — no offer, no answer, no IP path anywhere |
-| built? | designed, **not built** | **built and tested** (plan steps S1–S4) |
-| design thread | [libp2p-webrtc-qr#161](https://github.com/NiKrause/libp2p-webrtc-qr/issues/161) | [issue #1](https://github.com/NiKrause/funkpost/issues/1) |
-| the sentence to remember | *LoRa carries the handshake, not the connection.* | *The mesh carries the data when there is no connection to carry.* |
+| | **signalling plane** | **database plane** | **event plane** |
+|---|---|---|---|
+| what crosses the mesh | the WebRTC handshake: offer and answer, as small signed payloads | the database itself: OrbitDB entries, as signed blocks | one signed event at a time — and rules that *generate* a calendar instead of listing it |
+| first contact | two frames | a few kilobytes, ~12 frames | tens of bytes; a three-week busy mask is one frame |
+| WebRTC | yes — and the connection afterwards still needs an IP path (same Wi-Fi, or both online) | none — no offer, no answer, no IP path anywhere | none |
+| built? | designed, **not built** | **built, and first over the air 4 Sep 2026** | **built, and first booking over the air 6 Sep 2026** |
+| demo | — | [mesh-todo](https://nikrause.github.io/funkpost/mesh-todo/) | [mesh-calendar](https://nikrause.github.io/funkpost/mesh-calendar/) |
+| the sentence to remember | *LoRa carries the handshake, not the connection.* | *The mesh carries the data when there is no connection to carry.* | *What you do not send costs nothing.* |
 
-The announcement page for both, written for humans:
+Both data planes are real and neither replaces the other: pick the database
+plane when who wrote what must be **provable**, the event plane when the link
+is the scarce thing. Design threads:
+[libp2p-webrtc-qr#161](https://github.com/NiKrause/libp2p-webrtc-qr/issues/161),
+[#1](https://github.com/NiKrause/funkpost/issues/1) and
+[#38](https://github.com/NiKrause/funkpost/issues/38).
+
+**A note on the third name.** It used to be "the Yjs plane", after the library.
+The library changed underneath it — since [#45](https://github.com/NiKrause/funkpost/issues/45)
+the bookings live in a signed claim log and Yjs carries only the shop's rules —
+and the name went stale without anyone noticing, including in a sequence
+diagram that showed bookings as Yjs updates for weeks. Naming a plane after
+**what crosses it** survives a change of substrate. Naming it after the library
+does not.
+
+The announcement page for all three, written for humans:
 [lora.le-space.de](https://lora.le-space.de/).
 
 > ### ⚠ Experimental — not for production use
@@ -44,7 +60,8 @@ The announcement page for both, written for humans:
 > The examples are **demonstrators**, meant to be read and measured — not
 > deployed, and not pointed at anybody's real calendar.
 
-**Try it now.** Both demos are live, one per data plane, and every push to main
+**Try it now.** Both demos are live, one per data plane — database and event —
+and every push to main
 redeploys both:
 
 Both live at **[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)**,
@@ -104,11 +121,10 @@ Meshtastic nodes, with **no IP path**: `db.put` on one side, a delta over the
 paced ARQ courier, the LoRa hop, `joinEntry` on the other, both lists
 converged. Two desktop browsers, each driving its own node over Web Bluetooth.
 
-Since then a **second data plane** landed on the same courier — a Yjs provider
-whose updates are tens of bytes rather than kilobytes — demonstrated by
-**mesh-calendar**, an appointment book for a local business. The courier needed
-no changes for it,
-which was the claim worth testing.
+Since then the **event plane** landed on the same courier, and on 6 September
+carried a booking over real hardware: **31 s** to reach the shop, **9.3 s of
+airtime** for the whole session. The courier needed no changes for it, which
+was the claim worth testing.
 
 **6 September 2026 — a booking crossed the mesh.** Two nodes, EU 868,
 `LONG_FAST`, no IP path: a customer's booking travelled to the shop and stood in its day plan
@@ -149,9 +165,9 @@ what is built and what is not:
 |---|---|
 | **[The byte courier](docs/courier.md)** | framing, selective-ACK ARQ, duty-cycle pacing — carries both planes, knows about neither |
 | **[Links to a node](docs/links.md)** | Web Bluetooth reality, the reconnect policy, reading what the radio says |
-| **[The OrbitDB plane](docs/data-plane-orbitdb.md)** | signed entries and an access controller; the bootstrap, end to end |
-| **[The Yjs plane](docs/yjs-provider.md)** | tiny, loss-tolerant updates — and reusable outside this project |
-| **[mesh-calendar](docs/mesh-calendar.md)** | the Yjs plane's demo — a shop's appointment book: rules not lists, who got the slot — and how to run its tests in a browser you can watch |
+| **[The database plane](docs/data-plane-orbitdb.md)** | OrbitDB: signed entries and an access controller; the bootstrap, end to end |
+| **[The event plane's provider](docs/yjs-provider.md)** | the Yjs half of it: tiny, loss-tolerant updates — and reusable outside this project |
+| **[mesh-calendar](docs/mesh-calendar.md)** | the event plane's demo — a shop's appointment book: rules not lists, who got the slot — and how to run its tests in a browser you can watch |
 | **[The signalling plane](docs/signalling.md)** | designed, not built — LoRa carries the handshake, not the connection |
 | **[Channels](docs/channels.md)** | getting two devices onto one channel — `npm run channel`, and why a mismatch is silent |
 | **[Bench etiquette](docs/bench-etiquette.md)** | developing on a shared, legally rationed medium without ruining it for the neighbours |
@@ -163,11 +179,17 @@ what is built and what is not:
 The courier moves opaque bytes, so what sits on top is a choice — and both
 choices ship:
 
-| | **[OrbitDB plane](docs/data-plane-orbitdb.md)** | **[Yjs plane](docs/yjs-provider.md)** |
+| | **[database plane](docs/data-plane-orbitdb.md)** | **[event plane](docs/mesh-calendar.md)** |
 |---|---|---|
-| gives you | signed entries, an access controller, verifiable history | tiny, loss-tolerant, order-independent updates |
+| carries | the database: OrbitDB blocks, hash-linked and signed | one signed event at a time, plus rules that generate rather than list |
+| gives you | verifiable history and an access controller | a greeting that does not grow: 111 bytes for three weeks at any number of writers |
 | first contact | ~2 KB for a two-item list | tens of bytes |
-| pick it when | who wrote what must be provable | the channel key is trust enough |
+| pick it when | who wrote what must be **provable** | the **link** is the scarce thing |
+
+Its two structures are a Yjs document for the shop's rules and a signed claim
+log for the bookings — the split [#45](https://github.com/NiKrause/funkpost/issues/45)
+forced, when a Yjs state vector turned out to grow with every author who has
+ever written and never shrink.
 
 **The Yjs provider is reusable outside this project.** It needs only a courier
 — any object with `send(bytes)` and `onPayload(cb)` — so a WebSocket, a
@@ -188,7 +210,7 @@ courier stays dependency-light for everyone else.
       │                                                      │
       └── funkpost courier: framing · ARQ · duty-cycle pacing ┘
                     │                        │
-        OrbitDB plane                  Yjs plane
+       database plane                 event plane
 ```
 
 No IP path anywhere in that picture. That is the whole point, and everything

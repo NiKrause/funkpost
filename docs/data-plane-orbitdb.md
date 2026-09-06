@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-# The OrbitDB data plane
+# The database plane (OrbitDB)
 
 Status: **built and tested on hardware — first over-the-air replication 4 September 2026**
 
