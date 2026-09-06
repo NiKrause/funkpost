@@ -11,7 +11,7 @@
  *
  *   npm run channel                       # a fresh key, defaults for EU 868
  *   npm run channel -- --name bench-a
- *   npm run channel -- --preset SHORT_TURBO --tx-power 2
+ *   npm run channel -- --preset SHORT_FAST --tx-power 2
  *   npm run channel -- --psk <hex>        # reproduce an existing channel
  *   npm run channel -- --default --add    # put LongFast back after a replace
  *
