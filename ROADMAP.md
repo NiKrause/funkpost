@@ -194,11 +194,27 @@ payloads were dropped after 2 rounds, and the store errors on an empty room.
 `mesh-todo` keeps OrbitDB; #75 records why reshaping it would buy nothing. Two
 things it *does* take from `mesh-calendar`, in order:
 
-**P8a · A manual send button.** `mesh-todo` greets on a timer, which spends a
-legal budget on a schedule rather than on news. The button matches the actual
-case — Alice has something and no internet right now — and makes airtime a
-deliberate act. *Gate:* nothing leaves the radio until pressed; the e2e suite
-proves a delta still crosses when it is, and that an idle app is silent.
+**P8a · A manual send button.** Correcting the phase as first written: the
+timer in `courier-sync` only runs while a joiner has no database yet — a
+bootstrap retry, not a heartbeat, and well judged. What actually announces
+eagerly is **every local write**, and that is what the button replaces.
+
+The saving is not the announce, which is one small message. It is what follows:
+the peer wants, blocks come back. Five writes become five of those round trips
+where one would carry all five, since `createDelta` walks from the heads down
+to theirs.
+
+*Blocked on a release, not on code.* The option to opt out
+([bridge#56](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/56)) lives
+in a permissive package, as P8b requires — and **`courier-sync` has never been
+published to npm**: it landed after v0.4.3, which is why this repository depends
+on `github:…#main` rather than a version. That dependency is a moving target;
+any push to the bridge's main changes this build. The release fixes both, and
+P8a should land against a published version rather than a branch.
+
+*Gate:* nothing leaves the radio until pressed; the e2e suite proves a delta
+still crosses when it is, and that an idle app is silent. Plus: funkpost
+depends on a version, not a branch.
 
 **P8b · `courier-sync` out of the backup project — but not into this one.**
 566 lines importing only `multiformats` and `@ipld/dag-cbor`; nothing in it is
