@@ -392,3 +392,23 @@ test("a hand-made channel choice is never overridden", async ({ context }) => {
 
   await guest.page.close();
 });
+
+test("the experimental notice can be dismissed for good", async ({ context }) => {
+  const id = nextRoom();
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+
+  const notice = guest.page.getByTestId("experimental-notice");
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText(/Experimentell/);
+
+  await guest.page.getByTestId("dismiss-notice").click();
+  await expect(notice).toHaveCount(0);
+
+  // "Dauerhaft" is the whole point: a reload must not bring it back.
+  await guest.page.reload();
+  await ready(guest.page);
+  await expect(guest.page.getByTestId("experimental-notice")).toHaveCount(0);
+
+  await guest.page.close();
+});

@@ -158,3 +158,24 @@ test("a hand-made channel choice is never overridden", async ({ context }) => {
 
   await page.close();
 });
+
+test("the experimental notice can be dismissed for good", async ({ context }) => {
+  const page = await openPhone(context, room());
+
+  const notice = page.getByTestId("experimental-notice");
+  await expect(notice).toBeVisible();
+  // It carries the finding, not just the disclaimer — that is why it exists.
+  await expect(notice).toContainText(/Experimental/);
+  await expect(notice).toContainText(/noticeably slow over the mesh/);
+
+  await page.getByTestId("dismiss-notice").click();
+  await expect(notice).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByText("BroadcastChannel (fake mesh)", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("experimental-notice")).toHaveCount(0);
+
+  await page.close();
+});
