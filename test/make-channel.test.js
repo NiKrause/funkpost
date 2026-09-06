@@ -16,6 +16,23 @@ test("two fresh channels never share a key", () => {
   assert.notEqual(key(run(["--name", "a"])), key(run(["--name", "b"])));
 });
 
+test("--default rebuilds the public channel byte for byte", () => {
+  // The canonical default link is `#CgMSAQE`: an empty name, so the preset
+  // supplies "LongFast", and a one-byte psk of 0x01 meaning the well-known key.
+  // Ours must start with exactly those bytes and only add the LoRa config —
+  // otherwise it is a different channel on a different frequency slot, and
+  // whoever ran it to recover would be alone on the air without being told.
+  const fragment = run(["--default"]).match(/#(\S+)/)[1];
+  assert.ok(fragment.startsWith("CgMSAQE"), fragment);
+});
+
+test("--default refuses a preset that would make it another channel", () => {
+  assert.throws(
+    () => run(["--default", "--preset", "SHORT_TURBO"]),
+    (e) => /would be another channel/.test(e.stderr ?? ""),
+  );
+});
+
 test("refuses what the firmware would refuse", () => {
   for (const [args, expected] of [
     [["--name", "much-too-long-a-name"], /1–11 bytes/],
