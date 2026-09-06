@@ -240,6 +240,17 @@ official one from [meshtastic/design](https://github.com/meshtastic/design/tree/
 Commercial use of the Meshtastic firmware and marks carries their own terms in
 addition to the GPLv3.
 
+## Supporting this
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-NiKrause-FF6B5B?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/NiKrause)
+
+The work here is radios on a desk, hours of airtime, and the bench sessions
+written up in the [field notes](docs/field-notes.md). Nothing about it is
+funded, and nothing about it is for sale — it is GPL-3.0 and stays that way.
+
+If it is useful to you, the **Sponsor** button at the top of this repository is
+the least friction.
+
 ## Licence
 
 GPL-3.0-only. See [LICENSE](LICENSE).
