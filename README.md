@@ -110,9 +110,36 @@ whose updates are tens of bytes rather than kilobytes — demonstrated by
 no changes for it,
 which was the claim worth testing.
 
+**6 September 2026 — a booking crossed the mesh.** Two nodes, EU 868,
+`LONG_FAST`, no IP path: a shop's rules reached a device that had never seen
+them and became fourteen days of slots; a booking travelled back and stood in
+the shop's day plan **31 seconds** later. The whole session cost **9.3 s of
+airtime** — about 2.5 % of the hourly allowance.
+
 What is *not* settled, and what each bench session cost, is kept honestly in
 **[field notes](docs/field-notes.md)**. Sequencing and gates are in
 **[ROADMAP.md](ROADMAP.md)**.
+
+## The mesh carries the data, not the program
+
+Worth stating because it is the obvious next question, and the answer is a
+measurement rather than an opinion. `mesh-calendar`'s shell is **150 KB
+gzipped**, and **85 KB of that is the Meshtastic library and the polyfills it
+needs** — irreducible while a browser drives the radio over Web Bluetooth.
+Dropping Svelte and the salon half saves perhaps a fifth, not an order of
+magnitude.
+
+Over LoRa that is ~780 frames: **hours** at `LONG_FAST` once the duty cycle is
+counted, which is the binding limit, not the data rate. Set against the 9.3 s a
+whole booking session costs, **shipping the app is roughly fifty times
+everything it will ever do afterwards.**
+
+So the app arrives once — over Wi-Fi, a hotspot at the counter, or a QR and one
+moment of internet — and is a PWA from then on. After that it is offline, and
+only the appointments use the radio. The one lever that would change the
+arithmetic is not a smaller framework but a smaller *radio client*: Meshtastic
+nodes also speak HTTP, and a thin client for the handful of message types this
+uses would be a fraction of 85 KB.
 
 ## Where things are written down
 
