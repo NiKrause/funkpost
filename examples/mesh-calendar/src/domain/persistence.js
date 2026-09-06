@@ -67,6 +67,10 @@ export async function attachPersistence({ room, doc, log, Y, onError = null }) {
 
   let db;
   try {
+    // Still `termine`, from before the app moved path, and renaming it would
+    // be a silent data loss: IndexedDB is keyed by origin and name, so the same
+    // name reaches the same bookings from the new URL — a new one would open an
+    // empty database and look exactly like a calendar that forgot everything.
     db = await open(`funkpost-termine:${room}`);
   } catch (error) {
     fail(error);

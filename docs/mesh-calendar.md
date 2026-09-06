@@ -6,7 +6,7 @@ Status: **built and tested** ([#38](https://github.com/NiKrause/funkpost/issues/
 A1–A6) — domain, calendar file, both screens, and the deploy. Never run on
 hardware (P7). Tests: `examples/mesh-calendar/test/` and `e2e/`.
 
-Try it: **`/funkpost/termine/`**, or locally with `?mesh=bc&room=x&role=salon`
+Try it: **`/funkpost/mesh-calendar/`**, or locally with `?mesh=bc&room=x&role=salon`
 in one tab and `role=customer` in another — two tabs play the two devices with
 no hardware at all.
 
@@ -251,8 +251,8 @@ the salon holds no capability and must not publish a link implying otherwise.
 ### Why the link works without a backend
 
 ```
-https://…/termine/#/b/<shopId>/<bookingId>/<token>
-                  ^ everything from here never leaves the browser
+https://…/mesh-calendar/#/b/<shopId>/<bookingId>/<token>
+                        ^ everything from here never leaves the browser
 ```
 
 A fragment is not sent to the server — not in the request line, not in a

@@ -109,3 +109,52 @@ test("the wake-lock checkbox exists on a phone and not on a desktop", async ({
   await expect(phonePage.getByText(/keep the screen awake/)).toBeVisible({ timeout: 30_000 });
   await phone.close();
 });
+
+test("the shared channel is picked by name, wherever the node filed it", async ({ context }) => {
+  const page = await openPhone(context, room());
+
+  // What a node reports on connecting: its own channels, one at a time, in
+  // index order — and the shared one is rarely index 0, because the index is
+  // per-device bookkeeping. Two apps both defaulting to 0 would transmit to
+  // different rooms while showing the same name to their users.
+  await page.evaluate(async () => {
+    const psk = (fill) => new Uint8Array(32).fill(fill);
+    await window.__nodeChannel({ index: 0, role: 1, settings: { name: "", psk: psk(1) } });
+    await window.__nodeChannel({ index: 2, role: 2, settings: { name: "le-space.de", psk: psk(2) } });
+  });
+
+  const select = page.locator("select");
+  await expect(select).toHaveValue("2", { timeout: 8_000 });
+  // And it says so — a channel that moves without a word is the same silence
+  // this feature exists to prevent.
+  await expect(page.locator(".log")).toContainText(/le-space\.de.*chosen automatically/);
+
+  await page.close();
+});
+
+test("a hand-made channel choice is never overridden", async ({ context }) => {
+  const page = await openPhone(context, room());
+
+  await page.evaluate(async () => {
+    const psk = (fill) => new Uint8Array(32).fill(fill);
+    await window.__nodeChannel({ index: 0, role: 1, settings: { name: "", psk: psk(1) } });
+    await window.__nodeChannel({ index: 1, role: 2, settings: { name: "ROTTAL-MESH", psk: psk(2) } });
+  });
+
+  const select = page.locator("select");
+  await select.selectOption("1");
+  await expect(select).toHaveValue("1");
+
+  // The preferred channel turns up afterwards. Moving the selector now would
+  // undo a deliberate choice without telling anyone.
+  await page.evaluate(async () => {
+    await window.__nodeChannel({
+      index: 2,
+      role: 2,
+      settings: { name: "le-space.de", psk: new Uint8Array(32).fill(3) },
+    });
+  });
+  await expect(select).toHaveValue("1");
+
+  await page.close();
+});

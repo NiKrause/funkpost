@@ -3,18 +3,22 @@ name: Deploy the demos to GitHub Pages
 # The phones need an HTTPS address — Web Bluetooth refuses insecure origins.
 # Every push to main publishes an index and both demos:
 #
-#   https://nikrause.github.io/funkpost/           the menu
-#   https://nikrause.github.io/funkpost/mesh-todo/ mesh-todo    (OrbitDB plane)
-#   https://nikrause.github.io/funkpost/termine/   mesh-calendar (Yjs plane)
+#   https://nikrause.github.io/funkpost/               the menu
+#   https://nikrause.github.io/funkpost/mesh-todo/     mesh-todo     (OrbitDB)
+#   https://nikrause.github.io/funkpost/mesh-calendar/ mesh-calendar (Yjs)
+#   https://nikrause.github.io/funkpost/termine/       → mesh-calendar
 #
-# The /termine/ path is a ONE-WAY DOOR: every .ics ever downloaded carries a
-# change/cancel link pointing at it, and a calendar entry from last spring must
-# still lead somewhere. It matches DEFAULT_BASE in mesh-calendar's
-# link.js — change one and you must change the other, and break old links.
+# /termine/ was mesh-calendar's home and was documented as a ONE-WAY DOOR:
+# every .ics ever downloaded carries a change/cancel link pointing at it, and a
+# calendar entry from last spring must still lead somewhere. Renaming the
+# directory alone would have killed those links quietly — the entry still opens
+# a browser, the browser still shows a 404.
 #
-# /mesh-todo/ is new: that demo used to sit at the root. It has no permanent
-# links pointing into it, so moving it costs an old bookmark one click through
-# the menu — which is why only this one was allowed to move.
+# So the door was made two-way instead: /termine/ is now a redirect page that
+# forwards to /mesh-calendar/ *carrying the fragment*, which is where the
+# capability token lives. It stays for good; there is no expiry on a calendar
+# entry somebody already has. DEFAULT_BASE in link.js points at the new path,
+# so links issued from here on are direct.
 
 on:
   push:
@@ -48,14 +52,19 @@ jobs:
           PAGES_BASE: /funkpost/mesh-todo/
       - run: npm run build -w @le-space/mesh-calendar-example
         env:
-          PAGES_BASE: /funkpost/termine/
+          PAGES_BASE: /funkpost/mesh-calendar/
       # Assemble the site rather than nesting one demo inside another's build
       # output: each demo owns its directory, and the index owns the root.
       - run: |
-          mkdir -p site/mesh-todo site/termine
+          mkdir -p site/mesh-todo site/mesh-calendar site/termine
           cp examples/landing/index.html site/index.html
           cp -R examples/mesh-todo/dist/. site/mesh-todo/
-          cp -R examples/mesh-calendar/dist/. site/termine/
+          cp -R examples/mesh-calendar/dist/. site/mesh-calendar/
+          # Keeps every .ics ever issued working — see the header. The worker
+          # retires the one still installed at the old scope, which would
+          # otherwise keep serving the old build instead of the redirect.
+          cp examples/landing/termine.html site/termine/index.html
+          cp examples/landing/termine-sw.js site/termine/sw.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

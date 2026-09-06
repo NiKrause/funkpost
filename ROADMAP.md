@@ -139,9 +139,12 @@ under test. Local storage is namespaced by role instead.
 
 ### P6 · Deploy both demos, and make the link work — #38 A6 ✅
 
-`pages.yml` builds both: `mesh-todo` stays at `/funkpost/`, the booking demo
-lands at `/funkpost/termine/`, matching `DEFAULT_BASE` in `link.js`. **The path
-is a one-way door** — every `.ics` ever downloaded points at it.
+`pages.yml` builds both, each demo under its own name: `/funkpost/mesh-todo/`
+and `/funkpost/mesh-calendar/`, the latter matching `DEFAULT_BASE` in
+`link.js`. The booking demo started at `/funkpost/termine/`, and because every
+`.ics` ever downloaded points at whatever that constant said at the time, the
+old path stays for good as a fragment-preserving redirect. **A path this app
+has issued links from can be left, never deleted.**
 
 The link is now also *read*, which it was not: opening `#/b/<shop>/<booking>/
 <token>` adopts the capability and fetches the booking over the mesh, so a
