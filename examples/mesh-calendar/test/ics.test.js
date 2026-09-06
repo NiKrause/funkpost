@@ -189,7 +189,7 @@ describe("the serverless link", () => {
     const url = bookingLink({ shopId: "salon-funkpost", bookingId: "abcd1234", token });
 
     const [beforeHash, fragment] = url.split("#");
-    assert.ok(beforeHash.endsWith("/termine/"), "the path is static files only");
+    assert.ok(beforeHash.endsWith("/mesh-calendar/"), "the path is static files only");
     assert.ok(!beforeHash.includes("?"), "nothing in a query string, ever");
     // The token appears only after the '#'.
     assert.ok(!beforeHash.includes(fragment.split("/").pop()));

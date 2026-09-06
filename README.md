@@ -53,15 +53,18 @@ which is a menu:
 | | | |
 |---|---|---|
 | **[…/mesh-todo/](https://nikrause.github.io/funkpost/mesh-todo/)** | `mesh-todo` | a todo list over LoRa — the **OrbitDB** plane |
-| **[…/termine/](https://nikrause.github.io/funkpost/termine/)** | `mesh-calendar` | a hairdresser's appointment book — the **Yjs** plane |
+| **[…/mesh-calendar/](https://nikrause.github.io/funkpost/mesh-calendar/)** | `mesh-calendar` | a hairdresser's appointment book — the **Yjs** plane |
 
 Open either twice with `?mesh=bc` and two browser tabs play the two devices
 (the booking demo wants `&role=salon` in one and `&role=customer` in the
 other); with a Meshtastic node over Web Bluetooth, *Connect node* makes it
 real.
 
-The `/termine/` path is a **one-way door** — every `.ics` the booking demo has
-ever produced carries a change link pointing at it.
+The booking demo moved from `/termine/`, which every `.ics` it had ever
+produced points at. That path stays for good as a redirect that carries the
+fragment — the capability token lives there — so old calendar entries still
+lead somewhere. **A path this app has issued links from can be left, never
+deleted.**
 
 ## The test channel
 

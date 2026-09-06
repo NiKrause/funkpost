@@ -2,6 +2,7 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
 
+// Deliberately still `termine`, and it must stay — see the note in public/sw.js.
 const CACHE = "funkpost-termine-v1";
 
 /**

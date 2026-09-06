@@ -6,8 +6,8 @@
  * that there is no IP path to the salon. What makes it work anyway is the
  * **fragment**:
  *
- *     https://…/termine/#/b/<shopId>/<bookingId>/<token>
- *                       ^ everything from here never leaves the browser
+ *     https://…/mesh-calendar/#/b/<shopId>/<bookingId>/<token>
+ *                             ^ everything from here never leaves the browser
  *
  * A fragment is not sent to the server — not in the request line, not in a
  * header, not in a referrer. So the capability token is not disclosed to the
@@ -26,11 +26,15 @@
 import { toBase64Url, fromBase64Url, TOKEN_BYTES } from "./capability.js";
 
 /**
- * Where the app is deployed. A **one-way door**: every `.ics` ever downloaded
- * points at this path, and a calendar entry from last spring must still lead
- * somewhere useful. Change it and old links die.
+ * Where the app is deployed. Every `.ics` ever downloaded points at whatever
+ * this said at the time, and a calendar entry from last spring must still lead
+ * somewhere useful — so a path this appears in can be *left*, never *deleted*.
+ *
+ * It moved once, from `/termine/`, and `/termine/` still stands as a redirect
+ * that carries the fragment across (see the Pages workflow). Anything that
+ * replaces this constant owes the old path the same courtesy.
  */
-export const DEFAULT_BASE = "https://nikrause.github.io/funkpost/termine/";
+export const DEFAULT_BASE = "https://nikrause.github.io/funkpost/mesh-calendar/";
 
 const SAFE_SEGMENT = /^[A-Za-z0-9._~-]{1,64}$/;
 

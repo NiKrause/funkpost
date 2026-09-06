@@ -28,6 +28,16 @@
  * exactly what it wanted. Every match here passes `ignoreVary`.
  */
 
+/**
+ * The name still says `termine` because the app moved and this must not.
+ *
+ * Cache storage is per **origin**, not per scope, and the activate handler
+ * below deletes every cache that is not this one. A copy of this worker is
+ * still installed at the old `/funkpost/termine/` scope on anyone's phone that
+ * opened the demo before the move — and if it ever reactivates while holding a
+ * different name for the same idea, it would delete *this* app's shell out from
+ * under it. Same name, no collision.
+ */
 const CACHE = "funkpost-termine-v1";
 
 self.addEventListener("install", (event) => {

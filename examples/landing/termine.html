@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<!--
+  /funkpost/termine/ — where mesh-calendar used to live.
+
+  This exists because the old path was documented as a one-way door: every .ics
+  the demo has ever produced carries a change link pointing here, and a calendar
+  entry from last spring must still lead somewhere. Renaming the directory
+  without this page would have silently killed those links — the calendar entry
+  would still open a browser, and the browser would still show a 404.
+
+  The fragment is the whole point. `#/b/<shop>/<booking>/<token>` carries the
+  capability itself, and a fragment is never sent to a server: not in the
+  request line, not in a header, not in a referrer. So the redirect happens in
+  the browser, and the token goes nowhere but the next page.
+-->
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Termine über Funk — umgezogen</title>
+    <meta name="robots" content="noindex" />
+    <!-- Belt and braces: a browser that carries the fragment across a meta
+         refresh lands correctly even if the script below never runs. -->
+    <meta http-equiv="refresh" content="0; url=../mesh-calendar/" />
+    <script>
+      // location.replace, so Back does not bounce the visitor straight back
+      // here. location.hash is taken verbatim — it may hold a capability token,
+      // and re-encoding it would break the key it derives.
+      location.replace("../mesh-calendar/" + location.search + location.hash);
+    </script>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f4f6f9;
+        color: #14171f;
+        font-family: "Public Sans", system-ui, -apple-system, sans-serif;
+        line-height: 1.6;
+        text-align: center;
+        padding: 24px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0b0e15; color: #e8eaf0; }
+        a { color: #8fa5ff; }
+      }
+      p { max-width: 42ch; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>
+        <strong>Termine über Funk</strong> liegt jetzt unter
+        <code>/funkpost/mesh-calendar/</code>.
+      </p>
+      <p>
+        <a id="go" href="../mesh-calendar/">Weiter zur App</a> — der Link
+        funktioniert samt Termin, falls er einen enthält.
+      </p>
+    </main>
+    <script>
+      // The manual link needs the fragment too, for anyone who lands here with
+      // both the redirect and the refresh blocked.
+      document.getElementById("go").href =
+        "../mesh-calendar/" + location.search + location.hash;
+    </script>
+  </body>
+</html>
