@@ -81,6 +81,39 @@ lose the same afternoon.
 - Web Bluetooth support and spec:
   [WebBluetoothCG/web-bluetooth](https://github.com/WebBluetoothCG/web-bluetooth).
 
+## The first booking, and the two hours before it
+
+**6 September 2026.** A booking crossed a real mesh: the shop's rules reached a
+device that had never seen them and became fourteen days of slots; the booking
+crossed back and stood in the shop's day plan **31 s** later. The whole session
+cost **9.3 s of airtime** — 2.5 % of the hourly allowance, on `LONG_FAST`.
+
+What it cost to get there is the part worth writing down, because none of it
+was code.
+
+**Two nodes with the same key still heard nothing.** Both carried `le-space.de`
+⌗3dd3 and transmitted on it. But the frequency slot is derived from the
+**primary** channel's name while `channel_num` is 0, and one node had a
+regional mesh as primary while the other had the factory default. Same key,
+different frequency, `←0` on both — and *not one undecryptable packet*, which
+is the tell: a key mismatch delivers unreadable packets, a slot mismatch
+delivers nothing at all.
+
+**Two browser tabs took the same node.** Both reported `!f6fd6c20`, so one
+radio was talking to itself through two couriers. Nothing in the UI said so;
+the node id had to be read and compared. Worth a glance before every bench:
+two tabs, two different node ids.
+
+**A remote click cannot open the Bluetooth chooser.** Web Bluetooth needs
+transient user activation, and a synthetic click does not carry it. Any
+automated bench still needs a human for exactly two clicks.
+
+**What the run surfaced, in #73:** the console logged **87 `MAX_RETRANSMIT`**
+errors where the app showed 4 — absorbed, but possibly provoked, since we send
+broadcasts with `want_ack` and nothing rebroadcasts on a two-node bench. Two
+payloads were dropped after 2 rounds. And the store reported
+`Unexpected end of array` on a **brand-new** room, twice.
+
 ## Authorisation, measured rather than assumed
 
 Asked whether anyone on the mesh could flood a salon's calendar. They can, and

@@ -200,12 +200,23 @@ case — Alice has something and no internet right now — and makes airtime a
 deliberate act. *Gate:* nothing leaves the radio until pressed; the e2e suite
 proves a delta still crosses when it is, and that an idle app is silent.
 
-**P8b · `courier-sync` in-house.** 566 lines importing only `multiformats` and
-`@ipld/dag-cbor` — a clean seam in the wrong repository, since nothing in it is
-Storacha. The gain is the right to shape the wire format for LoRa, which is a
-foreign concern inside a backup project. *Gate:* `mesh-todo` builds and its e2e
-suite passes with the dependency on `orbitdb-storacha-bridge` removed, and the
-OrbitDB plane gets its own tests here rather than borrowing theirs.
+**P8b · `courier-sync` out of the backup project — but not into this one.**
+566 lines importing only `multiformats` and `@ipld/dag-cbor`; nothing in it is
+Storacha, so it is a clean seam sitting in a repository whose purpose is
+something else, where every duty-cycle-driven change is a foreign body.
+
+The obvious move — copy it here — is **the one thing this repository must not
+do**, and it is written down: funkpost is GPL-3.0 because `@meshtastic/core` is,
+`courier-sync` is permissive, and permissive flows into copyleft while the
+reverse fails. Anything that belongs in a permissive package has to be written
+*there* ([why-separate-repository.md](docs/why-separate-repository.md)). Copying
+it here would quietly make it GPL and close that door for good.
+
+So: **its own permissive package**, depended on from here exactly as today.
+That buys the independence without spending the licence. *Gate:* `mesh-todo`
+builds and its e2e suite passes against the new package, the OrbitDB plane gets
+its own tests wherever the code lands, and `why-separate-repository.md` still
+reads true afterwards.
 
 **Not in this phase, on purpose:** first contact. Bob without the database costs
 ~2 KB, inherent to a hash-linked log, and that belongs off the radio the same
