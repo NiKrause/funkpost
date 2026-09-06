@@ -111,9 +111,8 @@ no changes for it,
 which was the claim worth testing.
 
 **6 September 2026 — a booking crossed the mesh.** Two nodes, EU 868,
-`LONG_FAST`, no IP path: a shop's rules reached a device that had never seen
-them and became fourteen days of slots; a booking travelled back and stood in
-the shop's day plan **31 seconds** later. The whole session cost **9.3 s of
+`LONG_FAST`, no IP path: a customer's booking travelled to the shop and stood in its day plan
+**31 seconds** later — an appointment the shop never entered. The whole session cost **9.3 s of
 airtime** — about 2.5 % of the hourly allowance.
 
 What is *not* settled, and what each bench session cost, is kept honestly in
