@@ -30,6 +30,11 @@ else.
 names match; the keys do not. Both radios then hear each other perfectly and
 decrypt nothing. One key has to be generated once and carried to every device.
 
+> To try the demos with someone else, there is a published channel with a QR
+> code in the [README](../README.md#the-test-channel) — `le-space.de`, `⌗3dd3`.
+> Its key is public, which is exactly what a meeting place needs and exactly
+> what a private channel must not be.
+
 ## Make a channel
 
 ```bash
@@ -152,6 +157,34 @@ order of how well they work:
    this page. We also derive the channel `id` ourselves, which may not match
    the original's, so the honest test is not the fingerprint but whether a
    message actually arrives.
+
+## Where a key should live
+
+A channel key is small, it is the whole channel, and it exists only where you
+put it. The two ways of keeping one are opposites, and which is right follows
+entirely from what the channel is for:
+
+**A meeting place is published.** `le-space.de` is in the README, in this
+repository's history, in every clone and on the website. It cannot be lost —
+`--psk` rebuilds it byte for byte from the printed hex, and there is a test
+that says so. What that costs is privacy, and a channel whose job is letting
+strangers try a demo together never had any to spend.
+
+**A private channel is backed up, or it dies with the devices.** Somewhere that
+survives a factory reset and a lost phone: a password manager, or the same
+place your other secrets live. Not a note in this repository — a key committed
+to a public repository is a published key, whatever you meant by it.
+
+The failure mode is worth stating plainly, because it has already happened
+here: **a key you publish cannot be lost; a key you protect can.** A regional
+mesh channel went when one device's channel set was replaced, and it was
+recoverable only because two other devices still held it. Two devices is not a
+backup; it is two copies of one accident away from nothing.
+
+That also decides what `npm run channel` prints. The key goes to the terminal
+in full, in hex, next to the line saying `--psk` reproduces the channel from
+it — because the moment to write a key down is the moment it is created, and a
+tool that hides it guarantees nobody does.
 
 ## If a link is refused
 

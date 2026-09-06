@@ -63,6 +63,40 @@ real.
 The `/termine/` path is a **one-way door** — every `.ics` the booking demo has
 ever produced carries a change link pointing at it.
 
+## The test channel
+
+<img src="docs/img/channel-le-space.svg" alt="QR code for the le-space.de test channel" width="150" align="right">
+
+Two radios only hear each other if they carry the **same key**, so trying this
+with someone else needs a shared one. This is ours — scan it, or open
+**[the link](https://meshtastic.org/e/#CjQSIF4IiUrcKwAwd5ZYEhO72Qcrwb6q1IIS1aF4c0YdPoP9GgtsZS1zcGFjZS5kZSXtu8e8EgwIATgDQANIAVAOaAE)**:
+
+| | |
+|---|---|
+| name | `le-space.de` · EU_868 · LONG_FAST |
+| fingerprint | `⌗3dd3` — both demos show this beside the channel selector; **compare it across devices** |
+| key | `5e08894adc2b00307796581213bbd9072bc1beaad48212d5a17873461d3e83fd` |
+
+**This key is published, so this channel is public.** That is the point — it is
+a meeting place, not a secret, and nothing here was ever protected by it
+anyway. Bring your own channel (`npm run channel`) for anything else.
+
+> ⚠ **Importing replaces the whole channel set.** Every other channel on the
+> device is erased, including keys that exist nowhere else. Add `?add=true`
+> before the `#`, or use the app's import-as-additional option.
+
+Two settings on **your own node**, before you transmit — both explained in
+[bench etiquette](docs/bench-etiquette.md):
+
+- **Role `CLIENT_MUTE`.** A default node rebroadcasts everything it hears; on a
+  busy mesh that is most of its airtime, spent on strangers' packets. Muted, it
+  carries only your own traffic.
+- **Preset `SHORT_TURBO`** for heavy benching — 21 880 bit/s against
+  `LONG_FAST`'s 1 070, so the same frame costs a twentieth of the air, and
+  range is irrelevant across a desk. It is not set here because **the preset is
+  part of the air configuration**: everyone testing together has to change it
+  at once, or they stop hearing each other.
+
 ## Status
 
 **4 September 2026 — the first over-the-air replication.** A todo list
