@@ -357,15 +357,43 @@
     }
   }
 
+  // Writes land locally and wait. The radio is not a side effect of typing:
+  // each announce draws a want and a block reply, so five todos sent one by one
+  // are five round trips where a single delta would carry all five — createDelta
+  // walks from the heads down to the peer's.
+  let unsent = $state(0);
+  let sending = $state(false);
+
   async function add() {
     const text = newText.trim();
     if (!text || !db) return;
     newText = "";
     await db.put(`t${Date.now()}`, { text, done: false, ts: Date.now() });
+    unsent++;
   }
 
   async function toggle(todo) {
     await db.put(todo.key, { text: todo.text, done: !todo.done, ts: todo.ts });
+    unsent++;
+  }
+
+  /** The one place this app spends airtime on purpose. */
+  async function sendChanges() {
+    if (!sync || sending) return;
+    sending = true;
+    const carried = unsent;
+    try {
+      await sync.announce();
+      // Cleared on the announce, not on a delivery: the ARQ decides whether it
+      // lands, and claiming otherwise here would be a lie the courier can see
+      // through. What was written is now the peer's business to ask for.
+      unsent = 0;
+      pushLog(`→ announced${carried ? ` — ${carried} local change(s) offered` : ""}`);
+    } catch (e) {
+      pushLog(`! send failed: ${describeError(e)}`);
+    } finally {
+      sending = false;
+    }
   }
 
   const heardAgo = (node) => {
@@ -526,7 +554,19 @@
           </li>
         {/each}
       </ul>
-      <p class="dim">{todos.length} entr{todos.length === 1 ? "y" : "ies"} · every change crosses the mesh</p>
+      <p class="dim">
+        {todos.length} entr{todos.length === 1 ? "y" : "ies"} · changes stay here until you send them
+      </p>
+      <button
+        class="send"
+        data-testid="send-changes"
+        disabled={unsent === 0 || sending || airtimeBlocked}
+        onclick={sendChanges}
+      >
+        {#if airtimeBlocked}Airtime spent{:else if sending}sending…{:else if unsent === 0}Nothing to send{:else}
+          Send {unsent} change{unsent === 1 ? "" : "s"}
+        {/if}
+      </button>
       <button class="ghost" disabled={airtimeBlocked} onclick={() => sendInvite(courier, db.address)}>
         Invite again
       </button>
@@ -688,6 +728,14 @@
     opacity: 0.4;
     cursor: default;
   }
+  /* The only control here that spends airtime, so it is the only one that
+     looks like an action rather than a link. */
+  .send {
+    margin-top: 10px;
+    border-color: #58C7F3;
+    color: #EDF1F8;
+  }
+  .send:not(:disabled):hover { background: #1a2436; }
   .ghost {
     background: none;
     border-color: #232B3D;
