@@ -56,6 +56,11 @@ Keep the same slot on all three of your devices, obviously, or they will not
 hear each other either — the failure that looks exactly like nobody being there
 (see [links.md](links.md)).
 
+`npm run channel` makes one channel and prints it as a link and a QR to scan on
+every device, which is the reliable way to get identical keys — see
+[channels.md](channels.md). Creating a channel with the same *name* on each
+device does not do it: the names match, the keys do not.
+
 ## 3. Stop relaying other people's traffic
 
 A default node **rebroadcasts** what it hears. On a busy mesh that is most of

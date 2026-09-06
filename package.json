@@ -25,7 +25,8 @@
   },
   "scripts": {
     "test": "node --test --test-force-exit test/*.test.js",
-    "bench:goodput": "node scripts/bench-goodput.js"
+    "bench:goodput": "node scripts/bench-goodput.js",
+    "channel": "node scripts/make-channel.js"
   },
   "dependencies": {
     "@meshtastic/core": "^2.6.7",
