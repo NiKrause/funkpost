@@ -115,7 +115,12 @@ Same key in, same link out. There is a test for that.
 
 ## Import it, and check
 
-Scan or open the link on **every** device. Then, in either demo, the transmit
+Scan the code with **every phone** that holds one of the nodes — the Meshtastic
+app's scanner on Android, the camera on iOS. A channel link means nothing to a
+desktop browser: opening it there lands on Meshtastic's page saying so, and
+their web client drops the channel and shows its connection screen.
+
+Then, in either demo, the transmit
 channel selector beside the link indicator shows the name and the first two
 bytes of the key's SHA-256:
 

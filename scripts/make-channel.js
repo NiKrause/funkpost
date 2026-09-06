@@ -305,7 +305,9 @@ if (!flag("no-qr")) {
   }
 }
 
-console.log("  Scan or open it on EVERY device that should share this channel.");
+console.log("  Scan it with EVERY phone that should share this channel — from the");
+console.log("  Meshtastic app's scanner on Android, the camera on iOS. A channel link");
+console.log("  means nothing to a desktop browser; only the app can import one.");
 console.log();
 if (flag("add")) {
   console.log("  --add: this lands beside the existing channels and the current");
