@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-# The Yjs provider
+# The event plane's Yjs provider
 
 Status: **built and tested** ([#36](https://github.com/NiKrause/funkpost/issues/36)
 S1–S2) — and on air: it carried a shop's rules across a real LoRa mesh on
