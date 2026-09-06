@@ -147,7 +147,10 @@ export async function createList({ orbitdb, courier }) {
     sync: false,
     AccessController: IPFSAccessController({ write: ["*"] }),
   });
-  const sync = await createCourierSync({ db, courier });
+  // The radio waits to be asked. Announcing on every write is right when the
+  // courier is cheap; here each announce draws a want and a block reply, so
+  // five todos become five round trips where one delta would carry all five.
+  const sync = await createCourierSync({ db, courier, announceOnLocalUpdate: false });
   await sync.start();
   await sendInvite(courier, db.address);
   return { db, sync };
@@ -155,7 +158,9 @@ export async function createList({ orbitdb, courier }) {
 
 /** Join a list announced by the peer; the first delta materializes it. */
 export async function joinList({ orbitdb, courier, address }) {
-  const sync = await createCourierSync({ orbitdb, address, courier });
+  // Same on this side: a joiner's own writes wait for the button too. Going
+  // quiet does not go deaf — an announce from the peer is still answered.
+  const sync = await createCourierSync({ orbitdb, address, courier, announceOnLocalUpdate: false });
   await sync.start();
   return { sync };
 }
