@@ -71,6 +71,37 @@ A bench channel, off the busy defaults and cheap on airtime:
 npm run channel -- --name bench --preset SHORT_TURBO --tx-power 2
 ```
 
+### A whole channel set, in one link
+
+`ChannelSet.settings` is a repeated field, so one link can carry every channel
+a device should have — and put them in a fixed order, which is how two devices
+end up genuinely identical instead of approximately:
+
+```bash
+npm run channel -- --slot default --slot le-space.de:5e08894a…83fd
+```
+
+`default`, `NAME`, or `NAME:<pskhex>` — a bare name generates a fresh key.
+Scanned on every device, everyone gets the same channels at the same indices.
+Anything else you belong to is then one more scan, from whoever runs it, using
+their own share link with *add*.
+
+**Which order is right is your decision, not ours** — but it is a decision, and
+this is what it decides:
+
+> **Index 0 picks the frequency, not the membership.** With `channel_num` at 0
+> the firmware derives the radio's slot from the *primary* channel's name, so
+> whatever you put first is where the radio actually listens. Everything after
+> it is a key for traffic that arrives there.
+>
+> **A radio has one frequency.** Adding a channel does not add one. You cannot
+> sit on two slots at once, however many channels the device holds — so index 0
+> is really the question *"which group am I reachable in right now?"*
+
+`--channel-num <n>` pins the slot instead, the same number on every device.
+Then index 0 no longer decides it, and the order is free — still one frequency,
+but one you chose rather than one that fell out of a name.
+
 ### Getting the same channel back later
 
 The key is printed, so the channel is reproducible — for a third device that
@@ -148,12 +179,12 @@ order of how well they work:
    firmware's shorthand for that key:
 
    ```bash
-   npm run channel -- --name OPEN-MESH --psk 01
+   npm run channel -- --name open-mesh --psk 01
    ```
 
    **This is not a recovery method, and guessing it is worse than useless.**
-   A mesh that has its own key — which is the normal case, and which is what
-   `ROTTAL-MESH` has — cannot be reconstructed from its name. What you get
+   A mesh that has its own key — the normal case — cannot be reconstructed
+   from its name. What you get
    instead is a channel with the right name that talks to nobody: exactly the
    silent failure at the top of this page, now wearing a familiar label. The
    fingerprint will not catch it either, since it would legitimately be the

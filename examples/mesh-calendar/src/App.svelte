@@ -32,7 +32,14 @@ import { wallAt } from "./domain/time.js";
         }
       : { kind: "ble" };
   const pinnedToday = params.get("today");
-  const room = mode.kind === "bc" ? mode.room : "ble";
+  // Storage namespace — IndexedDB and localStorage, never the radio.
+  //
+  // Over Bluetooth this was fixed at "ble", which meant two windows on one
+  // machine shared one book: the salon's calendar reached the customer through
+  // the *database*, with no packet involved, and a bench test could pass while
+  // the mesh carried nothing. `?room=` separates them, so one laptop with two
+  // nodes can play both sides honestly.
+  const room = mode.kind === "bc" ? mode.room : (params.get("room") ?? "ble");
   const SHOP_ID = "salon-funkpost";
 
   // The link out of a calendar note. Everything after `#` stayed in this

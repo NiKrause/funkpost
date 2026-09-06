@@ -8,7 +8,7 @@ import {
 
 const channels = [
   { index: 0, name: "(default)" },
-  { index: 1, name: "ROTTAL-MESH" },
+  { index: 1, name: "local-mesh" },
   { index: 3, name: "le-space.de" },
 ];
 
