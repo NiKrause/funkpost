@@ -142,21 +142,23 @@ order of how well they work:
    reliable one, and the reason to do the recovery before touching the second
    device.
 2. **Whoever runs the mesh.** Regional meshes usually publish their link.
-3. **Guess that it uses the public key.** Many regional meshes are a *name*
-   only — a custom name moves them to their own frequency slot while the key
-   stays the well-known one, so anyone can join. `01` is the firmware's
-   shorthand for that key, so:
+3. **Only if it is known to use the public key.** Some open meshes are a *name*
+   and nothing else: the custom name moves them to their own frequency slot
+   while the key stays the well-known one, so anyone may join. `01` is the
+   firmware's shorthand for that key:
 
    ```bash
-   npm run channel -- --name ROTTAL-MESH --psk 01
+   npm run channel -- --name OPEN-MESH --psk 01
    ```
 
-   **Treat this as a guess and check it against a device that still has the
-   channel.** If the mesh does use a private key, you get a channel with the
-   right name that talks to nobody — exactly the silent failure at the top of
-   this page. We also derive the channel `id` ourselves, which may not match
-   the original's, so the honest test is not the fingerprint but whether a
-   message actually arrives.
+   **This is not a recovery method, and guessing it is worse than useless.**
+   A mesh that has its own key — which is the normal case, and which is what
+   `ROTTAL-MESH` has — cannot be reconstructed from its name. What you get
+   instead is a channel with the right name that talks to nobody: exactly the
+   silent failure at the top of this page, now wearing a familiar label. The
+   fingerprint will not catch it either, since it would legitimately be the
+   public key's. Use this only when someone who runs the mesh has said it is
+   open, never to find out whether it is.
 
 ## Where a key should live
 
