@@ -31,7 +31,7 @@ roadmap is built to keep testing.
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
-| **#68** | The founding off the radio | **Planned, P9** — the pointer it was waiting for already exists; what blocks it is a bundle, not a feature. One frame instead of seven, once the bridge grows a credential-free restore. |
+| **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/59): +12 kB instead of +617). What is left is this side: the pointer message and its UI. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -279,19 +279,23 @@ module level — so a restore-only client pays for the entire backup SDK:
 |---|---|
 | `mesh-todo` today | 561 kB |
 | … importing `restoreFromSpaceCAR` as it stands | **+617 kB** |
-| what a gateway-only restore actually needs (`@ipld/car`) | **+11 kB** |
+| … importing `restoreFromCID` instead | **+12 kB** |
 
-It would **more than double the application** to save six frames. The second
-number is the marginal one: fetch the metadata by CID, read `carCID`, fetch the
-CAR, parse it, put the blocks — that wants `@ipld/car`, `multiformats` and
-`@ipld/dag-cbor`, and `mesh-todo` already ships all but the first.
+It would **more than double the application** to save six frames.
 
-**So the work is a seam, and it is not in this repository.** A credential-free
-`restoreFromCID(orbitdb, { metadataCID })` importing no Storacha client belongs
-in the bridge, for exactly P8b's reason: it is permissive, this is GPL, and
-anything that should stay permissive has to be written *there*
+**That seam is built** — [bridge#59](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/59),
+closing [bridge#58](https://github.com/NiKrause/orbitdb-storacha-bridge/issues/58).
+It lives there and not here for exactly P8b's reason: it is permissive, this is
+GPL, and anything that should stay permissive has to be written *there*
 ([why-separate-repository.md](docs/why-separate-repository.md)). funkpost's own
 share is the pointer message and the UI around it.
+
+The 12 kB is measured against that module rather than estimated from its
+dependencies, and the difference matters more than the number: an earlier
+reading said 27 kB, which was an artefact of importing it by absolute path so
+that Vite resolved `multiformats` and `@ipld/car` twice, once out of each
+project. A bundle measurement that does not share a dependency tree with its
+consumer measures the wrong thing.
 
 **One sentence has to change, rather than quietly stop being true.**
 `examples/mesh-todo/src/stack.js` says *"Every replicated byte travels through
