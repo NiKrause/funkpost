@@ -31,6 +31,7 @@ roadmap is built to keep testing.
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
+| **#68** | The founding off the radio | **Planned, P9** — the pointer it was waiting for already exists; what blocks it is a bundle, not a feature. One frame instead of seven, once the bridge grows a credential-free restore. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -244,6 +245,70 @@ reads true afterwards.
 ~2 KB, inherent to a hash-linked log, and that belongs off the radio the same
 way the app bundle does — Wi-Fi, a QR, or a pointer (#68). *The mesh carries the
 change, not the founding.*
+
+### P9 · The founding, off the radio — #68
+
+P8 ends by naming what it deliberately does not fix: Bob without the database
+costs ~2 KB, inherent to a hash-linked log, and *the mesh carries the change,
+not the founding*. This is the phase that gives "the founding" somewhere else
+to arrive from.
+
+**The shape.** Alice backs up to Storacha whenever she next has internet and
+beams **one CID** over the mesh. Bob restores from that CID whenever *he* next
+has internet — from a public IPFS gateway, with no Storacha credentials of his
+own. After that, only deltas ever use the radio. One database, two couriers,
+each doing what its physics allows.
+
+**Measured, not estimated.** A pointer message — version, tag, database address
+and CID, dag-cbor encoded — is **147 bytes**. The frame payload is 191 bytes at
+the default 200-byte MTU, so that is **one frame**. Today's first contact is
+~2 KB, gzipped to ~1.2 KB, which is **about seven**. Seven frames to one.
+
+**Half of it already exists, and #68 does not know that.** The issue says it
+waits on "the planned latest-backup pointer (v0.4.4)". That pointer is moot:
+`backupDatabaseCAR` already returns a `metadataCID`, and `restoreFromSpaceCAR`
+already accepts one — resolving the blocks CAR out of the metadata and fetching
+both from the IPFS network or one of four public gateways. **The restoring side
+needs no credentials.** That is the whole mechanism, built and shipped.
+
+**The obstacle it also does not know about is the bundle.** `backup-car.js`
+imports from `orbitdb-storacha-bridge.js`, which imports `@storacha/client` at
+module level — so a restore-only client pays for the entire backup SDK:
+
+| | gzipped |
+|---|---|
+| `mesh-todo` today | 561 kB |
+| … importing `restoreFromSpaceCAR` as it stands | **+617 kB** |
+| what a gateway-only restore actually needs (`@ipld/car`) | **+11 kB** |
+
+It would **more than double the application** to save six frames. The second
+number is the marginal one: fetch the metadata by CID, read `carCID`, fetch the
+CAR, parse it, put the blocks — that wants `@ipld/car`, `multiformats` and
+`@ipld/dag-cbor`, and `mesh-todo` already ships all but the first.
+
+**So the work is a seam, and it is not in this repository.** A credential-free
+`restoreFromCID(orbitdb, { metadataCID })` importing no Storacha client belongs
+in the bridge, for exactly P8b's reason: it is permissive, this is GPL, and
+anything that should stay permissive has to be written *there*
+([why-separate-repository.md](docs/why-separate-repository.md)). funkpost's own
+share is the pointer message and the UI around it.
+
+**One sentence has to change, rather than quietly stop being true.**
+`examples/mesh-todo/src/stack.js` says *"Every replicated byte travels through
+the courier or not at all."* With a pointer it does not: the courier carries
+every **change**, and the founding may arrive by CID over plain HTTPS. Rewrite
+the claim with the mechanism.
+
+**What this does not do.** If neither side ever touches the internet, nothing
+changes and the mesh carries the founding exactly as today. The pointer is an
+optimisation available when somebody touches the internet — not a replacement,
+and not a dependency.
+
+*Gate:* a pointer crosses in **one** frame, counted rather than estimated; Bob
+restores a database he has never seen from the CID alone, with no Storacha
+credentials, while the radio carries nothing but that pointer; `mesh-todo`'s
+bundle grows by **under 20 kB gzipped**; and `stack.js`'s claim about where
+bytes travel reads true against the code again.
 
 ### Running alongside: #1 reliability
 
