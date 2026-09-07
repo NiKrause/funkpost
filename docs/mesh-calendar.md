@@ -384,11 +384,34 @@ because a take-over invalidates every decision the first device ever signed.
 the browser that made the booking — but also in the `.ics`, which is what that
 link is for.
 
+## What forgetting actually costs
+
+Expiry is not a scheduler. It happens in `announce()`, because that is the one
+place that already asks where the horizon starts — so the boundary that decides
+what is *greeted* and the boundary that decides what is *kept* are the same
+number, read at the same instant. The load path prunes too, with the same
+constant: restoring from disk puts back whatever was stored, expired days
+included, so a calendar reopened after a month drops that month immediately
+rather than carrying it until the first announce — and `onForget` clears it from
+disk on the way out.
+
+**One day of grace.** Nothing before today is ever discussed, so yesterday could
+in principle go at once. It does not: two devices cross midnight at slightly
+different moments, and a clock can be an hour out, so for a few minutes one of
+them would be dropping a day the other still names. A day of slack costs a day
+of records and removes that whole class of disagreement.
+
+**Dropping is only half of it.** A forgotten day is empty here and full on a peer
+who has not caught up — which reads exactly like a day we are *missing records
+for*. Left alone, the log would fetch them back and drop them again on the next
+announce, paying airtime to undo its own pruning. So the log keeps a `floor`:
+below it, records are refused on arrival and a peer's digest entries are ignored
+rather than chased. That is also the honest answer for a device that was off
+past the horizon — those days are gone everywhere, and it cannot catch up on
+them.
+
 ## Open, and deliberately so
 
-- **Nobody prunes yet.** `log.forgetBefore(day)` exists and is tested, but no
-  scheduler calls it. A running app must, or the horizon's tail accumulates —
-  the mechanism is there, the policy is not.
 - **The digest is a hint, not a proof.** A 32-bit XOR per day plus a count: a
   hash collision *and* an equal count would read as agreement. The odds are
   negligible at these sizes and the failure is silent divergence, so if this
