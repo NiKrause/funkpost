@@ -36,11 +36,27 @@ const open = (name) =>
     request.onerror = () => reject(request.error);
   });
 
+/**
+ * What a finished transaction resolves with.
+ *
+ * Split out and exported because the obvious one-liner for it is wrong in a way
+ * that only shows on a brand-new room. `request.result` is **legitimately
+ * `undefined`** for a key that was never written, so `request?.result ?? request`
+ * falls through to the `IDBRequest` itself — which is truthy, survives an
+ * `if (update)` guard, and turns into an empty `Uint8Array`. Yjs then rejects it
+ * with `Unexpected end of array`, and a first-time visitor's first sight of the
+ * app is a storage error (#73).
+ *
+ * So: ask whether there is a request, never whether it has a value.
+ */
+export const settle = (request) =>
+  request && typeof request === "object" && "result" in request ? request.result : request;
+
 const run = (db, store, mode, work) =>
   new Promise((resolve, reject) => {
     const tx = db.transaction(store, mode);
-    const result = work(tx.objectStore(store));
-    tx.oncomplete = () => resolve(result?.result ?? result);
+    const request = work(tx.objectStore(store));
+    tx.oncomplete = () => resolve(settle(request));
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });
@@ -81,7 +97,10 @@ export async function attachPersistence({ room, doc, log, Y, onError = null }) {
   let restored = 0;
   try {
     const update = await run(db, STORE_DOC, "readonly", (store) => store.get("state"));
-    if (update) Y.applyUpdate(doc, new Uint8Array(update), "persistence");
+    // `byteLength`, not truthiness: an empty `Uint8Array` is truthy, and Yjs
+    // will not decode one. Nothing stored and nothing worth applying are the
+    // same case here, and both mean "start empty".
+    if (update?.byteLength) Y.applyUpdate(doc, new Uint8Array(update), "persistence");
 
     const records = await run(db, STORE_RECORDS, "readonly", (store) => store.getAll());
     for (const record of records ?? []) {
