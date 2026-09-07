@@ -194,7 +194,7 @@ payloads were dropped after 2 rounds, and the store errors on an empty room.
 `mesh-todo` keeps OrbitDB; #75 records why reshaping it would buy nothing. Two
 things it *does* take from `mesh-calendar`, in order:
 
-**P8a · A manual send button.** Correcting the phase as first written: the
+**P8a · A manual send button.** ✅ Correcting the phase as first written: the
 timer in `courier-sync` only runs while a joiner has no database yet — a
 bootstrap retry, not a heartbeat, and well judged. What actually announces
 eagerly is **every local write**, and that is what the button replaces.
@@ -204,17 +204,23 @@ the peer wants, blocks come back. Five writes become five of those round trips
 where one would carry all five, since `createDelta` walks from the heads down
 to theirs.
 
-*Blocked on a release, not on code.* The option to opt out
+*Was blocked on a release, not on code.* The option to opt out
 ([bridge#56](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/56)) lives
-in a permissive package, as P8b requires — and **`courier-sync` has never been
-published to npm**: it landed after v0.4.3, which is why this repository depends
-on `github:…#main` rather than a version. That dependency is a moving target;
-any push to the bridge's main changes this build. The release fixes both, and
-P8a should land against a published version rather than a branch.
+in a permissive package, as P8b requires — and `courier-sync` had never been
+published to npm: it landed after v0.4.3, so this repository depended on
+`github:…#main` rather than a version. **`orbitdb-storacha-bridge` 0.5.0 fixed
+that**, and both `package.json`s now name a version.
 
-*Gate:* nothing leaves the radio until pressed; the e2e suite proves a delta
-still crosses when it is, and that an idle app is silent. Plus: funkpost
-depends on a version, not a branch.
+Worth saying why that mattered, since at the moment of pinning the branch and
+the tag were the same commit and nothing about the build changed: a `#main`
+dependency is not a version that happens to be current, it is *whatever main
+says when someone next installs*. The pin does not correct today's build. It is
+what makes tomorrow's the same one.
+
+*Gate met:* nothing leaves the radio until pressed — `mesh-todo`'s e2e suite
+runs ten cases including "changes wait for the button, and then they cross",
+which watches an idle app stay silent and the delta arrive once it is pressed.
+And funkpost depends on a version, not a branch.
 
 **P8b · `courier-sync` out of the backup project — but not into this one.**
 566 lines importing only `multiformats` and `@ipld/dag-cbor`; nothing in it is
