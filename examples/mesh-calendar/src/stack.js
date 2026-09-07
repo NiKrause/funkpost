@@ -23,7 +23,7 @@ import {
 import { createYjsProvider } from "@le-space/funkpost/yjs";
 import { createClaimLog } from "./domain/claimlog.js";
 import { attachPersistence } from "./domain/persistence.js";
-import { createClaimSync } from "./domain/claimsync.js";
+import { createClaimSync, FORGET_GRACE_DAYS } from "./domain/claimsync.js";
 import { createBookingBook } from "./domain/booking.js";
 import { DEFAULT_SHOP } from "./domain/slots.js";
 import { epochDay, parseISODate, toISODate } from "./domain/time.js";
@@ -62,7 +62,16 @@ export async function createStack({ room, days = DEFAULT_SHOP.horizonDays, pinne
   const doc = new Y.Doc();
   const log = createClaimLog();
   const store = await attachPersistence({ room, doc, log, Y, onError });
-  return { doc, log, days, pinnedToday, store, restored: store.restored };
+
+  // Restore puts back everything that was on disk, including the days that
+  // expired while this device was closed. Drop them now rather than waiting for
+  // the first announce: a calendar reopened after a month should not hold a
+  // month of dead bookings, and `onForget` clears them from disk on the way out.
+  // The same boundary the sync uses, so the two cannot disagree.
+  const { fromDay } = horizonFor(todayISO(DEFAULT_SHOP.tz, pinnedToday), days);
+  const expired = log.forgetBefore(fromDay - FORGET_GRACE_DAYS);
+
+  return { doc, log, days, pinnedToday, store, restored: store.restored - expired, expired };
 }
 
 /**

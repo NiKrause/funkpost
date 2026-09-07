@@ -19,9 +19,11 @@
  * - **Records are bucketed by the day of their slot**, and the summary is one
  *   small digest per day. That summary is **O(horizon), not O(writers)** — 111
  *   bytes for three weeks whether two people or two thousand have booked.
- * - **Expiry is forgetting.** Yesterday's bucket is dropped by everyone; no
- *   tombstones, no client ids to remember for ever. A CRDT cannot forget, and
- *   appointments are nothing but a thing that expires.
+ * - **Expiry is forgetting.** A bucket the horizon has passed is dropped by
+ *   everyone, on every announce; no tombstones, no client ids to remember for
+ *   ever. A CRDT cannot forget, and appointments are nothing but a thing that
+ *   expires. What makes it hold is the `floor` below: dropping a day is not
+ *   enough on its own, because a peer who still has it will offer it back.
  *
  * What does *not* change: `arbitration.js` decides who got a contested slot,
  * exactly as before. That was always substrate-independent, and this file is
@@ -110,6 +112,15 @@ export function recordId(record) {
  * hash collision — which XOR alone would hide, and which would then look like
  * agreement — still shows up as a difference. A false *match* is the only
  * dangerous outcome here; a false mismatch merely costs one extra exchange.
+ *
+ * **The count is one byte, and saturates at 255.** Past 256 records in a single
+ * day, two genuinely different days can report the same count — so the count
+ * stops adding information and the 32-bit XOR carries the comparison alone.
+ * Sync does not break, it only loses its second opinion. Worth stating plainly
+ * because the claim this structure was chosen for is *"constant in the number
+ * of writers"*, and that is true of the **size**; the precision has a ceiling.
+ * A salon cannot reach it — 256 appointments in one day — which is why one byte
+ * was the right trade rather than an oversight (#70).
  */
 
 const hash32 = (text) => {
@@ -173,7 +184,14 @@ export function divergentDays(log, theirs) {
   if (!theirs) return [];
   const ours = decodeDigest(encodeDigest(log, theirs.fromDay, theirs.days));
   return theirs.entries
-    .filter((them, i) => ours.entries[i].xor !== them.xor || ours.entries[i].count !== them.count)
+    .filter((them, i) => {
+      // A day we have forgotten is not a disagreement to be settled. Our bucket
+      // for it is empty and theirs is not, which reads exactly like a day we
+      // are missing records for — so without this the expiry boundary would
+      // generate work instead of saving it.
+      if (them.day < log.floor) return false;
+      return ours.entries[i].xor !== them.xor || ours.entries[i].count !== them.count;
+    })
     .map((entry) => entry.day);
 }
 
@@ -189,6 +207,16 @@ export function divergentDays(log, theirs) {
 export function createClaimLog({ salonKey = null, now = () => Date.now() } = {}) {
   /** epochDay → Map<recordKey, record> */
   const days = new Map();
+  /**
+   * The day before which this log has forgotten, and refuses to remember again.
+   *
+   * Without it, forgetting is a loop rather than an expiry: we drop a day, a
+   * peer whose clock is behind still names it in a digest, we notice the
+   * "divergence", fetch the records back, and drop them again on the next
+   * announce — paying airtime each time to undo our own pruning. `0` means
+   * nothing has been forgotten yet, which is where every log starts.
+   */
+  let floor = 0;
   let shopKey = salonKey;
   const putCbs = new Set();
   const forgetCbs = new Set();
@@ -220,6 +248,11 @@ export function createClaimLog({ salonKey = null, now = () => Date.now() } = {})
     /** @returns {Map<string, Object>} the day's records — never null */
     bucket(day) {
       return bucketFor(day);
+    },
+
+    /** The expiry boundary: nothing before this day is held, or accepted. */
+    get floor() {
+      return floor;
     },
 
     get salonKey() {
@@ -268,6 +301,13 @@ export function createClaimLog({ salonKey = null, now = () => Date.now() } = {})
     async accept(record) {
       if (!record || typeof record.day !== "number" || typeof record.id !== "string") return false;
 
+      // Expired, and it stays expired. A peer offering a day everyone has
+      // dropped is behind rather than right, and taking it back would only
+      // mean dropping it again — see `floor`. This is also the honest answer
+      // to a device that has been offline past the horizon: those days are
+      // gone here too, and it cannot catch up on them.
+      if (record.day < floor) return false;
+
       if (record.kind === KIND_DECISION) {
         // Only the salon decides. Without its key we cannot tell, so we refuse
         // rather than guess — a decision believed on hearsay is a double booking.
@@ -315,6 +355,9 @@ export function createClaimLog({ salonKey = null, now = () => Date.now() } = {})
      * and every device drops it at the same boundary.
      */
     forgetBefore(day) {
+      // Never backwards: a horizon that jumped forward once (a clock correcting
+      // itself, say) must not un-forget on the next call.
+      floor = Math.max(floor, day);
       const gone = [];
       for (const key of [...days.keys()]) {
         if (key < day) {

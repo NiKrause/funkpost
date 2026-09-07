@@ -43,6 +43,15 @@ export const MSG_DIGEST = 0x10;
 export const MSG_HAVE = 0x11;
 export const MSG_RECORDS = 0x12;
 
+/**
+ * How many days behind the horizon to keep before dropping them.
+ *
+ * Exported because the load path prunes too, and the two must agree: a stack
+ * that forgot at one boundary and then synced at another would drop a day and
+ * immediately be told about it again.
+ */
+export const FORGET_GRACE_DAYS = 1;
+
 /** Keep a RECORDS payload near a handful of frames rather than a hundred. */
 const MAX_RECORDS_BYTES = 600;
 /** A day nobody could sensibly fill; a defence against a hostile HAVE. */
@@ -93,8 +102,16 @@ const readKeys = (body) => {
  * @param {Object} options.log A claim log
  * @param {{ send: Function, onPayload: Function }} options.courier Any courier
  * @param {() => { fromDay: number, days: number }} options.horizon What we
- *   currently care about — moves forward as days pass, which is how the log
+ *   currently care about — moves forward as days pass, and each announce drops
+ *   what it has moved past (see `forgetGraceDays`), which is how the log
  *   forgets
+ * @param {number} [options.forgetGraceDays] How many days behind the horizon to
+ *   keep before dropping them (default 1). The horizon starts at today, and
+ *   nothing before it is ever discussed — so in principle yesterday could go at
+ *   once. It does not, because two devices cross midnight at slightly different
+ *   moments and a clock can be an hour out: for a few minutes one of them would
+ *   be forgetting a day the other still names. One day of slack costs one day
+ *   of records and removes that whole class of disagreement.
  * @param {number} [options.announceIntervalMs] Re-publish the fingerprints on
  *   this interval once somebody has been heard (default 5 min). One greeting is
  *   not enough on a broadcast: nothing acknowledges it, so a peer whose radio
@@ -120,6 +137,7 @@ export function createClaimSync({
   horizon,
   peerId = globalThis.crypto.getRandomValues(new Uint8Array(4)),
   peerTimeoutMs = 120_000,
+  forgetGraceDays = FORGET_GRACE_DAYS,
   announceIntervalMs = 300_000,
   searchIntervalMs = 45_000,
   timers = { setTimeout: (...a) => setTimeout(...a), clearTimeout: (...a) => clearTimeout(...a) },
@@ -165,6 +183,20 @@ export function createClaimSync({
     );
   };
 
+  /**
+   * Drop what the horizon has moved past.
+   *
+   * This lives here, rather than on a timer of its own, because this is the one
+   * place that already asks where the horizon starts — so the boundary that
+   * decides what is *greeted* and the boundary that decides what is *kept* are
+   * the same number, read at the same instant, and cannot drift apart.
+   */
+  const forgetExpired = (fromDay) => {
+    const dropped = log.forgetBefore(fromDay - forgetGraceDays);
+    if (dropped > 0) emit({ kind: "forgot", records: dropped, before: fromDay - forgetGraceDays });
+    return dropped;
+  };
+
   /** Publish one fingerprint per day. Constant size; the whole point. */
   const announce = ({ force = false } = {}) => {
     if (closed) return;
@@ -172,6 +204,8 @@ export function createClaimSync({
     if (!force && lastAnnounceAt != null && at - lastAnnounceAt < minAnnounceGapMs) return;
     lastAnnounceAt = at;
     const { fromDay, days } = horizon();
+    // Before the digest, so what we publish is what we actually hold.
+    forgetExpired(fromDay);
     const digest = encodeDigest(log, fromDay, days);
     const payload = new Uint8Array(1 + peerId.length + digest.length);
     payload[0] = MSG_DIGEST;
