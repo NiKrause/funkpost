@@ -7,6 +7,7 @@ name: Deploy the demos to GitHub Pages
 #   https://nikrause.github.io/funkpost/mesh-todo/     mesh-todo     (OrbitDB)
 #   https://nikrause.github.io/funkpost/mesh-calendar/ mesh-calendar (Yjs)
 #   https://nikrause.github.io/funkpost/termine/       → mesh-calendar
+#   https://nikrause.github.io/funkpost/passkey-probe/ a hardware check (#93)
 #
 # /termine/ was mesh-calendar's home and was documented as a ONE-WAY DOOR:
 # every .ics ever downloaded carries a change/cancel link pointing at it, and a
@@ -56,8 +57,11 @@ jobs:
       # Assemble the site rather than nesting one demo inside another's build
       # output: each demo owns its directory, and the index owns the root.
       - run: |
-          mkdir -p site/mesh-todo site/mesh-calendar site/termine
+          mkdir -p site/mesh-todo site/mesh-calendar site/termine site/passkey-probe
           cp examples/landing/index.html site/index.html
+          # Not linked from the menu: it is a diagnostic for #93, reached by
+          # its address, and it creates a test passkey on whatever key taps it.
+          cp examples/landing/passkey-probe.html site/passkey-probe/index.html
           cp -R examples/mesh-todo/dist/. site/mesh-todo/
           cp -R examples/mesh-calendar/dist/. site/mesh-calendar/
           # Keeps every .ics ever issued working — see the header. The worker

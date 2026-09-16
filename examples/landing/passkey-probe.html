@@ -1,0 +1,451 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>funkpost — Passkey-Probe</title>
+    <meta
+      name="description"
+      content="Prüft auf echter Hardware, ob ein Sicherheitsschlüssel eine Identität per PRF oder largeBlob auf ein zweites Gerät tragen kann."
+    />
+    <meta name="robots" content="noindex" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
+    <style>
+      :root {
+        --bg: #f4f6f9;
+        --panel: #fff;
+        --ink: #14171f;
+        --ink-2: #5b6478;
+        --ink-3: #8b93a5;
+        --line: #e3e7ee;
+        --accent: #2d4ad0;
+        --accent-soft: #eaeeff;
+        --good: #12855a;
+        --good-soft: #e4f4ec;
+        --bad: #b42318;
+        --bad-soft: #fdecea;
+        --warn: #8a5a00;
+        --warn-soft: #fff4dc;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0e15;
+          --panel: #131826;
+          --ink: #e8eaf0;
+          --ink-2: #9aa3b5;
+          --ink-3: #6f7a8f;
+          --line: #232a3a;
+          --accent: #8fa5ff;
+          --accent-soft: #1a2140;
+          --good: #5dd39e;
+          --good-soft: #12291f;
+          --bad: #ff8a80;
+          --bad-soft: #2c1414;
+          --warn: #e0b85a;
+          --warn-soft: #251d0b;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Public Sans", system-ui, -apple-system, sans-serif;
+        line-height: 1.55;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      h1 { font-size: 1.5rem; margin: 0; text-wrap: balance; }
+      h2 { font-size: 1rem; margin: 0 0 8px; }
+      p { margin: 0; }
+      .lede { color: var(--ink-2); }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .steps { display: grid; gap: 8px; }
+      button {
+        font: inherit;
+        font-weight: 600;
+        text-align: left;
+        padding: 12px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--accent-soft);
+        color: var(--accent);
+        cursor: pointer;
+      }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      button:disabled { opacity: 0.5; cursor: progress; }
+      button small { display: block; font-weight: 400; color: var(--ink-2); }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85rem; }
+      /* Stacked on a phone, which is the only place this page is used: side by
+         side, the longest label takes the width and a fingerprint — the thing
+         being compared — breaks across lines. */
+      dl { display: grid; grid-template-columns: 1fr; margin: 0; }
+      dt { color: var(--ink-2); font-size: 0.75rem; margin-top: 8px; }
+      dt:first-child { margin-top: 0; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      @media (min-width: 560px) {
+        dl { grid-template-columns: max-content 1fr; gap: 4px 12px; }
+        dt { font-size: inherit; margin-top: 0; }
+      }
+      .log { display: flex; flex-direction: column; gap: 8px; }
+      .entry { border-left: 3px solid var(--line); padding: 6px 10px; border-radius: 4px; }
+      .entry.good { border-color: var(--good); background: var(--good-soft); }
+      .entry.bad { border-color: var(--bad); background: var(--bad-soft); }
+      .entry.warn { border-color: var(--warn); background: var(--warn-soft); }
+      .entry b { display: block; }
+      .fp { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.15rem; letter-spacing: 0.04em; }
+      table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+      th, td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+      .scroll { overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="panel">
+        <h1>Passkey-Probe</h1>
+        <p class="lede">
+          Beantwortet eine Frage auf echter Hardware: <b>Kann ein Sicherheitsschlüssel eine Identität
+          auf ein zweites Gerät tragen</b> — per <b>PRF</b>, per <b>largeBlob</b>, oder gar nicht?
+          Ein Schlüssel, zwei Telefone, dieselbe Adresse.
+        </p>
+        <p class="lede">
+          Diese Seite legt einen eigenen Test-Passkey an. Sie hat mit keiner echten Identität zu tun, und
+          sie zeigt den geheimen PRF-Wert nie an — nur einen kurzen Fingerabdruck zum Vergleichen.
+        </p>
+      </header>
+
+      <section class="panel" aria-labelledby="env-h">
+        <h2 id="env-h">Dieser Browser</h2>
+        <dl class="mono" id="env"></dl>
+      </section>
+
+      <section class="panel" aria-labelledby="steps-h">
+        <h2 id="steps-h">Schritte</h2>
+        <div class="steps">
+          <button id="create" type="button">
+            1 · Test-Passkey auf dem Sicherheitsschlüssel anlegen
+            <small>Nur auf dem ersten Telefon. Im Dialog „Sicherheitsschlüssel" wählen.</small>
+          </button>
+          <button id="prf" type="button">
+            2 · PRF-Wert lesen
+            <small>Auf beiden Telefonen. Die Fingerabdrücke müssen gleich sein.</small>
+          </button>
+          <button id="write" type="button">
+            3 · largeBlob schreiben
+            <small>Nur auf dem ersten Telefon, nach Schritt 1 oder 2.</small>
+          </button>
+          <button id="read" type="button">
+            4 · largeBlob lesen
+            <small>Auf beiden Telefonen.</small>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="log-h">
+        <h2 id="log-h">Ergebnisse</h2>
+        <div class="log" id="log" aria-live="polite">
+          <p class="lede">Noch nichts geprüft.</p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="read-h">
+        <h2 id="read-h">So liest man das Ergebnis</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Beobachtung</th><th>Bedeutung</th></tr></thead>
+            <tbody>
+              <tr><td>PRF-Fingerabdruck auf <b>beiden</b> Telefonen gleich</td><td>Die Identität kann per PRF wandern.</td></tr>
+              <tr><td>PRF-Fingerabdruck verschieden</td><td>Nur aussagekräftig, wenn das <b>Passkey-Kennzeichen</b> auf beiden Telefonen gleich ist — sonst wurde ein anderer Passkey gewählt.</td></tr>
+              <tr><td>„kein PRF-Ergebnis"</td><td>Dieser Browser oder Schlüssel liefert kein PRF.</td></tr>
+              <tr><td>Anlegen: <span class="mono">largeBlob.supported = false</span></td><td>largeBlob steht für diesen Passkey nicht zur Verfügung — Schreiben wird scheitern. <b>Nur hier</b> lässt sich „nicht unterstützt" von „leer" unterscheiden; beim Lesen sieht beides gleich aus.</td></tr>
+              <tr><td>Schreiben: <span class="mono">written = true</span>, auf dem anderen Telefon lesbar</td><td>Die Identität kann per largeBlob wandern.</td></tr>
+              <tr><td>Schreiben: <span class="mono">written = false</span> oder fehlt</td><td>Nichts wurde gespeichert — obwohl der Browser keinen Fehler geworfen hat.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      // Fixed, public, and deliberately meaningless: the same 32 bytes on every
+      // device, so both phones evaluate PRF against the same input. It is not a
+      // key — the secret is the authenticator's, and only its fingerprint is shown.
+      // Embedded rather than hashed at load, so no await sits between the click
+      // and the WebAuthn call: some browsers drop the user gesture across one.
+      const SALT = hexToBytes("66756e6b706f73742070617373206b65792070726f6265207631202d20707266");
+
+      /** @type {ArrayBuffer | null} */
+      let lastCredentialId = null;
+
+      const $ = (id) => document.getElementById(id);
+      const enc = new TextEncoder();
+      const dec = new TextDecoder();
+
+      function hexToBytes(hex) {
+        const out = new Uint8Array(hex.length / 2);
+        for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+        return out;
+      }
+
+      const toHex = (buf) =>
+        [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+      /** A short, comparable fingerprint of secret or opaque bytes — never the bytes. */
+      async function fingerprint(buf) {
+        const digest = await crypto.subtle.digest("SHA-256", buf);
+        return toHex(digest).slice(0, 16).match(/.{4}/g).join(" ");
+      }
+
+      const random = (n) => crypto.getRandomValues(new Uint8Array(n));
+
+      let first = true;
+      function log(kind, title, rows = []) {
+        const box = $("log");
+        if (first) {
+          box.textContent = "";
+          first = false;
+        }
+        const entry = document.createElement("div");
+        entry.className = `entry ${kind}`;
+        const time = new Date().toLocaleTimeString();
+        const b = document.createElement("b");
+        b.textContent = `${time} · ${title}`;
+        entry.append(b);
+        if (rows.length) {
+          const dl = document.createElement("dl");
+          dl.className = "mono";
+          for (const [k, v] of rows) {
+            const dt = document.createElement("dt");
+            dt.textContent = k;
+            const dd = document.createElement("dd");
+            dd.textContent = v;
+            if (k.startsWith("PRF-Fingerabdruck")) dd.className = "fp";
+            dl.append(dt, dd);
+          }
+          entry.append(dl);
+        }
+        box.prepend(entry);
+      }
+
+      /** The error, word for word. Swallowing this is how the original problem hid. */
+      function logError(step, error) {
+        log("bad", `${step}: Fehler`, [
+          ["name", error?.name ?? "—"],
+          ["meldung", error?.message ?? String(error)],
+        ]);
+      }
+
+      const fmt = (value) => (value === undefined ? "fehlt (nicht gemeldet)" : String(value));
+
+      /** Disable while a ceremony runs, so a second tap cannot start another. */
+      function guarded(button, run) {
+        button.addEventListener("click", () => {
+          button.disabled = true;
+          run().finally(() => (button.disabled = false));
+        });
+      }
+
+      // ── environment ──────────────────────────────────────────────────────
+      async function describeEnvironment() {
+        const rows = [
+          ["Adresse (rpId)", location.hostname],
+          ["sicherer Kontext", String(window.isSecureContext)],
+          ["WebAuthn", typeof window.PublicKeyCredential === "function" ? "ja" : "nein"],
+        ];
+        if (typeof PublicKeyCredential?.getClientCapabilities === "function") {
+          try {
+            const caps = await PublicKeyCredential.getClientCapabilities();
+            for (const key of ["extension:prf", "extension:largeBlob", "hybridTransport", "passkeyPlatformAuthenticator"]) {
+              rows.push([key, fmt(caps[key])]);
+            }
+          } catch (error) {
+            rows.push(["getClientCapabilities", `Fehler: ${error?.name}`]);
+          }
+        } else {
+          rows.push(["getClientCapabilities", "nicht verfügbar (älterer Browser)"]);
+        }
+        rows.push(["Browser", navigator.userAgent]);
+        const dl = $("env");
+        for (const [k, v] of rows) {
+          const dt = document.createElement("dt");
+          dt.textContent = k;
+          const dd = document.createElement("dd");
+          dd.textContent = v;
+          dl.append(dt, dd);
+        }
+      }
+
+      // ── 1 · create on the security key ───────────────────────────────────
+      guarded($("create"), async () => {
+        try {
+          const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+          const credential = await navigator.credentials.create({
+            publicKey: {
+              rp: { name: "funkpost passkey probe" },
+              user: { id: random(16), name: `probe ${stamp}`, displayName: `funkpost probe ${stamp}` },
+              challenge: random(32),
+              pubKeyCredParams: [
+                { type: "public-key", alg: -7 },
+                { type: "public-key", alg: -8 },
+                { type: "public-key", alg: -257 },
+              ],
+              authenticatorSelection: {
+                // The security key, not the phone's own passkey manager — the
+                // opposite of what the identity provider hard-codes.
+                authenticatorAttachment: "cross-platform",
+                residentKey: "required",
+                requireResidentKey: true,
+                userVerification: "required",
+              },
+              // Both carriers requested here, at creation: a security key only
+              // sets up large-blob storage for a credential that asks for it now.
+              extensions: { prf: {}, largeBlob: { support: "preferred" }, credProps: true },
+              timeout: 120000,
+              attestation: "none",
+            },
+          });
+          lastCredentialId = credential.rawId;
+          const ext = credential.getClientExtensionResults?.() ?? {};
+          // Green only when both carriers are available. A passkey that was
+          // created but cannot carry an identity either way is not a success
+          // for what this page is asking, and colouring it one is the same
+          // mistake as a message that reads fine and means nothing.
+          const both = ext.prf?.enabled === true && ext.largeBlob?.supported === true;
+          const neither = ext.prf?.enabled !== true && ext.largeBlob?.supported !== true;
+          log(both ? "good" : neither ? "bad" : "warn", "1 · Passkey angelegt", [
+            ["Passkey-Kennzeichen", await fingerprint(credential.rawId)],
+            ["prf.enabled", fmt(ext.prf?.enabled)],
+            ["largeBlob.supported", fmt(ext.largeBlob?.supported)],
+            ["credProps.rk", fmt(ext.credProps?.rk)],
+            ["authenticatorAttachment", fmt(credential.authenticatorAttachment)],
+          ]);
+        } catch (error) {
+          logError("1 · Anlegen", error);
+        }
+      });
+
+      // ── 2 · read PRF ──────────────────────────────────────────────────────
+      guarded($("prf"), async () => {
+        try {
+          const assertion = await navigator.credentials.get({
+            publicKey: {
+              challenge: random(32),
+              userVerification: "required",
+              timeout: 120000,
+              extensions: { prf: { eval: { first: SALT } } },
+            },
+          });
+          lastCredentialId = assertion.rawId;
+          const ext = assertion.getClientExtensionResults?.() ?? {};
+          const output = ext.prf?.results?.first;
+          if (output) {
+            log("good", "2 · PRF-Wert erhalten", [
+              ["Passkey-Kennzeichen", await fingerprint(assertion.rawId)],
+              ["PRF-Fingerabdruck", await fingerprint(output)],
+            ]);
+          } else {
+            log("bad", "2 · kein PRF-Ergebnis", [
+              ["Passkey-Kennzeichen", await fingerprint(assertion.rawId)],
+              ["prf im Ergebnis", ext.prf ? "vorhanden, aber ohne Wert" : "fehlt ganz"],
+            ]);
+          }
+        } catch (error) {
+          logError("2 · PRF lesen", error);
+        }
+      });
+
+      // ── 3 · write largeBlob ──────────────────────────────────────────────
+      guarded($("write"), async () => {
+        if (!lastCredentialId) {
+          log("warn", "3 · Zuerst Schritt 1 oder 2", [
+            ["warum", "Schreiben verlangt genau einen bekannten Passkey."],
+          ]);
+          return;
+        }
+        try {
+          const message = `funkpost probe ${new Date().toISOString()}`;
+          const assertion = await navigator.credentials.get({
+            publicKey: {
+              challenge: random(32),
+              userVerification: "required",
+              timeout: 120000,
+              allowCredentials: [{ type: "public-key", id: lastCredentialId }],
+              extensions: { largeBlob: { write: enc.encode(message) } },
+            },
+          });
+          const ext = assertion.getClientExtensionResults?.() ?? {};
+          const written = ext.largeBlob?.written;
+          log(written === true ? "good" : "bad", written === true ? "3 · largeBlob geschrieben" : "3 · largeBlob NICHT geschrieben", [
+            ["Passkey-Kennzeichen", await fingerprint(assertion.rawId)],
+            ["largeBlob.written", fmt(written)],
+            ["Inhalt", written === true ? message : "—"],
+          ]);
+        } catch (error) {
+          logError("3 · largeBlob schreiben", error);
+        }
+      });
+
+      // ── 4 · read largeBlob ───────────────────────────────────────────────
+      guarded($("read"), async () => {
+        try {
+          const assertion = await navigator.credentials.get({
+            publicKey: {
+              challenge: random(32),
+              userVerification: "required",
+              timeout: 120000,
+              extensions: { largeBlob: { read: true } },
+            },
+          });
+          lastCredentialId = assertion.rawId;
+          const ext = assertion.getClientExtensionResults?.() ?? {};
+          const blob = ext.largeBlob?.blob;
+          if (blob) {
+            log("good", "4 · largeBlob gelesen", [
+              ["Passkey-Kennzeichen", await fingerprint(assertion.rawId)],
+              ["Inhalt", dec.decode(blob)],
+            ]);
+          } else {
+            // Reading cannot tell "not supported" from "nothing stored": Chrome
+            // returns an empty `largeBlob` for a key without large-blob support
+            // too — checked against a virtual authenticator that has none. Only
+            // `largeBlob.supported` at creation answers that, so say so instead
+            // of guessing, which is how the original message went wrong.
+            log("bad", "4 · kein largeBlob", [
+              ["Passkey-Kennzeichen", await fingerprint(assertion.rawId)],
+              [
+                "largeBlob im Ergebnis",
+                ext.largeBlob
+                  ? "leer — nichts gespeichert, oder vom Schlüssel nicht unterstützt (das zeigt nur largeBlob.supported beim Anlegen)"
+                  : "fehlt ganz — der Browser kennt die Erweiterung nicht",
+              ],
+            ]);
+          }
+        } catch (error) {
+          logError("4 · largeBlob lesen", error);
+        }
+      });
+
+      describeEnvironment();
+    </script>
+  </body>
+</html>
