@@ -129,6 +129,12 @@
           Ein Schlüssel, zwei Telefone, dieselbe Adresse.
         </p>
         <p class="lede">
+          Und die zweite Frage, aus
+          <a href="https://github.com/Le-Space/orbitdb-identity-provider-webauthn-did/issues/61">#61</a>:
+          <b>Lässt sich die Identität auf dem zweiten Gerät ganz ohne gespeicherte Daten wiederherstellen</b>
+          — nur aus dem Schlüssel, mit zwei Berührungen?
+        </p>
+        <p class="lede">
           Diese Seite legt einen eigenen Test-Passkey an. Sie hat mit keiner echten Identität zu tun, und
           sie zeigt den geheimen PRF-Wert nie an — nur einen kurzen Fingerabdruck zum Vergleichen.
         </p>
@@ -158,6 +164,10 @@
             4 · largeBlob lesen
             <small>Auf beiden Telefonen.</small>
           </button>
+          <button id="recover" type="button">
+            5 · Identität ohne gespeicherte Daten wiederherstellen
+            <small>Auf beiden Telefonen. Zweimal berühren: einmal mit PIN, einmal nur berühren.</small>
+          </button>
         </div>
       </section>
 
@@ -180,6 +190,11 @@
               <tr><td>Anlegen: <span class="mono">largeBlob.supported = false</span></td><td>largeBlob steht für diesen Passkey nicht zur Verfügung — Schreiben wird scheitern. <b>Nur hier</b> lässt sich „nicht unterstützt" von „leer" unterscheiden; beim Lesen sieht beides gleich aus.</td></tr>
               <tr><td>Schreiben: <span class="mono">written = true</span>, auf dem anderen Telefon lesbar</td><td>Die Identität kann per largeBlob wandern.</td></tr>
               <tr><td>Schreiben: <span class="mono">written = false</span> oder fehlt</td><td>Nichts wurde gespeichert — obwohl der Browser keinen Fehler geworfen hat.</td></tr>
+              <tr><td>Schritt 5 zeigt denselben <b>DID-Fingerabdruck</b> wie Schritt 1 auf demselben Gerät</td><td>Der öffentliche Schlüssel lässt sich auf echter Hardware aus zwei Signaturen zurückgewinnen.</td></tr>
+              <tr><td>Schritt 5 auf <b>beiden</b> Telefonen: DID-, PRF- und Signierschlüssel-Fingerabdruck gleich</td><td>Die Identität lässt sich auf einem zweiten Gerät ohne gespeicherte Daten wiederherstellen — der Vorschlag aus #61 trägt.</td></tr>
+              <tr><td>PRF-Fingerabdruck in Schritt 5 anders als in Schritt 2</td><td>Richtig so: Schritt 5 benutzt die PRF-Eingabe aus #61, Schritt 2 eine eigene. Verglichen wird Schritt 5 mit Schritt 5.</td></tr>
+              <tr><td>Schritt 5: „kein ES256"</td><td>Dieser Passkey signiert nicht mit P-256 (sondern z. B. EdDSA). Aus solchen Signaturen lässt sich der öffentliche Schlüssel nicht zurückgewinnen.</td></tr>
+              <tr><td>Schritt 5: DID ja, aber „kein PRF-Ergebnis"</td><td>Die Adresse (DID) ist da, der Signierschlüssel nicht. Die Bibliothek verweigert in diesem Fall, statt einen Ersatz zu erfinden.</td></tr>
             </tbody>
           </table>
         </div>
@@ -239,7 +254,7 @@
             dt.textContent = k;
             const dd = document.createElement("dd");
             dd.textContent = v;
-            if (k.startsWith("PRF-Fingerabdruck")) dd.className = "fp";
+            if (k.includes("Fingerabdruck")) dd.className = "fp";
             dl.append(dt, dd);
           }
           entry.append(dl);
@@ -264,6 +279,208 @@
           run().finally(() => (button.disabled = false));
         });
       }
+
+      // ── the identity, derived as the library derives it ──────────────────
+      // Mirrors @le-space/orbitdb-identity-provider-webauthn-did 0.5.4, so that
+      // "the same identity" here means the DID and signing key the library
+      // would produce, not a lookalike of them.
+
+      // The PRF input #61 proposes: fixed per relying party instead of random
+      // per credential, so a second device reaches the same output from the
+      // authenticator alone. Hashed at load rather than at the click, so no
+      // await sits between the gesture and the WebAuthn call.
+      let prfInputV2 = null;
+      crypto.subtle
+        .digest("SHA-256", enc.encode(`orbitdb-identity-provider-webauthn-did:prf:v2:${location.hostname}`))
+        .then((digest) => (prfInputV2 = new Uint8Array(digest)));
+
+      const bytesToBigInt = (bytes) => BigInt(`0x${toHex(bytes) || "0"}`);
+      const bigIntTo32 = (value) => hexToBytes(value.toString(16).padStart(64, "0"));
+
+      // P-256, to recover a public key from a signature. Only public values go
+      // through this arithmetic — the signature, the signed bytes, the curve —
+      // so plain BigInt is fine, and every candidate it yields must also pass
+      // WebCrypto's own ECDSA verify before it counts.
+      const P256 = {
+        p: 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn,
+        n: 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n,
+        b: 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604bn,
+        g: {
+          x: 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296n,
+          y: 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5n,
+        },
+      };
+
+      const mod = (a, m) => ((a % m) + m) % m;
+
+      function powMod(base, exponent, m) {
+        let result = 1n;
+        base = mod(base, m);
+        for (; exponent > 0n; exponent >>= 1n) {
+          if (exponent & 1n) result = (result * base) % m;
+          base = (base * base) % m;
+        }
+        return result;
+      }
+
+      /** Inverse modulo a prime, by extended Euclid. */
+      function invMod(a, m) {
+        let [oldR, r] = [mod(a, m), m];
+        let [oldS, s] = [1n, 0n];
+        while (r !== 0n) {
+          const q = oldR / r;
+          [oldR, r] = [r, oldR - q * r];
+          [oldS, s] = [s, oldS - q * s];
+        }
+        return mod(oldS, m);
+      }
+
+      /** Affine point addition; null is the point at infinity. */
+      function addPoints(a, b) {
+        const { p } = P256;
+        if (!a) return b;
+        if (!b) return a;
+        let slope;
+        if (a.x === b.x) {
+          if (mod(a.y + b.y, p) === 0n) return null;
+          slope = mod((3n * a.x * a.x - 3n) * invMod(2n * a.y, p), p);
+        } else {
+          slope = mod((b.y - a.y) * invMod(b.x - a.x, p), p);
+        }
+        const x = mod(slope * slope - a.x - b.x, p);
+        return { x, y: mod(slope * (a.x - x) - a.y, p) };
+      }
+
+      function multiply(point, scalar) {
+        let result = null;
+        for (let k = scalar, addend = point; k > 0n; k >>= 1n) {
+          if (k & 1n) result = addPoints(result, addend);
+          addend = addPoints(addend, addend);
+        }
+        return result;
+      }
+
+      /** Every P-256 key that could have produced signature (r, s) over this digest. */
+      function recoveryCandidates(r, s, digest) {
+        const { p, n, b, g } = P256;
+        if (r <= 0n || r >= n || s <= 0n || s >= n) return [];
+        // R's x coordinate is r. It could also be r + n where that is below p;
+        // the chance is about 2^-128, which does not earn a branch.
+        const x = r;
+        const ySquared = mod(x * x * x - 3n * x + b, p);
+        const y = powMod(ySquared, (p + 1n) / 4n, p); // p ≡ 3 (mod 4)
+        if ((y * y) % p !== ySquared) return [];
+        const rInverse = invMod(r, n);
+        const eG = multiply(g, mod(-mod(digest, n) * rInverse, n));
+        const u2 = mod(s * rInverse, n);
+        return (y === 0n ? [y] : [y, p - y])
+          .map((ry) => addPoints(eG, multiply({ x, y: ry }, u2)))
+          .filter(Boolean);
+      }
+
+      /** r and s of an ES256 (DER) signature, or null when it is not one. */
+      function parseDerSignature(signature) {
+        const bytes = new Uint8Array(signature);
+        let i = 0;
+        const length = () => {
+          let len = bytes[i++];
+          if (len & 0x80) {
+            const count = len & 0x7f;
+            len = 0;
+            for (let j = 0; j < count; j++) len = (len << 8) | bytes[i++];
+          }
+          return len;
+        };
+        const integer = () => {
+          if (bytes[i++] !== 0x02) return null;
+          const len = length();
+          const value = bytes.slice(i, i + len);
+          i += len;
+          return value.length === len && len > 0 ? bytesToBigInt(value) : null;
+        };
+        if (bytes[i++] !== 0x30) return null;
+        const total = length();
+        if (i + total !== bytes.length) return null;
+        const r = integer();
+        const s = integer();
+        return r !== null && s !== null && i === bytes.length ? { r, s } : null;
+      }
+
+      const uncompressed = ({ x, y }) => new Uint8Array([0x04, ...bigIntTo32(x), ...bigIntTo32(y)]);
+
+      async function verifiesWith(point, signedBytes, { r, s }) {
+        try {
+          const key = await crypto.subtle.importKey(
+            "raw",
+            uncompressed(point),
+            { name: "ECDSA", namedCurve: "P-256" },
+            false,
+            ["verify"]
+          );
+          const raw = new Uint8Array([...bigIntTo32(r), ...bigIntTo32(s)]);
+          return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, raw, signedBytes);
+        } catch {
+          return false;
+        }
+      }
+
+      /** The keys an assertion could have been signed with, each verified — or null if not ES256. */
+      async function candidatesFrom(assertion) {
+        const { authenticatorData, clientDataJSON, signature } = assertion.response;
+        const rs = parseDerSignature(signature);
+        if (!rs) return null;
+        // WebAuthn signs authenticatorData ‖ SHA-256(clientDataJSON).
+        const clientDataHash = new Uint8Array(await crypto.subtle.digest("SHA-256", clientDataJSON));
+        const signedBytes = new Uint8Array([...new Uint8Array(authenticatorData), ...clientDataHash]);
+        const digest = bytesToBigInt(new Uint8Array(await crypto.subtle.digest("SHA-256", signedBytes)));
+        const verified = [];
+        for (const point of recoveryCandidates(rs.r, rs.s, digest)) {
+          if (await verifiesWith(point, signedBytes, rs)) verified.push(point);
+        }
+        return verified;
+      }
+
+      const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+      function base58btc(bytes) {
+        let value = bytesToBigInt(bytes);
+        let out = "";
+        for (; value > 0n; value /= 58n) out = BASE58[Number(value % 58n)] + out;
+        for (const byte of bytes) {
+          if (byte !== 0) break;
+          out = `1${out}`;
+        }
+        return `z${out}`;
+      }
+
+      /** As WebAuthnDIDProvider.createDID: the p256-pub multicodec, then the uncompressed point. */
+      const didFromPoint = (point) => `did:key:${base58btc(new Uint8Array([0x80, 0x24, ...uncompressed(point)]))}`;
+
+      async function didFromSpki(spki) {
+        const key = await crypto.subtle.importKey("spki", spki, { name: "ECDSA", namedCurve: "P-256" }, true, ["verify"]);
+        const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key));
+        return didFromPoint({ x: bytesToBigInt(raw.slice(1, 33)), y: bytesToBigInt(raw.slice(33, 65)) });
+      }
+
+      const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+
+      /** As deriveSigningKeyBytes with its default secp256k1: HKDF over the PRF output, the DID mixed in. */
+      async function derivedSigningKey(prfOutput, did) {
+        const base = await crypto.subtle.importKey("raw", prfOutput, "HKDF", false, ["deriveBits"]);
+        for (let counter = 0; counter < 256; counter++) {
+          const info = enc.encode(`orbitdb-identity-provider-webauthn-did:signing-key:v1:${did}:${counter}`);
+          const bits = await crypto.subtle.deriveBits(
+            { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info },
+            base,
+            256
+          );
+          const scalar = bytesToBigInt(new Uint8Array(bits));
+          if (scalar > 0n && scalar < SECP256K1_N) return bits;
+        }
+        throw new Error("kein gültiger secp256k1-Schlüssel ableitbar");
+      }
+
+      const ALGORITHMS = { [-7]: "ES256 (P-256)", [-8]: "EdDSA (Ed25519)", [-257]: "RS256 (RSA)" };
 
       // ── environment ──────────────────────────────────────────────────────
       async function describeEnvironment() {
@@ -332,13 +549,22 @@
           // mistake as a message that reads fine and means nothing.
           const both = ext.prf?.enabled === true && ext.largeBlob?.supported === true;
           const neither = ext.prf?.enabled !== true && ext.largeBlob?.supported !== true;
-          log(both ? "good" : neither ? "bad" : "warn", "1 · Passkey angelegt", [
+          const algorithm = credential.response.getPublicKeyAlgorithm?.();
+          const rows = [
             ["Passkey-Kennzeichen", await fingerprint(credential.rawId)],
             ["prf.enabled", fmt(ext.prf?.enabled)],
             ["largeBlob.supported", fmt(ext.largeBlob?.supported)],
             ["credProps.rk", fmt(ext.credProps?.rk)],
             ["authenticatorAttachment", fmt(credential.authenticatorAttachment)],
-          ]);
+            ["Algorithmus", ALGORITHMS[algorithm] ?? fmt(algorithm)],
+          ];
+          // The DID from the key the authenticator just handed over — the value
+          // step 5 has to reach again, from signatures alone.
+          if (algorithm === -7) {
+            const did = await didFromSpki(credential.response.getPublicKey());
+            rows.push(["DID-Fingerabdruck", await fingerprint(enc.encode(did))], ["DID", did]);
+          }
+          log(both ? "good" : neither ? "bad" : "warn", "1 · Passkey angelegt", rows);
         } catch (error) {
           logError("1 · Anlegen", error);
         }
@@ -442,6 +668,79 @@
           }
         } catch (error) {
           logError("4 · largeBlob lesen", error);
+        }
+      });
+
+      // ── 5 · restore the identity with nothing stored ─────────────────────
+      guarded($("recover"), async () => {
+        if (!prfInputV2) {
+          log("warn", "5 · Seite lädt noch", [["warum", "Die PRF-Eingabe wird noch berechnet. Gleich noch einmal drücken."]]);
+          return;
+        }
+        let stage = "erste Berührung";
+        try {
+          // First touch: pick the passkey, sign, and evaluate PRF — with the
+          // PIN, because a security key answers PRF differently with and
+          // without user verification, and the library always asks with it.
+          const first = await navigator.credentials.get({
+            publicKey: {
+              challenge: random(32),
+              userVerification: "required",
+              timeout: 120000,
+              extensions: { prf: { eval: { first: prfInputV2 } } },
+            },
+          });
+          lastCredentialId = first.rawId;
+          const prfOutput = first.getClientExtensionResults?.()?.prf?.results?.first;
+
+          // Second touch: the same passkey, another challenge. It only has to
+          // sign, so it asks for no PIN.
+          stage = "zweite Berührung";
+          const second = await navigator.credentials.get({
+            publicKey: {
+              challenge: random(32),
+              userVerification: "discouraged",
+              timeout: 120000,
+              allowCredentials: [{ type: "public-key", id: first.rawId }],
+            },
+          });
+
+          stage = "Auswertung";
+          const rows = [["Passkey-Kennzeichen", await fingerprint(first.rawId)]];
+          const a = await candidatesFrom(first);
+          const b = await candidatesFrom(second);
+          if (!a || !b) {
+            log("bad", "5 · kein ES256 — Schlüssel nicht rückgewinnbar", [
+              ...rows,
+              ["Signatur", "keine P-256-Signatur; vermutlich EdDSA oder RSA"],
+            ]);
+            return;
+          }
+          // Each signature admits two keys; only the signer's is in both.
+          const shared = a.filter((p) => b.some((q) => p.x === q.x && p.y === q.y));
+          rows.push(["Kandidaten", `${a.length} aus Signatur 1 · ${b.length} aus Signatur 2 · ${shared.length} in beiden`]);
+          if (shared.length !== 1) {
+            log("bad", "5 · kein eindeutiger Schlüssel", rows);
+            return;
+          }
+          const did = didFromPoint(shared[0]);
+          rows.push(["DID-Fingerabdruck", await fingerprint(enc.encode(did))]);
+          if (!prfOutput) {
+            log("warn", "5 · DID zurückgewonnen, aber kein PRF-Ergebnis", [
+              ...rows,
+              ["Signierschlüssel", "nicht ableitbar — ohne PRF verweigert die Bibliothek"],
+              ["DID", did],
+            ]);
+            return;
+          }
+          rows.push(
+            ["PRF-Fingerabdruck (Eingabe aus #61)", await fingerprint(prfOutput)],
+            ["Signierschlüssel-Fingerabdruck", await fingerprint(await derivedSigningKey(prfOutput, did))],
+            ["DID", did]
+          );
+          log("good", "5 · Identität wiederhergestellt — ohne gespeicherte Daten", rows);
+        } catch (error) {
+          logError(`5 · ${stage}`, error);
         }
       });
 
