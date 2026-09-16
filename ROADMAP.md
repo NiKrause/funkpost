@@ -31,7 +31,9 @@ roadmap is built to keep testing.
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
-| **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/59): +12 kB instead of +617). What is left is this side: the pointer message and its UI. |
+| **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
+| **#82** | Internet first, mesh as fallback | **Planned, P10** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. The first question is whether OrbitDB's own sync and `courier-sync` compose on one log. |
+| **#93** | A lost phone, the same passkey | **Planned, P11** — the design exists in p2pass (PRF seed → deterministic IPNS key → manifest), used as reference and not integrated. The first question is whether PRF works with a YubiKey on the two actual phones. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -313,6 +315,104 @@ restores a database he has never seen from the CID alone, with no Storacha
 credentials, while the radio carries nothing but that pointer; `mesh-todo`'s
 bundle grows by **under 20 kB gzipped**; and `stack.js`'s claim about where
 bytes travel reads true against the code again.
+
+### P10 · Internet first, the mesh when it is gone — #82
+
+**Not built.** `mesh-todo` is mesh-only on purpose — `addresses: { listen: [] }`
+and `sync: false` — and the relay-synced version is a different program,
+`simple-todo`. #82 wrote the question down and left it unscheduled. This phase
+schedules it.
+
+The demo: two phones keep a list in step over the internet, as any OrbitDB app
+does. The internet goes. The app notices, **says so**, offers the LoRa mesh,
+proves another *app* is listening on it, and offers to send what changed.
+
+**Why it is more tractable than #82 feared.** #82 worried that a fallback
+carries the same data over the radio, slowly — the bootstrap alone is about
+seven frames. But in a fallback the phones were syncing over IP until the
+outage, so **they already share the log**: the founding happened while the
+internet worked. What the mesh has to carry is only what changed during the
+outage — P8's motto, *the change, not the founding*. And P8a's send button
+already *is* "offer to send what changed".
+
+In order, and the first is the risk:
+
+1. **Both syncs on one log.** OrbitDB's own replication over libp2p and
+   `courier-sync`'s `joinEntry` writing into the same hash-linked log. Both
+   converge on content-addressed entries, so they should compose; nobody has
+   checked. If they fight, the design changes — so this comes before any UI.
+   *Gate:* e2e, two peers edit over IP, IP is cut, edits continue over the fake
+   mesh, IP returns, and the logs are identical with nothing duplicated or lost.
+2. **An IP path in `mesh-todo`** — a relay and `sync: true`, as `simple-todo`
+   does. `stack.js` then stops being able to say *"every replicated byte travels
+   through the courier or not at all"*; rewrite it rather than leave it wrong.
+3. **Detection that is honest.** Not `navigator.onLine`, which reports the
+   interface and not reachability — a captive portal is "online" and reaches
+   nobody. Watch what actually matters: libp2p connections to the relay and to
+   peers, and declare the internet lost only after a probe fails.
+4. **A prompt, not a switch.** *"The peer-to-peer connection dropped — probably
+   the internet. Continue over the LoRa mesh?"* Required anyway: Web Bluetooth
+   needs a gesture to pair, and the radio spends a rationed budget.
+5. **A connection test with peers, not radios.** `mesh-todo` lists the radio
+   *nodes* its node has heard — that proves radios in range, not that another
+   `mesh-todo` is listening. `mesh-calendar` has real app-level `presence()`;
+   `courier-sync` has none. That belongs in the bridge, for P8b's reason.
+6. **Offer the sync** — exists, P8a.
+
+*Gate:* the whole script on the fake mesh in e2e, then once on the two nodes.
+
+### P11 · A lost phone, the same passkey — #93
+
+The demo: phone A holds the list and a passkey on a **YubiKey**. Phone A is
+wiped. Phone B, with the same YubiKey, restores the list **with the same
+identity** and can write to it — not only read it. P10 is *the internet is
+gone, the mesh carries*; P11 is *the device is gone, the internet brings it
+back*.
+
+**Why the passkey matters.** An access controller that names the owner makes a
+restored copy readable but not writable unless phone B reproduces the same
+identity. *Restored* has to mean *same identity*, not *same bytes*. And a
+YubiKey rather than a synced passkey, because then the secret is on the key and
+not on the phone that was lost.
+
+**The design exists, in [p2pass](https://github.com/Le-Space/p2pass)** — used as
+reference, **not integrated**. The WebAuthn PRF seed is the root of every key;
+HKDF over it gives a deterministic IPNS key, so phone B finds the pointer with
+nothing from phone A; the identity archive is encrypted with the PRF key and
+fetched without auth. The primitives underneath are
+`@le-space/orbitdb-identity-provider-webauthn-did`, and **that is the dependency
+to take**, not p2pass. Storage and restore are the bridge's (0.5.2, 0.5.3,
+`restoreFromCID`).
+
+p2pass hangs on Storacha for uploads (dead), a UCAN delegation in the manifest
+(meaningless now) and `w3name` for IPNS (alive when checked, but Storacha's).
+Four things it does must not come along, each detailed in #93: a **rawId
+fallback** when PRF is missing, which keys a publicly fetchable archive with a
+value that is not secret — and runs silently on exactly the phones that lack
+PRF; a bug that **creates a new credential where reuse was meant**, giving a new
+PRF seed and a recovery that resolves a name nobody published; **cross-device
+recovery that was never tested**, because a virtual authenticator cannot be
+shared between browser contexts; and a routing endpoint that answers **200 with
+an error body**.
+
+In order — check before design:
+
+1. **The two phones, first.** PRF and a discoverable credential with the YubiKey
+   over NFC or USB-C, on the actual hardware. Missing PRF on either phone
+   changes the design, so nothing else is built before that answer.
+2. **A pointer without `w3name`** — an IPNS record signed by the PRF-derived
+   key, through delegated routing. Unverified that a browser can publish one.
+   In the bridge.
+3. **Dehydrate** on phone A: the database as a CAR to Aleph, the identity
+   archive encrypted, a manifest, the IPNS record.
+4. **Hydrate** on phone B: PRF → IPNS key → manifest → `restoreFromCID` →
+   decrypt → open with the same identity.
+5. **Write**, not just read.
+
+*Gate:* phone A **wiped**, not simulated by clearing a tab; phone B with the
+same YubiKey restores the list, its identity equals the original, and it writes
+an entry the original access controller accepts. Missing PRF produces a
+refusal, never the fallback.
 
 ### Running alongside: #1 reliability
 
