@@ -32,7 +32,7 @@ roadmap is built to keep testing.
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
 | **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
-| **#82** | Internet first, mesh as fallback | **Planned, P10** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. The first question is whether OrbitDB's own sync and `courier-sync` compose on one log. |
+| **#82** | Internet first, mesh as fallback | **P10, first risk answered** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. |
 | **#93** | A lost phone, the same passkey | **Planned, P11** — the design exists in p2pass (PRF seed → deterministic IPNS key → manifest), used as reference and not integrated. The first question is whether PRF works with a YubiKey on the two actual phones. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
@@ -337,12 +337,35 @@ already *is* "offer to send what changed".
 
 In order, and the first is the risk:
 
-1. **Both syncs on one log.** OrbitDB's own replication over libp2p and
-   `courier-sync`'s `joinEntry` writing into the same hash-linked log. Both
-   converge on content-addressed entries, so they should compose; nobody has
-   checked. If they fight, the design changes — so this comes before any UI.
-   *Gate:* e2e, two peers edit over IP, IP is cut, edits continue over the fake
-   mesh, IP returns, and the logs are identical with nothing duplicated or lost.
+1. **Both syncs on one log.** ✅ *Answered in Node, 2026-09-16.* OrbitDB's own
+   replication over libp2p and `courier-sync`'s `joinEntry` writing into the
+   same hash-linked log. If they fight, the design changes — so this came
+   before any UI.
+
+   **They compose one at a time, and fight when run together.**
+   [`test/fallback-one-log.test.js`](test/fallback-one-log.test.js) carries a
+   list over IP, then over a lossy fake mesh with IP cut, then over IP again:
+   the logs end identical, every write in them exactly once, and an entry both
+   sides changed while apart resolves the same way on both. Under load, with
+   both sides writing in parallel:
+
+   | carried by | runs clean |
+   |---|---|
+   | IP alone | 3 of 3 |
+   | IP → the mesh alone → IP, sending while the other side writes | 8 of 8 |
+   | IP and `courier-sync` **at the same time** | **0 of 3** — every run stalled |
+
+   In the stalled runs a join waited out OrbitDB's 30-second block timeout for
+   an identity block the other peer held and bitswap did not deliver. Not
+   pursued further, because the answer does not need it: **one path at a
+   time, enforced in code.** Going to the mesh stops OrbitDB's sync
+   (`db.sync.stop()`) before `courier-sync` starts; coming back stops
+   `courier-sync` before `db.sync.start()`. Connectivity alone must not decide
+   it — detection (step 3) can be late, and a late switch is exactly the
+   overlap that stalled.
+
+   *Still open from the original gate:* the same script as an e2e in the
+   browser, which needs step 2's IP path first.
 2. **An IP path in `mesh-todo`** — a relay and `sync: true`, as `simple-todo`
    does. `stack.js` then stops being able to say *"every replicated byte travels
    through the courier or not at all"*; rewrite it rather than leave it wrong.
