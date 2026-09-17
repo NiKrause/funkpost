@@ -31,7 +31,7 @@ roadmap is built to keep testing.
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
-| **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
+| **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storage-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
 | **#82** | Internet first, mesh as fallback | **P10, first risk answered** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. |
 | **#93** | A lost phone, the same passkey | **Planned, P11** — the design exists in p2pass (PRF seed → deterministic IPNS key → manifest), used as reference and not integrated. The first question is whether PRF works with a YubiKey on the two actual phones. |
 
@@ -208,7 +208,7 @@ where one would carry all five, since `createDelta` walks from the heads down
 to theirs.
 
 *Was blocked on a release, not on code.* The option to opt out
-([bridge#56](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/56)) lives
+([bridge#56](https://github.com/NiKrause/orbitdb-storage-bridge/pull/56)) lives
 in a permissive package, as P8b requires — and `courier-sync` had never been
 published to npm: it landed after v0.4.3, so this repository depended on
 `github:…#main` rather than a version. **`orbitdb-storacha-bridge` 0.5.0 fixed
@@ -290,8 +290,8 @@ It would **more than double the application** to save six frames.
 calling `createHelia`, which would pull in Helia's whole default libp2p stack
 (718 kB). The two import costs have not been re-measured on the new stack.
 
-**That seam is built** — [bridge#59](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/59),
-closing [bridge#58](https://github.com/NiKrause/orbitdb-storacha-bridge/issues/58).
+**That seam is built** — [bridge#59](https://github.com/NiKrause/orbitdb-storage-bridge/pull/59),
+closing [bridge#58](https://github.com/NiKrause/orbitdb-storage-bridge/issues/58).
 It lives there and not here for exactly P8b's reason: it is permissive, this is
 GPL, and anything that should stay permissive has to be written *there*
 ([why-separate-repository.md](docs/why-separate-repository.md)). funkpost's own

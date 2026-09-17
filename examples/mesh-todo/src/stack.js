@@ -2,7 +2,7 @@
 /**
  * Wires the whole data plane for the demo:
  *
- *   OrbitDB (browser) → courier-sync (orbitdb-storacha-bridge, MIT seam)
+ *   OrbitDB (browser) → courier-sync (orbitdb-storage-bridge, MIT seam)
  *   → meshtastic courier (framing · ARQ · duty-cycle pacing, this repo)
  *   → a link: Web Bluetooth to a real node, or a BroadcastChannel fake.
  *
@@ -20,7 +20,7 @@ import { withBitswap } from "@helia/bitswap";
 import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
 import { createOrbitDB, IPFSAccessController } from "@orbitdb/core";
-import { createCourierSync } from "orbitdb-storacha-bridge/courier-sync";
+import { createCourierSync } from "orbitdb-storage-bridge/courier-sync";
 import * as dagCbor from "@ipld/dag-cbor";
 import {
   createMeshtasticCourier,

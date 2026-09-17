@@ -32,7 +32,7 @@ import { createHelia } from "helia";
 import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
 import { createOrbitDB, IPFSAccessController } from "@orbitdb/core";
-import { createCourierSync } from "orbitdb-storacha-bridge/courier-sync";
+import { createCourierSync } from "orbitdb-storage-bridge/courier-sync";
 
 import { createMeshtasticCourier } from "../lib/meshtastic-courier.js";
 import { createMemoryMeshPair } from "../lib/links/memory-mesh.js";
