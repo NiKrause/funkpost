@@ -14,7 +14,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createLibp2p } from "libp2p";
 import { tcp } from "@libp2p/tcp";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
@@ -40,19 +39,22 @@ const until = async (fn, timeoutMs = 20000, stepMs = 20) => {
 const keysOf = async (db) => (await db.all()).map((entry) => entry.key).sort();
 
 async function makeOrbitDBNode(name, dir) {
-  const libp2p = await createLibp2p({
-    addresses: { listen: [] },
-    transports: [tcp()],
-    connectionEncrypters: [noise()],
-    streamMuxers: [yamux()],
-  });
+  // Helia 7 builds libp2p from options, and fills every key left out from
+  // defaults that reach the public network — so each is given, even empty.
   const helia = await createHelia({
-    libp2p,
+    libp2p: {
+      addresses: { listen: [] },
+      transports: [tcp()],
+      connectionEncrypters: [noise()],
+      streamMuxers: [yamux()],
+      peerDiscovery: [],
+      services: {},
+    },
     blockstore: new MemoryBlockstore(),
     datastore: new MemoryDatastore(),
-  });
+  }).start();
   const orbitdb = await createOrbitDB({ ipfs: helia, id: name, directory: join(dir, name) });
-  return { libp2p, helia, orbitdb };
+  return { libp2p: helia.libp2p, helia, orbitdb };
 }
 
 describe("full stack: OrbitDB over the mesh courier", () => {

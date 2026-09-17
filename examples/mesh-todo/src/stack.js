@@ -11,11 +11,12 @@
  * Every replicated byte travels through the courier or not at all.
  */
 
-import { createLibp2p } from "libp2p";
 import { webSockets } from "@libp2p/websockets";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
-import { createHelia } from "helia";
+import { createHeliaLight } from "helia";
+import { withLibp2pLight } from "@helia/libp2p";
+import { withBitswap } from "@helia/bitswap";
 import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
 import { createOrbitDB, IPFSAccessController } from "@orbitdb/core";
@@ -32,20 +33,30 @@ const INVITE_VERSION = 1;
 
 /** One OrbitDB per tab; memory stores, so Reset is a reload. */
 export async function createDatabaseStack() {
-  const libp2p = await createLibp2p({
-    addresses: { listen: [] },
-    transports: [webSockets()],
-    connectionEncrypters: [noise()],
-    streamMuxers: [yamux()],
-  });
-  const helia = await createHelia({
-    libp2p,
-    blockstore: new MemoryBlockstore(),
-    datastore: new MemoryDatastore(),
-  });
+  // Composed rather than createHelia(). Helia 7's createHelia builds libp2p
+  // on top of its default stack — WebRTC, TLS, DHT, UPnP, a relay server,
+  // delegated routing over public HTTP endpoints — which put +157 kB gzipped
+  // into this bundle, and it adds a broker that asks public HTTP gateways for
+  // any block it lacks. A mesh-only app wants neither: the light variants take
+  // exactly the libp2p options given, and bitswap is kept for the IP path.
+  const helia = await withBitswap(
+    withLibp2pLight(
+      createHeliaLight({
+        blockstore: new MemoryBlockstore(),
+        datastore: new MemoryDatastore(),
+        codecs: [dagCbor],
+      }),
+      {
+        addresses: { listen: [] },
+        transports: [webSockets()],
+        connectionEncrypters: [noise()],
+        streamMuxers: [yamux()],
+      },
+    ),
+  ).start();
   const id = `mesh-todo-${Math.random().toString(36).slice(2, 10)}`;
   const orbitdb = await createOrbitDB({ ipfs: helia, id, directory: `./${id}` });
-  return { libp2p, helia, orbitdb };
+  return { libp2p: helia.libp2p, helia, orbitdb };
 }
 
 /**

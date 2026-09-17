@@ -285,6 +285,11 @@ module level — so a restore-only client pays for the entire backup SDK:
 
 It would **more than double the application** to save six frames.
 
+*These three were measured on OrbitDB 3 / Helia 5.* On OrbitDB 4 / Helia 7
+`mesh-todo` itself is **434 kB**, because it composes a light Helia instead of
+calling `createHelia`, which would pull in Helia's whole default libp2p stack
+(718 kB). The two import costs have not been re-measured on the new stack.
+
 **That seam is built** — [bridge#59](https://github.com/NiKrause/orbitdb-storacha-bridge/pull/59),
 closing [bridge#58](https://github.com/NiKrause/orbitdb-storacha-bridge/issues/58).
 It lives there and not here for exactly P8b's reason: it is permissive, this is

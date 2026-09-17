@@ -23,12 +23,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createLibp2p } from "libp2p";
 import { tcp } from "@libp2p/tcp";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
 import { identify } from "@libp2p/identify";
-import { gossipsub } from "@chainsafe/libp2p-gossipsub";
+import { gossipsub } from "@libp2p/gossipsub";
 import { createHelia } from "helia";
 import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
@@ -55,28 +54,30 @@ const until = async (fn, timeoutMs = 30000, stepMs = 25) => {
  */
 async function makePeer(name, dir) {
   const ip = { down: false };
-  const libp2p = await createLibp2p({
-    addresses: { listen: ["/ip4/127.0.0.1/tcp/0"] },
-    transports: [tcp()],
-    connectionEncrypters: [noise()],
-    streamMuxers: [yamux()],
-    connectionGater: {
-      denyDialMultiaddr: () => ip.down,
-      denyInboundConnection: () => ip.down,
-      denyOutboundConnection: () => ip.down,
-    },
-    services: {
-      identify: identify(),
-      pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
-    },
-  });
+  // Helia 7 builds libp2p from options, and fills every key left out from
+  // defaults that reach the public network — so each is given, even empty.
   const helia = await createHelia({
-    libp2p,
+    libp2p: {
+      addresses: { listen: ["/ip4/127.0.0.1/tcp/0"] },
+      transports: [tcp()],
+      connectionEncrypters: [noise()],
+      streamMuxers: [yamux()],
+      connectionGater: {
+        denyDialMultiaddr: () => ip.down,
+        denyInboundConnection: () => ip.down,
+        denyOutboundConnection: () => ip.down,
+      },
+      peerDiscovery: [],
+      services: {
+        identify: identify(),
+        pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
+      },
+    },
     blockstore: new MemoryBlockstore(),
     datastore: new MemoryDatastore(),
-  });
+  }).start();
   const orbitdb = await createOrbitDB({ ipfs: helia, id: name, directory: join(dir, name) });
-  return { name, ip, libp2p, helia, orbitdb };
+  return { name, ip, libp2p: helia.libp2p, helia, orbitdb };
 }
 
 const stateOf = async (db) =>
