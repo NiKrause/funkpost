@@ -14,6 +14,9 @@
     joinList,
     sendInvite,
     watchInvites,
+    backUpAndPoint,
+    restoreFromPointer,
+    watchFoundingPointers,
     probeMeshtasticCore,
   } from "./stack.js";
   import {
@@ -55,6 +58,12 @@
   let reconnecting = $state(false);
   let creating = $state(false);
   let joining = $state(false);
+  // P9: the founding, off the radio. A pointer names a backup; the bytes come
+  // over HTTPS when there is internet, and the radio carried one frame.
+  let pointer = $state(null);
+  let backingUp = $state(false);
+  let restoring = $state(false);
+  let online = $state(navigator.onLine);
   let neighbours = $state([]);
   let primaryChannel = $state(null); // { name, fingerprint }
   let channels = $state([]); // [{ index, name, fingerprint, role }]
@@ -232,6 +241,11 @@
       pushLog(`! window ${e.type}: ${describeError(e.reason ?? e.error ?? e.message ?? e)}`);
     window.addEventListener("error", onWinError);
     window.addEventListener("unhandledrejection", onWinError);
+    // The pointer path is the only thing here that wants the internet, so the
+    // buttons say plainly when there is none.
+    const onOnline = () => (online = navigator.onLine);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOnline);
 
     if (params.get("probe") === "meshtastic-core") {
       try {
@@ -319,6 +333,10 @@
       watchInvites(courier, (addr) => {
         if (!db) invite = addr;
       });
+      watchFoundingPointers(courier, (p) => {
+        if (!db) pointer = p;
+        pushLog(`pointer for ${p.address.slice(0, 20)}… → ${p.cid.slice(0, 12)}…`);
+      });
       phase = "ready";
       pushLog(`link up: ${linkKind}, region ${region}`);
     } catch (e) {
@@ -359,6 +377,42 @@
       pushLog(`! join failed: ${e.message}`);
     } finally {
       joining = false;
+    }
+  }
+
+  /** Back the list up over the internet, and name it over the radio. */
+  async function backUp() {
+    error = "";
+    backingUp = true;
+    pushLog("backing up over the internet — the radio only carries the pointer…");
+    try {
+      const { cid, blocks } = await backUpAndPoint({ orbitdb: stack.orbitdb, db, courier });
+      pushLog(`pointer sent: ${blocks} blocks backed up, cid ${cid.slice(0, 12)}…`);
+    } catch (e) {
+      error = e.message;
+      pushLog(`! backup failed: ${e.message}`);
+    } finally {
+      backingUp = false;
+    }
+  }
+
+  /** Take the list from the pointer: bytes over HTTPS, nothing over the air. */
+  async function restorePointed() {
+    error = "";
+    restoring = true;
+    pushLog("restoring from the pointer — fetching the backup over the internet…");
+    try {
+      const restored = await restoreFromPointer({ orbitdb: stack.orbitdb, courier, pointer });
+      sync = restored.sync;
+      wireSyncLog(sync);
+      attachDb(restored.db);
+      pointer = null;
+      pushLog(`restored ${restored.entries} entries from ${restored.blocks} blocks — no radio`);
+    } catch (e) {
+      error = e.message;
+      pushLog(`! restore failed: ${e.message}`);
+    } finally {
+      restoring = false;
     }
   }
 
@@ -619,9 +673,26 @@
       <button class="ghost" disabled={airtimeBlocked} onclick={() => sendInvite(courier, db.address)}>
         Invite again
       </button>
+      <button
+        class="ghost"
+        data-testid="back-up-and-point"
+        disabled={!online || backingUp || airtimeBlocked}
+        onclick={backUp}
+        title={online ? "Backs up over the internet, then names it over the radio in one frame" : "Needs internet"}
+      >
+        {#if backingUp}backing up…{:else if !online}Back up (needs internet){:else}Back up & beam pointer{/if}
+      </button>
       <button class="ghost" onclick={() => location.reload()}>Reset (drops local copy)</button>
     {:else if sync}
       <p>joining — the first delta carries manifest, access controller and entries…</p>
+    {:else if pointer}
+      <p>a pointer arrived over the mesh — the list itself is on the internet:</p>
+      <p class="dim addr">{pointer.address}</p>
+      <p class="dim addr">backup {pointer.cid}</p>
+      <button data-testid="restore-from-pointer" onclick={restorePointed} disabled={restoring || !online}>
+        {#if restoring}Restoring…{:else if !online}Restore (needs internet){:else}Restore from the pointer{/if}
+      </button>
+      <button class="ghost" onclick={() => (pointer = null)}>Ignore</button>
     {:else if invite}
       <p>invitation from the mesh:</p>
       <p class="dim addr">{invite}</p>

@@ -8,7 +8,10 @@
  *
  * The libp2p node here exists only because Helia wants one — it listens
  * nowhere, dials nobody, and every database is opened with `sync: false`.
- * Every replicated byte travels through the courier or not at all.
+ * Every *change* travels through the courier. The founding may not: a list
+ * that already exists can be backed up where there is internet and named over
+ * the radio in one frame, and the far side fetches those bytes over HTTPS when
+ * it next has internet of its own (P9, funkpost#68). Nothing else uses IP.
  */
 
 import { webSockets } from "@libp2p/websockets";
@@ -20,7 +23,19 @@ import { withBitswap } from "@helia/bitswap";
 import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
 import { createOrbitDB, IPFSAccessController } from "@orbitdb/core";
-import { createCourierSync } from "orbitdb-storage-bridge/courier-sync";
+import { createCourierSync, databaseTag } from "orbitdb-storage-bridge/courier-sync";
+// The two light entries. Through the main entry this would cost 88 kB more, for
+// a Storacha client the demo never calls (bridge #95); these two and the Aleph
+// driver are 18.6 kB gzipped together, and they are imported rather than split
+// off because splitting them measured *worse*: Rollup then duplicates what the
+// page and the chunk share, and the page grew by 280 kB.
+import { backupDatabaseCAR } from "orbitdb-storage-bridge/backup-car";
+import { restoreFromCID } from "orbitdb-storage-bridge/restore-cid";
+import { createAlephBackend } from "orbitdb-storage-bridge/backends/aleph";
+import {
+  encodeFoundingPointer,
+  decodeFoundingPointer,
+} from "@le-space/funkpost/founding-pointer";
 import * as dagCbor from "@ipld/dag-cbor";
 import {
   createMeshtasticCourier,
@@ -178,6 +193,58 @@ export async function joinList({ orbitdb, courier, address }) {
   const sync = await createCourierSync({ orbitdb, address, courier, announceOnLocalUpdate: false });
   await sync.start();
   return { sync };
+}
+
+/**
+ * Back the list up where there is internet, and name it over the radio.
+ *
+ * The backup is one CAR file and the message that points at it is one frame —
+ * against the seven or so a first contact costs over the air. Aleph takes the
+ * upload without an account; it is also not kept without a wallet-signed STORE
+ * message, so a pointer is a shortcut for a peer who is listening now, not an
+ * archive.
+ */
+export async function backUpAndPoint({ orbitdb, db, courier }) {
+  const backend = createAlephBackend();
+  const result = await backupDatabaseCAR(orbitdb, db.address, { backend });
+  if (!result.success) throw new Error(result.error ?? "backup failed");
+
+  const cid = result.backupFiles.metadataCID;
+  const tag = await databaseTag(db.address);
+  await courier.send(encodeFoundingPointer({ tag, address: db.address, cid }));
+  return { cid, blocks: result.blocksTotal };
+}
+
+/**
+ * Take a list from a pointer somebody beamed: the bytes come over HTTPS, and
+ * the radio carried nothing but the CID. From here on the courier carries the
+ * changes, exactly as it would after a join.
+ */
+export async function restoreFromPointer({ orbitdb, courier, pointer }) {
+  const backend = createAlephBackend();
+  const restored = await restoreFromCID(orbitdb, {
+    metadataCID: pointer.cid,
+    fetchBytes: (cid) => backend.getBlob(cid),
+    // No pubsub on this node: OrbitDB's Sync subscribes on open and would throw
+    // before the restore ever hands the database back. The courier is the sync.
+    open: { sync: false },
+  });
+
+  const sync = await createCourierSync({
+    db: restored.database,
+    courier,
+    announceOnLocalUpdate: false,
+  });
+  await sync.start();
+  return { db: restored.database, sync, entries: restored.entries, blocks: restored.blocks };
+}
+
+/** Pointers share the courier with sync traffic and invites; the rest is ignored. */
+export function watchFoundingPointers(courier, cb) {
+  return courier.onPayload((bytes) => {
+    const pointer = decodeFoundingPointer(bytes);
+    if (pointer) cb(pointer);
+  });
 }
 
 /** One packet: here is a database worth joining. */
