@@ -21,7 +21,8 @@
     "./yjs": "./lib/yjs/provider.js",
     "./links/memory-mesh": "./lib/links/memory-mesh.js",
     "./links/meshtastic-device": "./lib/links/meshtastic-device-link.js",
-    "./links/meshtastic-supervisor": "./lib/links/meshtastic-supervisor.js"
+    "./links/meshtastic-supervisor": "./lib/links/meshtastic-supervisor.js",
+    "./founding-pointer": "./lib/founding-pointer.js"
   },
   "scripts": {
     "test": "node --test --test-force-exit test/*.test.js",
@@ -29,6 +30,7 @@
     "channel": "node scripts/make-channel.js"
   },
   "dependencies": {
+    "@ipld/dag-cbor": "^9.2.5",
     "@meshtastic/core": "^2.6.7",
     "@meshtastic/transport-web-bluetooth": "^0.1.5"
   },

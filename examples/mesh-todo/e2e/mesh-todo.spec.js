@@ -8,6 +8,7 @@
  * here is everything above the antenna, exactly as the demo ships it.
  */
 import { test, expect, devices } from "@playwright/test";
+import { createHash } from "node:crypto";
 
 const room = () => `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -218,6 +219,95 @@ test("changes wait for the button, and then they cross", async ({ context }) => 
   // Nothing left waiting, and the control says so rather than staying armed.
   await expect(a.getByTestId("send-changes")).toHaveText(/Nothing to send/);
   await expect(a.getByTestId("send-changes")).toBeDisabled();
+
+  await a.close();
+  await b.close();
+});
+
+/**
+ * P9: the founding, off the radio (#68).
+ *
+ * A carries the list, backs it up where there is internet, and beams one frame
+ * naming the backup. B has never seen the database and does not join over the
+ * mesh — it fetches the bytes over HTTPS and opens the same address.
+ *
+ * Aleph is played here: the test keeps the uploads in memory and serves them
+ * back, so the run needs no account, no internet and no third party — and a
+ * request that would leave this machine fails it.
+ */
+test("the founding arrives by pointer: one frame over the air, the bytes over HTTPS", async ({
+  context,
+}) => {
+  const uploads = new Map();
+  const strayed = [];
+
+  // Anything that is not this machine and not Aleph is refused, so a demo that
+  // quietly grew a dependency fails here rather than in the field.
+  await context.route(
+    (url) => !["localhost", "127.0.0.1"].includes(url.hostname),
+    async (route) => {
+      const url = new URL(route.request().url());
+      if (url.hostname !== "ipfs.aleph.cloud") {
+        strayed.push(url.href);
+        return route.abort();
+      }
+
+      const cors = { "access-control-allow-origin": "*" };
+      if (url.pathname === "/api/v0/add") {
+        const request = route.request();
+        const form = await new Response(request.postDataBuffer(), {
+          headers: { "content-type": await request.headerValue("content-type") },
+        }).formData();
+        const file = form.get("file");
+        const bytes = Buffer.from(await file.arrayBuffer());
+        const id = `Qm${createHash("sha256").update(bytes).digest("hex").slice(0, 44)}`;
+        uploads.set(id, bytes);
+        return route.fulfill({
+          headers: cors,
+          contentType: "application/json",
+          body: `${JSON.stringify({ Name: file.name, Hash: id, Size: String(bytes.length) })}\n`,
+        });
+      }
+
+      const bytes = uploads.get(url.pathname.replace("/ipfs/", ""));
+      return route.fulfill(
+        bytes
+          ? { headers: cors, contentType: "application/octet-stream", body: bytes }
+          : { status: 404, headers: cors, body: "not found" },
+      );
+    },
+  );
+
+  const roomId = room();
+  const a = await openPhone(context, roomId);
+  const b = await openPhone(context, roomId);
+
+  await a.getByRole("button", { name: "Create a list" }).click();
+  await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
+  const address = (await a.locator(".addr").innerText()).trim();
+
+  await a.getByLabel("new todo").fill("Milch kaufen");
+  await a.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(a.getByText("Milch kaufen")).toBeVisible({ timeout: 15_000 });
+
+  // B has not joined: the mesh has carried an invite and nothing else.
+  await expect(b.getByText("Milch kaufen")).toHaveCount(0);
+
+  await a.getByTestId("back-up-and-point").click();
+  await expect(a.getByText(/pointer sent: \d+ blocks backed up/)).toBeVisible({ timeout: 60_000 });
+  expect(uploads.size).toBe(2); // the CAR and the metadata naming it
+
+  await expect(b.getByTestId("restore-from-pointer")).toBeVisible({ timeout: 30_000 });
+  await b.getByTestId("restore-from-pointer").click();
+  await expect(b.getByText(/restored \d+ entries from \d+ blocks — no radio/)).toBeVisible({
+    timeout: 60_000,
+  });
+
+  // Same database, same entry, and B never joined over the air.
+  await expect(b.locator(".addr").first()).toHaveText(address, { timeout: 15_000 });
+  await expect(b.getByText("Milch kaufen")).toBeVisible({ timeout: 15_000 });
+
+  expect(strayed).toEqual([]);
 
   await a.close();
   await b.close();
