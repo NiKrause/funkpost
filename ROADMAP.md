@@ -333,10 +333,11 @@ orbitdb-storage-bridge 0.8.0, since every backup here happens in a browser.
 
 ### P10 · Internet first, the mesh when it is gone — #82
 
-**Not built.** `mesh-todo` is mesh-only on purpose — `addresses: { listen: [] }`
-and `sync: false` — and the relay-synced version is a different program,
-`simple-todo`. #82 wrote the question down and left it unscheduled. This phase
-schedules it.
+**Steps 1–4 built, 5 open.** `mesh-todo` was mesh-only on purpose —
+`addresses: { listen: [] }` and `sync: false` — and the relay-synced version
+was a different program, `simple-todo`. #82 wrote the question down and left it
+unscheduled. This phase scheduled it, and the app now carries one list over
+either path.
 
 The demo: two phones keep a list in step over the internet, as any OrbitDB app
 does. The internet goes. The app notices, **says so**, offers the LoRa mesh,
@@ -405,13 +406,53 @@ In order, and the first is the risk:
    bytes **whole** — so a busy relay is never recognised as a relay at the
    default limit (measured: 611 protocols). `identify({ maxMessageSize })` is
    not optional here.
-3. **Detection that is honest.** Not `navigator.onLine`, which reports the
-   interface and not reachability — a captive portal is "online" and reaches
-   nobody. Watch what actually matters: libp2p connections to the relay and to
-   peers, and declare the internet lost only after a probe fails.
-4. **A prompt, not a switch.** *"The peer-to-peer connection dropped — probably
-   the internet. Continue over the LoRa mesh?"* Required anyway: Web Bluetooth
-   needs a gesture to pair, and the radio spends a rationed budget.
+3. **Detection that is honest.** ✅ *Built 2026-09-18.* Not `navigator.onLine`,
+   which reports the interface and not reachability — a captive portal is
+   "online" and reaches nobody. `watchInternet()` looks at what matters: are
+   there open libp2p connections, and if there are none, **does a dial to a
+   relay still get through**. A dropped connection alone says nothing, because
+   libp2p drops and redials all the time; the failed dial is the evidence, and
+   the page says which one it has: *"internet gone — no peer answers, and a
+   dial to the relay failed too"*.
+4. **A prompt, not a switch.** ✅ *Built 2026-09-18.* *"The peer-to-peer
+   connection dropped — probably the internet. Continue over the LoRa mesh?"*
+   The page never moves the log by itself: the radio spends a rationed budget,
+   Web Bluetooth needs a gesture to pair anyway, and a late automatic switch is
+   exactly the overlap step 1 found stalls. Until somebody answers, the log
+   stays on the path it was on, and the line under it says *internet gone*.
+
+   **Both proven in the browser, and this closes step 1's open gate.**
+   [`e2e/internet-path.spec.js`](examples/mesh-todo/e2e/internet-path.spec.js)
+   runs the whole script on one machine: two pages sync over a libp2p relay
+   Playwright starts on `127.0.0.1` (a write appears in the other page with
+   nothing pressed), the context goes offline, the page says the internet is
+   gone and asks, both readers accept, and the next change waits for the send
+   button and crosses the fake mesh. A second test lies to the page —
+   `navigator.onLine` forced to `false` while every peer is reachable — and no
+   offer appears. Nothing in the run may leave the machine: any request to
+   another host fails the test.
+
+   **What the e2e found in the app, not in itself:** libp2p 3 has no
+   auto-dialer left. A discovery module files the addresses it hears in the
+   peer store and dispatches an event; **nothing dials**. So the two pages met
+   on the relay's discovery topic, learned each other's addresses, and never
+   connected — `mesh-todo` now dials what it discovers, and retries on a
+   ticker, because `peer:discovery` fires once per peer while a dial can fail
+   for a while (`simple-todo` has the same subsystem, which is why it was not
+   missing there). A deployed relay hides this: it opens the databases it
+   hears about, so heads travel through the relay even when the peers never
+   meet. A bare relay does not, and neither does a village.
+
+   The page's entry graph is **463.9 kB gzipped** — +1.8 on step 2, for the
+   watcher, the offer and the dialling.
+
+   *One gotcha for whoever writes the next such test:* Playwright's offline
+   switch is the browser's network stack, and **WebRTC does not go through
+   it** — two tabs of one browser keep their direct link across the "outage",
+   and then nothing has been taken away to detect. The run starts Chromium
+   with `--force-webrtc-ip-handling-policy=disable_non_proxied_udp`, which
+   leaves WebRTC without host candidates: as close as one machine gets to two
+   villages.
 5. **A connection test with peers, not radios.** `mesh-todo` lists the radio
    *nodes* its node has heard — that proves radios in range, not that another
    `mesh-todo` is listening. `mesh-calendar` has real app-level `presence()`;

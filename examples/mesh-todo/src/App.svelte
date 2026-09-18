@@ -1,10 +1,14 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <script>
   /**
-   * mesh-todo: two phones, two nodes, no IP path — and the demo is also the
-   * bench instrument. The sync pane shows every protocol message with its
-   * cost, because the two hardware gates in issue #1 are read off exactly
-   * these numbers.
+   * mesh-todo: two phones, two nodes, and a radio between them — and the demo
+   * is also the bench instrument. The sync pane shows every protocol message
+   * with its cost, because the two hardware gates in issue #1 are read off
+   * exactly these numbers.
+   *
+   * There is an IP path too (P10, `?ip=1`, on by default with a real radio),
+   * and it exists to be lost: what the phase is about is the afternoon the
+   * internet goes and the list carries on over the air.
    */
   import { onMount } from "svelte";
   import {
@@ -13,6 +17,8 @@
     carryOverInternet,
     carryOverMesh,
     internetPeers,
+    watchInternet,
+    relayMultiaddrs,
     relaySource,
     connectCourier,
     createList,
@@ -75,6 +81,10 @@
   let carriedBy = $state(wantsInternet ? "internet" : "mesh");
   let ipPeers = $state([]);
   let switching = $state(false);
+  // P10 step 3/4: the internet going is a question the page asks the network,
+  // and an offer it makes the reader — never a switch it throws by itself.
+  let internetReachable = $state(true);
+  let offerTheMesh = $state(false);
   let backingUp = $state(false);
   let restoring = $state(false);
   let online = $state(navigator.onLine);
@@ -271,10 +281,26 @@
     stack = await createDatabaseStack({ internet: wantsInternet });
     if (wantsInternet) {
       pushLog(`internet path up — relays from ${relaySource}`);
-      // Connections, not navigator.onLine: a captive portal is "online" and
-      // reaches nobody. Honest detection is P10 step 3; this is what it will
-      // watch.
       setInterval(() => (ipPeers = internetPeers(stack.libp2p)), 2000);
+      // Connections and a probe, not navigator.onLine: it reports the
+      // interface, not reachability, so a captive portal is "online" and
+      // reaches nobody.
+      watchInternet({
+        libp2p: stack.libp2p,
+        relays: relayMultiaddrs,
+        onChange: ({ reachable, peers }) => {
+          internetReachable = reachable;
+          ipPeers = reachable ? ipPeers : [];
+          pushLog(
+            reachable
+              ? `internet back — ${peers} peer${peers === 1 ? "" : "s"} over IP`
+              : "internet gone — no peer answers, and a dial to the relay failed too",
+          );
+          // The offer, not the switch: the radio spends a rationed budget, and
+          // pairing a node needs a gesture anyway.
+          if (!reachable && carriedBy === "internet" && db) offerTheMesh = true;
+        },
+      });
     }
     phase = "idle";
     if (mode.kind === "bc") connect();
@@ -433,6 +459,7 @@
         pushLog("carried by the mesh — OrbitDB's own sync is stopped");
       }
       carriedBy = path;
+      if (path === "mesh") offerTheMesh = false;
     } catch (e) {
       error = e.message;
       pushLog(`! switch failed: ${e.message}`);
@@ -570,7 +597,10 @@
 
 <main>
   <h1>mesh-todo</h1>
-  <p class="tag">no servers · no accounts · no IP path — a todo list over LoRa</p>
+  <p class="tag">
+    no servers · no accounts ·
+    {wantsInternet ? "internet first, the mesh when it goes" : "no IP path"} — a todo list over LoRa
+  </p>
 
   <!-- Dismissible, and it stays dismissed: somebody using this as a bench
        instrument reads it once and then wants the screen back. -->
@@ -731,10 +761,30 @@
           Send {unsent} change{unsent === 1 ? "" : "s"}
         {/if}
       </button>
+      {#if offerTheMesh}
+        <div class="offer" data-testid="mesh-offer">
+          <p>
+            The peer-to-peer connection dropped — probably the internet.
+            Continue over the LoRa mesh?
+          </p>
+          <p class="dim">
+            The radio carries what changed, not the whole list, and spends a
+            rationed budget: changes then wait for the send button.
+          </p>
+          <button data-testid="accept-mesh" disabled={switching} onclick={() => carryOver("mesh")}>
+            {switching ? "switching…" : "Continue over the mesh"}
+          </button>
+          <!-- Dismissed for this outage: the watcher speaks on change, so the
+               question is not asked again until the internet comes back and
+               goes a second time. The line below still says it is gone. -->
+          <button class="ghost" onclick={() => (offerTheMesh = false)}>Stay on the internet</button>
+        </div>
+      {/if}
       {#if wantsInternet}
         <p class="dim" data-testid="carried-by">
           carried by <strong>{carriedBy === "internet" ? "the internet" : "the mesh"}</strong>
           {#if carriedBy === "internet"}· {ipPeers.length} peer{ipPeers.length === 1 ? "" : "s"} over IP{/if}
+          {#if !internetReachable}· <strong>internet gone</strong>{/if}
         </p>
         <button
           class="ghost"
@@ -976,6 +1026,15 @@
     display: flex;
     gap: 8px;
     margin: 10px 0;
+  }
+  .offer {
+    border: 1px solid var(--accent, #888);
+    border-radius: 6px;
+    padding: 12px;
+    margin: 12px 0;
+  }
+  .offer p {
+    margin: 0 0 8px;
   }
   input[type="text"],
   input:not([type]) {
