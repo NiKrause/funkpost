@@ -6,15 +6,31 @@
  *   → meshtastic courier (framing · ARQ · duty-cycle pacing, this repo)
  *   → a link: Web Bluetooth to a real node, or a BroadcastChannel fake.
  *
- * The libp2p node here exists only because Helia wants one — it listens
- * nowhere, dials nobody, and every database is opened with `sync: false`.
- * Every *change* travels through the courier. The founding may not: a list
- * that already exists can be backed up where there is internet and named over
- * the radio in one frame, and the far side fetches those bytes over HTTPS when
- * it next has internet of its own (P9, funkpost#68). Nothing else uses IP.
+ * Two paths carry one log, and never both at once.
+ *
+ *   · the mesh — OrbitDB → courier-sync → this repo's courier → a radio link
+ *   · the internet — OrbitDB's own sync over libp2p, through a relay
+ *
+ * Mesh-only was the whole point until P10: the node listened nowhere and
+ * dialled nobody, and every replicated byte went through the courier. It still
+ * can — `createDatabaseStack()` without `internet` is exactly that node. What
+ * changed is that the demo can now *start* on the internet and fall back to
+ * the radio when it goes, which is the case #82 asks about; and that a list's
+ * founding may arrive by CID over HTTPS, named over the radio in one frame
+ * (P9, funkpost#68).
+ *
+ * Never both at once is not taste: with OrbitDB's sync and courier-sync on one
+ * log at the same time, every run stalled — see test/fallback-one-log.test.js.
  */
 
 import { webSockets } from "@libp2p/websockets";
+import { webRTC } from "@libp2p/webrtc";
+import { circuitRelayTransport } from "@libp2p/circuit-relay-v2";
+import { identify } from "@libp2p/identify";
+import { gossipsub } from "@libp2p/gossipsub";
+import { bootstrap } from "@libp2p/bootstrap";
+import { pubsubPeerDiscovery } from "@libp2p/pubsub-peer-discovery";
+import { relayMultiaddrs, relaySource } from "./relays.js";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
 import { createHeliaLight } from "helia";
@@ -46,8 +62,64 @@ import { createBroadcastChannelLink } from "./fake-bc-link.js";
 
 const INVITE_VERSION = 1;
 
-/** One OrbitDB per tab; memory stores, so Reset is a reload. */
-export async function createDatabaseStack() {
+const PUBSUB_TOPICS = ["todo._peer-discovery._p2p._pubsub"];
+
+/**
+ * The libp2p an internet path needs: a relay to be reachable through, WebRTC
+ * to leave it again, pubsub for OrbitDB's own sync and for finding the other
+ * browser. None of this is used while the mesh carries the list — it is the
+ * *other* path, and only one runs at a time (see carryOverInternet).
+ */
+async function internetLibp2pOptions() {
+  const relays = await relayMultiaddrs();
+
+  return {
+    addresses: { listen: ["/p2p-circuit", "/webrtc"] },
+    transports: [
+      webSockets(),
+      webRTC({
+        rtcConfiguration: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:global.stun.twilio.com:3478" },
+          ],
+        },
+      }),
+      circuitRelayTransport(),
+    ],
+    connectionEncrypters: [noise()],
+    streamMuxers: [yamux()],
+    // A browser dials a relay on a private address in local testing, and the
+    // default gater refuses that.
+    connectionGater: {
+      denyDialMultiaddr: () => false,
+    },
+    peerDiscovery: [
+      ...(relays.length > 0
+        ? [bootstrap({ list: relays, timeout: 30_000, tagName: "bootstrap", tagValue: 50 })]
+        : []),
+      pubsubPeerDiscovery({ interval: 3000, topics: PUBSUB_TOPICS, listenOnly: false }),
+    ],
+    services: {
+      // A relay announces one protocol per database it holds open
+      // (`/orbitdb/heads/<address>`), and libp2p rejects an identify response
+      // over 8192 bytes *whole* — so a busy relay is never recognised as a
+      // relay at the default limit: no HOP, no reservation, no address.
+      // Measured against the registered relay, 2026-09-18: 611 protocols.
+      identify: identify({ maxMessageSize: 65_536 }),
+      pubsub: gossipsub({ allowPublishToZeroTopicPeers: true }),
+    },
+  };
+}
+
+/**
+ * One OrbitDB per tab; memory stores, so Reset is a reload.
+ *
+ * `internet: true` adds the IP path — a relay, pubsub, WebRTC — which is what
+ * P10 falls back *from*. Without it this is the mesh-only node the demo has
+ * always been: listening nowhere, dialling nobody.
+ */
+export async function createDatabaseStack({ internet = false } = {}) {
   // Composed rather than createHelia(). Helia 7's createHelia builds libp2p
   // on top of its default stack — WebRTC, TLS, DHT, UPnP, a relay server,
   // delegated routing over public HTTP endpoints — which put +157 kB gzipped
@@ -61,12 +133,14 @@ export async function createDatabaseStack() {
         datastore: new MemoryDatastore(),
         codecs: [dagCbor],
       }),
-      {
-        addresses: { listen: [] },
-        transports: [webSockets()],
-        connectionEncrypters: [noise()],
-        streamMuxers: [yamux()],
-      },
+      internet
+        ? await internetLibp2pOptions()
+        : {
+            addresses: { listen: [] },
+            transports: [webSockets()],
+            connectionEncrypters: [noise()],
+            streamMuxers: [yamux()],
+          },
     ),
   ).start();
   const id = `mesh-todo-${Math.random().toString(36).slice(2, 10)}`;
@@ -186,6 +260,18 @@ export async function createList({ orbitdb, courier }) {
   return { db, sync };
 }
 
+/**
+ * Join over the internet: OrbitDB opens the address and replicates it itself.
+ *
+ * The courier sync is built but not started — it is the other path, and the
+ * two do not share a log at the same time.
+ */
+export async function joinOverInternet({ orbitdb, courier, address }) {
+  const db = await orbitdb.open(address, { type: "keyvalue", sync: true });
+  const sync = await createCourierSync({ db, courier, announceOnLocalUpdate: false });
+  return { db, sync };
+}
+
 /** Join a list announced by the peer; the first delta materializes it. */
 export async function joinList({ orbitdb, courier, address }) {
   // Same on this side: a joiner's own writes wait for the button too. Going
@@ -246,6 +332,34 @@ export function watchFoundingPointers(courier, cb) {
     if (pointer) cb(pointer);
   });
 }
+
+/**
+ * Carry the list over the internet: OrbitDB's own sync, and the courier quiet.
+ *
+ * The order matters. Stopping the courier first is what keeps the two off the
+ * log together — a late switch is exactly the overlap that stalled every run
+ * in test/fallback-one-log.test.js.
+ */
+export async function carryOverInternet({ db, sync }) {
+  if (sync) await sync.stop();
+  await db.sync.start();
+}
+
+/** Carry it over the mesh: OrbitDB's sync stopped, the courier doing the work. */
+export async function carryOverMesh({ db, sync }) {
+  await db.sync.stop();
+  if (sync) await sync.start();
+}
+
+/** Peers this node is actually connected to over IP — what "online" should mean. */
+export function internetPeers(libp2p) {
+  return libp2p
+    .getConnections()
+    .filter((connection) => connection.status === "open")
+    .map((connection) => connection.remotePeer.toString());
+}
+
+export { relaySource };
 
 /** One packet: here is a database worth joining. */
 export function sendInvite(courier, address) {
