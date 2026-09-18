@@ -286,9 +286,11 @@ module level — so a restore-only client pays for the entire backup SDK:
 It would **more than double the application** to save six frames.
 
 *These three were measured on OrbitDB 3 / Helia 5.* On OrbitDB 4 / Helia 7
-`mesh-todo` itself is **434 kB**, because it composes a light Helia instead of
+`mesh-todo` itself is **420 kB**, because it composes a light Helia instead of
 calling `createHelia`, which would pull in Helia's whole default libp2p stack
-(718 kB). The two import costs have not been re-measured on the new stack.
+(718 kB). **Re-measured on the new stack 2026-09-18: importing `restoreFromCID`
+costs +3.8 kB gzipped** (420.4 → 424.2), not the 12 kB of the old one — the gate
+asks for under 20.
 
 **That seam is built** — [bridge#59](https://github.com/NiKrause/orbitdb-storage-bridge/pull/59),
 closing [bridge#58](https://github.com/NiKrause/orbitdb-storage-bridge/issues/58).
@@ -320,6 +322,14 @@ restores a database he has never seen from the CID alone, with no Storacha
 credentials, while the radio carries nothing but that pointer; `mesh-todo`'s
 bundle grows by **under 20 kB gzipped**; and `stack.js`'s claim about where
 bytes travel reads true against the code again.
+
+*Step 1 (2026-09-18):* the message exists and both numbers are counted.
+`lib/founding-pointer.js` encodes version, tag, address and CID as dag-cbor:
+**145 bytes, one frame** at the default 200-byte MTU, against about seven for
+today's first contact. The seam costs **+3.8 kB gzipped**. What is left is the
+wiring — backing up when there is internet, restoring on the far side, and the
+UI around both — and the backup half needs the browser fix released in
+orbitdb-storage-bridge 0.8.0, since every backup here happens in a browser.
 
 ### P10 · Internet first, the mesh when it is gone — #82
 
