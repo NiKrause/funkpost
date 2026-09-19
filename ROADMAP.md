@@ -592,10 +592,27 @@ In order — check before design:
    memory backend and a routing endpoint written in the test file: another seed
    finds nothing rather than somebody else's list, and a label keeps two
    databases of one seed apart.
-5. **Write**, not just read. The piece that is still only argued: the restored
-   identity is the same DID and the same signing key (measured on both phones),
-   so the original access controller should accept it — but nothing has yet
-   written an entry from a restored device and watched the first one take it.
+5. **Write**, not just read. ✅ *Shown 2026-09-19*
+   ([bridge#104](https://github.com/NiKrause/orbitdb-storage-bridge/pull/104)),
+   which is what the phase turns on: a restored copy that can only be read is a
+   photograph.
+
+   A signing key derived from the same secret produces the **same identity
+   document — same id, same hash** — on a machine that never saw the first. So
+   the access controller that named the original writer accepts the device that
+   came back: it writes, a courier carries the entry, and the original joins it.
+   A device holding another key restores the same database, reads it, and is
+   **refused** on write, which is what makes the acceptance mean anything.
+
+   *Still the gate, and not claimed:* the hardware. Phone A **wiped**, not a
+   cleared tab, and phone B writing with the same YubiKey. The mechanism holds;
+   that is a different sentence from "it happened on the bench".
+
+   Two traps turned up on the way, both silent, both now in the write-up:
+   `Identities({ keystore })` without `ipfs` verifies only identities it minted
+   itself, so a restored log comes back **empty with no error**; and seeding a
+   keystore under your own label is not enough with OrbitDB's default provider,
+   which looks the identity's key up under a derived hex id.
 
 *The whole procedure is written down* — the four things that have to be true,
 which package solves each, the code for both sides, and what none of it
