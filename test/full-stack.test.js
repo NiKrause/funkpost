@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 /**
  * The whole data plane, no radio: OrbitDB → courier-sync (MIT seam, from
- * orbitdb-storage-bridge) → this repo's meshtastic courier (framing, ARQ,
+ * @le-space/orbitdb-storage-bridge) → this repo's meshtastic courier (framing, ARQ,
  * EU_868 pacing) → an in-memory mesh that drops frames.
  *
  * Two OrbitDB peers converge through all of it while their libp2p nodes hold
@@ -21,7 +21,7 @@ import { createHelia } from "helia";
 import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
 import { createOrbitDB } from "@orbitdb/core";
-import { createCourierSync } from "orbitdb-storage-bridge/courier-sync";
+import { createCourierSync } from "@le-space/orbitdb-storage-bridge/courier-sync";
 
 import { createMeshtasticCourier } from "../lib/meshtastic-courier.js";
 import { createMemoryMeshPair } from "../lib/links/memory-mesh.js";
