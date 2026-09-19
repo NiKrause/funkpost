@@ -9,15 +9,7 @@
  */
 import { test, expect, devices } from "@playwright/test";
 import { createHash } from "node:crypto";
-
-const room = () => `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
-async function openPhone(context, roomId, extra = "") {
-  const page = await context.newPage();
-  await page.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO${extra}`);
-  await expect(page.getByText("BroadcastChannel (fake mesh)", { exact: true })).toBeVisible({ timeout: 30_000 });
-  return page;
-}
+import { room, openPhone } from "./phones.js";
 
 async function runTheScript(context, extra) {
   const roomId = room();

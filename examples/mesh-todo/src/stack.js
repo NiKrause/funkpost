@@ -30,6 +30,7 @@ import { identify } from "@libp2p/identify";
 import { gossipsub } from "@libp2p/gossipsub";
 import { bootstrap } from "@libp2p/bootstrap";
 import { pubsubPeerDiscovery } from "@libp2p/pubsub-peer-discovery";
+import { multiaddr } from "@multiformats/multiaddr";
 import { relayMultiaddrs, relaySource } from "./relays.js";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
@@ -59,10 +60,9 @@ import {
   describeMeshtasticError,
 } from "@le-space/funkpost";
 import { createBroadcastChannelLink } from "./fake-bc-link.js";
+import { PUBSUB_TOPICS } from "./pubsub-topics.js";
 
 const INVITE_VERSION = 1;
-
-const PUBSUB_TOPICS = ["todo._peer-discovery._p2p._pubsub"];
 
 /**
  * The libp2p an internet path needs: a relay to be reachable through, WebRTC
@@ -113,6 +113,50 @@ async function internetLibp2pOptions() {
 }
 
 /**
+ * Dial the peers discovery turns up.
+ *
+ * libp2p 3 has no auto-dialer left: a discovery module files the addresses it
+ * hears in the peer store and dispatches an event, and nothing else happens.
+ * Without this the two browsers meet on the relay's discovery topic, learn
+ * each other's addresses, and never connect — which is exactly what the log
+ * needs them to do, since a browser serves its blocks over a connection it
+ * made itself. (A relay that opens the databases it hears about papers over
+ * this, because then heads travel through the relay; a bare relay does not,
+ * and neither does a direct WebRTC link.)
+ *
+ * `peer:discovery` fires once per peer — the peer store only calls a peer new
+ * the first time — so the dial is retried on a ticker rather than given up on
+ * after one failure, which is ordinary while a circuit reservation is still
+ * being set up on the other side.
+ *
+ * @returns {() => void} stop dialling
+ */
+function dialDiscoveredPeers(libp2p, { intervalMs = 5000 } = {}) {
+  const known = new Map(); // peer id string → PeerId, so no re-parsing
+  const dialling = new Set();
+
+  const tick = () => {
+    for (const [id, peer] of known) {
+      if (dialling.has(id)) continue;
+      if (libp2p.getConnections(peer).length > 0) continue;
+      dialling.add(id);
+      libp2p
+        .dial(peer, { signal: AbortSignal.timeout(15_000) })
+        .catch(() => {}) // unreachable right now is ordinary, and the ticker returns
+        .finally(() => dialling.delete(id));
+    }
+  };
+
+  libp2p.addEventListener("peer:discovery", (event) => {
+    known.set(event.detail.id.toString(), event.detail.id);
+    tick();
+  });
+
+  const timer = setInterval(tick, intervalMs);
+  return () => clearInterval(timer);
+}
+
+/**
  * One OrbitDB per tab; memory stores, so Reset is a reload.
  *
  * `internet: true` adds the IP path — a relay, pubsub, WebRTC — which is what
@@ -143,6 +187,7 @@ export async function createDatabaseStack({ internet = false } = {}) {
           },
     ),
   ).start();
+  if (internet) dialDiscoveredPeers(helia.libp2p);
   const id = `mesh-todo-${Math.random().toString(36).slice(2, 10)}`;
   const orbitdb = await createOrbitDB({ ipfs: helia, id, directory: `./${id}` });
   return { libp2p: helia.libp2p, helia, orbitdb };
@@ -351,6 +396,75 @@ export async function carryOverMesh({ db, sync }) {
   if (sync) await sync.start();
 }
 
+/**
+ * Watch whether the internet is actually there.
+ *
+ * Not `navigator.onLine`: it reports the interface, not reachability, so a
+ * captive portal is "online" and reaches nobody. What matters is whether this
+ * node still has a connection it can replicate over — and a dropped connection
+ * alone is not proof either, since libp2p drops and redials all the time. So a
+ * loss is only declared after a dial fails: the probe is the evidence.
+ *
+ * @param {Object} params
+ * @param {Object} params.libp2p
+ * @param {() => Promise<string[]>} params.relays addresses to probe
+ * @param {(state: {reachable: boolean, peers: number}) => void} params.onChange
+ * @param {number} [params.intervalMs] how often to look
+ * @returns {() => void} stop watching
+ */
+export function watchInternet({ libp2p, relays, onChange, intervalMs = 4000 }) {
+  let reachable = true;
+  let probing = false;
+  let stopped = false;
+
+  const probe = async () => {
+    if (probing || stopped) return;
+    probing = true;
+    try {
+      const addresses = await relays();
+      for (const address of addresses) {
+        try {
+          await libp2p.dial(multiaddr(address), { signal: AbortSignal.timeout(8000) });
+          return true;
+        } catch {
+          // try the next one
+        }
+      }
+      return false;
+    } finally {
+      probing = false;
+    }
+  };
+
+  const look = async () => {
+    if (stopped) return;
+    const peers = internetPeers(libp2p).length;
+    if (peers > 0) {
+      if (!reachable) {
+        reachable = true;
+        onChange({ reachable, peers });
+      }
+      return;
+    }
+
+    // No connections. That is a question, not an answer — ask the network.
+    const answered = await probe();
+    if (stopped) return;
+    if (answered !== reachable) {
+      reachable = answered;
+      onChange({ reachable, peers: internetPeers(libp2p).length });
+    }
+  };
+
+  const timer = setInterval(look, intervalMs);
+  look();
+
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
 /** Peers this node is actually connected to over IP — what "online" should mean. */
 export function internetPeers(libp2p) {
   return libp2p
@@ -359,7 +473,7 @@ export function internetPeers(libp2p) {
     .map((connection) => connection.remotePeer.toString());
 }
 
-export { relaySource };
+export { relaySource, relayMultiaddrs };
 
 /** One packet: here is a database worth joining. */
 export function sendInvite(courier, address) {
