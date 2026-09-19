@@ -533,9 +533,29 @@ an error body**.
 
 In order — check before design:
 
-1. **The two phones, first.** PRF and a discoverable credential with the YubiKey
-   over NFC or USB-C, on the actual hardware. Missing PRF on either phone
-   changes the design, so nothing else is built before that answer.
+1. **The two phones, first.** ✅ *Answered 2026-09-19, on a Galaxy Fold 5 and a
+   Galaxy A57 with one YubiKey.* PRF and a discoverable credential, on the
+   hardware rather than on a virtual authenticator — because missing PRF on
+   either phone changes the design, and nothing else was built before that
+   answer.
+
+   Both phones, one key, [the probe](examples/landing/passkey-probe.html)
+   (published at
+   [/funkpost/passkey-probe/](https://nikrause.github.io/funkpost/passkey-probe/)):
+
+   - the **same PRF value** on both — the identity can travel by PRF, so the
+     rawId fallback #93 forbids is not merely forbidden, it is unnecessary;
+   - the passkey was **found without being named** — the probe never says which
+     credential to use, so it is discoverable on the key, which is all phone B
+     has to go on;
+   - the signature is **ES256**, and two of them leave exactly one candidate
+     public key ("2 from signature 1 · 2 from signature 2 · 1 in both"), so the
+     **DID is recovered rather than stored**;
+   - **DID, PRF and derived signing key identical on both phones.** That is the
+     whole claim of the phase, measured: the same key on a second device
+     reproduces the same identity, with nothing carried over.
+
+   The values themselves stay off this page; what matters is that they matched.
 2. **A pointer without `w3name`** — an IPNS record signed by the PRF-derived
    key, through delegated routing. Unverified that a browser can publish one.
    In the bridge.
