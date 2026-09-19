@@ -34,7 +34,7 @@
     "datastore-core": "^12.0.1",
     "helia": "^7.1.12",
     "libp2p": "^3.3.6",
-    "orbitdb-storage-bridge": "^0.9.0"
+    "@le-space/orbitdb-storage-bridge": "^0.9.0"
   },
   "devDependencies": {
     "@libp2p/ping": "^3.1.13",

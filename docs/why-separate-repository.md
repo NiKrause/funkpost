@@ -22,7 +22,7 @@ One consequence stated in advance, because it is a one-way door: anything that
 turns out to belong in a permissive package — the carrier-neutral framing, the
 sync seam — has to be written **there** and used from here. Designing it here
 and wanting it back later does not work. That is why `courier-sync` lives in
-orbitdb-storage-bridge and this repository only implements its courier
+@le-space/orbitdb-storage-bridge and this repository only implements its courier
 contract.
 
 ---

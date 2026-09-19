@@ -8,7 +8,7 @@ Status: **built and tested on hardware — first over-the-air replication 4 Sept
 
 Two peers whose *only* link is the mesh cannot have a WebRTC channel — but
 they can have a replicated OrbitDB database: entry by entry over the radio,
-big things via the [storage bridge](https://github.com/NiKrause/orbitdb-storage-bridge)
+big things via the [storage bridge](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge)
 once one side finds the internet again. Design, arithmetic and the S1–S5
 build plan live in
 [issue #1](https://github.com/NiKrause/funkpost/issues/1)
@@ -20,7 +20,7 @@ the per-jurisdiction airtime law:
 The transport-neutral half — `courier-sync`, the diff/bundle/apply protocol —
 deliberately does **not** live here: it is MIT, designed against an abstract
 courier in
-[orbitdb-storage-bridge#50](https://github.com/NiKrause/orbitdb-storage-bridge/issues/50),
+[@le-space/orbitdb-storage-bridge#50](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/50),
 and this repository binds it to the radio. The licence section below says why
 that direction is the only one that works.
 
@@ -90,7 +90,7 @@ into the blockstore and calls `joinEntry(head)`, which walks the parents *from
 local storage*, re-verifies every signature and the access controller, and
 splices them in. Authoring uses `put`; replicating uses `blockstore + joinEntry`
 — the same split OrbitDB's own pubsub sync uses, and the same the
-[storage bridge](https://github.com/NiKrause/orbitdb-storage-bridge) uses to
+[storage bridge](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge) uses to
 restore.
 
 Now the crux. **There are two separate acknowledgements, and only one of them

@@ -31,7 +31,7 @@ roadmap is built to keep testing.
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
-| **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storage-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
+| **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
 | **#82** | Internet first, mesh as fallback | **P10, built** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. The loss is established by a failed dial rather than a flag, the switch is a question rather than a reflex, and the app can ask the air whether another app — not another radio — is out there. |
 | **#93** | A lost phone, the same passkey | **Planned, P11** — the design exists in p2pass (PRF seed → deterministic IPNS key → manifest), used as reference and not integrated. The first question is whether PRF works with a YubiKey on the two actual phones. |
 
@@ -208,7 +208,7 @@ where one would carry all five, since `createDelta` walks from the heads down
 to theirs.
 
 *Was blocked on a release, not on code.* The option to opt out
-([bridge#56](https://github.com/NiKrause/orbitdb-storage-bridge/pull/56)) lives
+([bridge#56](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/56)) lives
 in a permissive package, as P8b requires — and `courier-sync` had never been
 published to npm: it landed after v0.4.3, so this repository depended on
 `github:…#main` rather than a version. **`orbitdb-storacha-bridge` 0.5.0 fixed
@@ -292,8 +292,8 @@ calling `createHelia`, which would pull in Helia's whole default libp2p stack
 costs +3.8 kB gzipped** (420.4 → 424.2), not the 12 kB of the old one — the gate
 asks for under 20.
 
-**That seam is built** — [bridge#59](https://github.com/NiKrause/orbitdb-storage-bridge/pull/59),
-closing [bridge#58](https://github.com/NiKrause/orbitdb-storage-bridge/issues/58).
+**That seam is built** — [bridge#59](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/59),
+closing [bridge#58](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/58).
 It lives there and not here for exactly P8b's reason: it is permissive, this is
 GPL, and anything that should stay permissive has to be written *there*
 ([why-separate-repository.md](docs/why-separate-repository.md)). funkpost's own
@@ -329,7 +329,7 @@ bytes travel reads true against the code again.
 today's first contact. The seam costs **+3.8 kB gzipped**. What is left is the
 wiring — backing up when there is internet, restoring on the far side, and the
 UI around both — and the backup half needs the browser fix released in
-orbitdb-storage-bridge 0.8.0, since every backup here happens in a browser.
+@le-space/orbitdb-storage-bridge 0.8.0, since every backup here happens in a browser.
 
 ### P10 · Internet first, the mesh when it is gone — #82
 
@@ -460,7 +460,7 @@ In order, and the first is the risk:
    worth a rationed budget.
 
    Answering it needs the protocol, so it was written in the bridge, for P8b's
-   reason: [bridge#99](https://github.com/NiKrause/orbitdb-storage-bridge/pull/99),
+   reason: [bridge#99](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/99),
    released as **0.9.0**. Every `courier-sync` message now carries a four-byte
    sender id, so ordinary traffic answers the question for free — a sync round
    *is* the proof — and `hello()` asks outright for the silence in between.
@@ -566,10 +566,10 @@ In order — check before design:
    and the preflight allows `PUT` **from any origin** — run again from a real
    browser page on a foreign origin, both calls 200. So a page with no server
    behind it can publish a pointer
-   ([bridge#101](https://github.com/NiKrause/orbitdb-storage-bridge/pull/101)).
+   ([bridge#101](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/101)).
 
-   *Then built:* `orbitdb-storage-bridge/pointer-ipns`
-   ([bridge#102](https://github.com/NiKrause/orbitdb-storage-bridge/pull/102)) —
+   *Then built:* `@le-space/orbitdb-storage-bridge/pointer-ipns`
+   ([bridge#102](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/102)) —
    `derivePointerKey` stretches a seed into the key, the name follows from it,
    and `resolvePointer` **validates every record against the name it asked
    for**, so an endpoint cannot hand back somebody else's pointer without being
@@ -584,7 +584,7 @@ In order — check before design:
    the passkey it does not have to be, so the step is: the database as a CAR to
    Aleph, the metadata that names it, and the pointer. One call:
    `dehydrate({ orbitdb, address, seed, backend })`
-   ([bridge#103](https://github.com/NiKrause/orbitdb-storage-bridge/pull/103)).
+   ([bridge#103](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/103)).
 4. **Hydrate** on phone B ✅ *Built 2026-09-19.* `hydrate({ orbitdb, seed })` —
    the same name, the record checked against it, `restoreFromCID`, the database
    open. Between the two devices there is **no CID, no address and no file**,
@@ -593,7 +593,7 @@ In order — check before design:
    finds nothing rather than somebody else's list, and a label keeps two
    databases of one seed apart.
 5. **Write**, not just read. ✅ *Shown 2026-09-19*
-   ([bridge#104](https://github.com/NiKrause/orbitdb-storage-bridge/pull/104)),
+   ([bridge#104](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/104)),
    which is what the phase turns on: a restored copy that can only be read is a
    photograph.
 
@@ -617,7 +617,7 @@ In order — check before design:
 *The whole procedure is written down* — the four things that have to be true,
 which package solves each, the code for both sides, and what none of it
 promises:
-[Getting a database back on a device that has nothing](https://github.com/NiKrause/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md).
+[Getting a database back on a device that has nothing](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md).
 
 *Gate:* phone A **wiped**, not simulated by clearing a tab; phone B with the
 same YubiKey restores the list, its identity equals the original, and it writes
