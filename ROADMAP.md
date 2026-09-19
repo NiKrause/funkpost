@@ -556,14 +556,51 @@ In order — check before design:
      reproduces the same identity, with nothing carried over.
 
    The values themselves stay off this page; what matters is that they matched.
-2. **A pointer without `w3name`** — an IPNS record signed by the PRF-derived
-   key, through delegated routing. Unverified that a browser can publish one.
-   In the bridge.
-3. **Dehydrate** on phone A: the database as a CAR to Aleph, the identity
-   archive encrypted, a manifest, the IPNS record.
-4. **Hydrate** on phone B: PRF → IPNS key → manifest → `restoreFromCID` →
-   decrypt → open with the same identity.
-5. **Write**, not just read.
+2. **A pointer without `w3name`** ✅ *Measured and built 2026-09-19.* An IPNS
+   record signed by a key the seed derives, published through delegated
+   routing — `w3name` was Storacha's, and Storacha is gone.
+
+   *Measured first,* because the doubt was never the code:
+   `PUT /routing/v1/ipns/{name}` at `delegated-ipfs.dev` answers **200**, the
+   `GET` gives the record back byte for byte and it validates against the name,
+   and the preflight allows `PUT` **from any origin** — run again from a real
+   browser page on a foreign origin, both calls 200. So a page with no server
+   behind it can publish a pointer
+   ([bridge#101](https://github.com/NiKrause/orbitdb-storage-bridge/pull/101)).
+
+   *Then built:* `orbitdb-storage-bridge/pointer-ipns`
+   ([bridge#102](https://github.com/NiKrause/orbitdb-storage-bridge/pull/102)) —
+   `derivePointerKey` stretches a seed into the key, the name follows from it,
+   and `resolvePointer` **validates every record against the name it asked
+   for**, so an endpoint cannot hand back somebody else's pointer without being
+   caught.
+
+   *Not established, and therefore not promised:* that a record travels beyond
+   the endpoint that took it (the public gateways answered 429 and 403), and
+   how long it is kept.
+3. **Dehydrate** on phone A ✅ *Built 2026-09-19* — and **without the encrypted
+   identity archive this step used to call for**. That archive existed because
+   the signing key was generated at random and had to be carried; derived from
+   the passkey it does not have to be, so the step is: the database as a CAR to
+   Aleph, the metadata that names it, and the pointer. One call:
+   `dehydrate({ orbitdb, address, seed, backend })`
+   ([bridge#103](https://github.com/NiKrause/orbitdb-storage-bridge/pull/103)).
+4. **Hydrate** on phone B ✅ *Built 2026-09-19.* `hydrate({ orbitdb, seed })` —
+   the same name, the record checked against it, `restoreFromCID`, the database
+   open. Between the two devices there is **no CID, no address and no file**,
+   only a secret both can produce. Four tests carry it end to end against a
+   memory backend and a routing endpoint written in the test file: another seed
+   finds nothing rather than somebody else's list, and a label keeps two
+   databases of one seed apart.
+5. **Write**, not just read. The piece that is still only argued: the restored
+   identity is the same DID and the same signing key (measured on both phones),
+   so the original access controller should accept it — but nothing has yet
+   written an entry from a restored device and watched the first one take it.
+
+*The whole procedure is written down* — the four things that have to be true,
+which package solves each, the code for both sides, and what none of it
+promises:
+[Getting a database back on a device that has nothing](https://github.com/NiKrause/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md).
 
 *Gate:* phone A **wiped**, not simulated by clearing a tab; phone B with the
 same YubiKey restores the list, its identity equals the original, and it writes
