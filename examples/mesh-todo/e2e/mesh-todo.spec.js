@@ -217,6 +217,44 @@ test("changes wait for the button, and then they cross", async ({ context }) => 
 });
 
 /**
+ * P10 step 5: who is out there, not which radios are (#82).
+ *
+ * The node can list the radios it has heard. That is a different question, and
+ * the one an app has to answer before spending a rationed budget is whether
+ * another *mesh-todo* is keeping this same list. Only that app can say so.
+ */
+test("the air is asked who is out there, and only an app can answer", async ({ context }) => {
+  const roomId = room();
+  const a = await openPhone(context, roomId);
+
+  // Alone: the question is asked, and the honest answer is nobody. A second
+  // page in the same room would answer; a radio never would.
+  await a.getByRole("button", { name: "Create a list" }).click();
+  await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
+  await expect(a.getByTestId("company")).toHaveText(/nobody has spoken here yet/);
+
+  await a.getByTestId("who-is-there").click();
+  await expect(a.getByTestId("company")).toHaveText(/nobody answered/, { timeout: 30_000 });
+  await expect(a.locator(".log")).toContainText(/radios may be in range, but no app/);
+
+  // Now somebody is. B joins, and from here both its join traffic and its
+  // answer say so — which is the point: the question exists for the silence
+  // between them, and the bridge's own tests isolate that by dropping
+  // everything the peer says until the question is asked.
+  const b = await openPhone(context, roomId);
+  await a.getByRole("button", { name: "Invite again" }).click();
+  await b.getByRole("button", { name: "Join this list" }).click();
+  await expect(b.getByText(/0 entries/)).toBeVisible({ timeout: 60_000 });
+
+  await a.getByTestId("who-is-there").click();
+  await expect(a.getByTestId("company")).toHaveText(/1 app out there/, { timeout: 30_000 });
+  await expect(b.getByTestId("company")).toHaveText(/1 app out there/, { timeout: 30_000 });
+
+  await a.close();
+  await b.close();
+});
+
+/**
  * P9: the founding, off the radio (#68).
  *
  * A carries the list, backs it up where there is internet, and beams one frame

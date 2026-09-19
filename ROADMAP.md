@@ -32,7 +32,7 @@ roadmap is built to keep testing.
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
 | **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storage-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
-| **#82** | Internet first, mesh as fallback | **P10, first risk answered** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. |
+| **#82** | Internet first, mesh as fallback | **P10, built** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. The loss is established by a failed dial rather than a flag, the switch is a question rather than a reflex, and the app can ask the air whether another app — not another radio — is out there. |
 | **#93** | A lost phone, the same passkey | **Planned, P11** — the design exists in p2pass (PRF seed → deterministic IPNS key → manifest), used as reference and not integrated. The first question is whether PRF works with a YubiKey on the two actual phones. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
@@ -333,7 +333,7 @@ orbitdb-storage-bridge 0.8.0, since every backup here happens in a browser.
 
 ### P10 · Internet first, the mesh when it is gone — #82
 
-**Steps 1–4 built, 5 open.** `mesh-todo` was mesh-only on purpose —
+**Built.** `mesh-todo` was mesh-only on purpose —
 `addresses: { listen: [] }` and `sync: false` — and the relay-synced version
 was a different program, `simple-todo`. #82 wrote the question down and left it
 unscheduled. This phase scheduled it, and the app now carries one list over
@@ -453,13 +453,49 @@ In order, and the first is the risk:
    with `--force-webrtc-ip-handling-policy=disable_non_proxied_udp`, which
    leaves WebRTC without host candidates: as close as one machine gets to two
    villages.
-5. **A connection test with peers, not radios.** `mesh-todo` lists the radio
-   *nodes* its node has heard — that proves radios in range, not that another
-   `mesh-todo` is listening. `mesh-calendar` has real app-level `presence()`;
-   `courier-sync` has none. That belongs in the bridge, for P8b's reason.
+5. **A connection test with peers, not radios.** ✅ *Built 2026-09-19.*
+   `mesh-todo` lists the radio *nodes* its node has heard, and on a public
+   channel most of them are somebody's router. That proves radios are in range
+   — not that another `mesh-todo` is keeping this list, which is the question
+   worth a rationed budget.
+
+   Answering it needs the protocol, so it was written in the bridge, for P8b's
+   reason: [bridge#99](https://github.com/NiKrause/orbitdb-storage-bridge/pull/99),
+   released as **0.9.0**. Every `courier-sync` message now carries a four-byte
+   sender id, so ordinary traffic answers the question for free — a sync round
+   *is* the proof — and `hello()` asks outright for the silence in between.
+   `presence()` reports who has been heard lately and how long ago the air last
+   carried anything at all; `forgetPeers()` drops it when the carrier changes
+   underneath, which is what a TX-channel switch does.
+
+   **The price, counted:** the id is **7 bytes of dag-cbor on every message**,
+   and asking outright is **33 bytes out, 32 back** — one frame each, against
+   the seven or so a first contact costs. Airtime spent to find out whether
+   spending airtime is worth it.
+
+   Two things the bridge's tests hold down, because both would lie to somebody
+   alone in a valley: **a mesh repeating our own message is not company** (LoRa
+   rebroadcasts, so a node hears itself), and **a peer keeping another database
+   on the same air is not either**. Its `hello` test drops everything the peer
+   says until the question is asked, so the answer is the only thing that can
+   prove anything.
+
+   In the app: *Is anyone out there?* under the send button, the answer in
+   plain words (*1 app out there keeping this list, last word 6 s ago* or
+   *nobody answered — radios can be in range without an app listening*), and
+   the question asked on its own the moment somebody accepts the mesh, which is
+   exactly when it is due. An older peer sends no id and answers nothing, so it
+   cannot be counted — its traffic still moves "last word", which is the honest
+   degradation: somebody is out there, we cannot say who.
 6. **Offer the sync** — exists, P8a.
 
 *Gate:* the whole script on the fake mesh in e2e, then once on the two nodes.
+**Half met, 2026-09-19:** the script runs in e2e —
+[`internet-path.spec.js`](examples/mesh-todo/e2e/internet-path.spec.js) carries
+a list over IP, loses the internet, asks, switches and sends over the mesh, and
+[`mesh-todo.spec.js`](examples/mesh-todo/e2e/mesh-todo.spec.js) asks the air who
+is out there and is told the truth both times. The two nodes are the open half,
+and they need hardware on a bench, not another commit.
 
 ### P11 · A lost phone, the same passkey — #93
 
