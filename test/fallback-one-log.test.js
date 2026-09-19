@@ -226,5 +226,15 @@ describe("P10 step 1: OrbitDB's own sync and courier-sync on one log", () => {
     assert.equal(logA.length, writes, "every write is in the log, exactly once");
     assert.deepEqual(await stateOf(dbA), await stateOf(dbB), "and both show the same list");
     assert.deepEqual(carried.errors, [], "courier-sync reported no errors");
+
+    // Leave the world quiet. The test ends with both OrbitDB syncs running and
+    // the two nodes connected, so teardown races whatever is in flight on the
+    // heads topic — and a message that arrives while its store is closing has
+    // surfaced on CI as an unhandled rejection charged to the `before` hook
+    // ("CBOR decode error: too many terminals"), twice, never reproducibly and
+    // never here. Whether or not that is the whole of it, a test should switch
+    // off what it switched on.
+    await dbA.sync.stop();
+    await dbB.sync.stop();
   });
 });
