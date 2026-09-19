@@ -85,6 +85,12 @@
   // and an offer it makes the reader — never a switch it throws by itself.
   let internetReachable = $state(true);
   let offerTheMesh = $state(false);
+  // P10 step 5: who is out there, as opposed to which radios are. The node
+  // below lists the radios it has heard; that is a different question, and
+  // answering it with this one is how an app ends up talking to nobody.
+  let company = $state({ peers: [], lastHeardAgoMs: null });
+  let asking = $state(false);
+  let askedAt = $state(null);
   let backingUp = $state(false);
   let restoring = $state(false);
   let online = $state(navigator.onLine);
@@ -313,6 +319,10 @@
         if (courier.timeUntilAffordable) blockedForMs = courier.timeUntilAffordable();
       }
       if (sync && !db && sync.db) attachDb(sync.db);
+      // Only while the courier is started: on the internet path it is stopped,
+      // and a stopped sync hears no answers — reporting its last ones as if
+      // they were current would be the same lie as counting radios.
+      if (sync && carriedBy === "mesh") company = sync.presence();
       nowTick = Date.now();
     }, 1000);
     document.addEventListener("visibilitychange", reacquireOnReturn);
@@ -459,12 +469,47 @@
         pushLog("carried by the mesh — OrbitDB's own sync is stopped");
       }
       carriedBy = path;
-      if (path === "mesh") offerTheMesh = false;
+      if (path === "mesh") {
+        offerTheMesh = false;
+        company = { peers: [], lastHeardAgoMs: null }; // the other path's silence says nothing
+        askWhoIsThere(); // the next thing anyone wants to know, so do not make them ask
+      }
     } catch (e) {
       error = e.message;
       pushLog(`! switch failed: ${e.message}`);
     } finally {
       switching = false;
+    }
+  }
+
+  /**
+   * Ask whether another app is out there — the question the node cannot
+   * answer.
+   *
+   * A radio reports the radios in range, and on a public channel most of them
+   * are somebody's router. Only a program keeping this same list can say it is
+   * keeping it, so this asks on the air and waits for an answer: two small
+   * messages, against a delta that costs frames.
+   */
+  async function askWhoIsThere() {
+    if (!sync || asking || carriedBy !== "mesh") return;
+    asking = true;
+    askedAt = Date.now();
+    pushLog("asking the air: is another mesh-todo keeping this list?");
+    try {
+      await sync.hello();
+      // An answer has to travel, and this carrier is slow on purpose.
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+      company = sync.presence();
+      pushLog(
+        company.peers.length > 0
+          ? `${company.peers.length} app${company.peers.length === 1 ? "" : "s"} answered: ${company.peers.map((peer) => peer.id).join(", ")}`
+          : "nobody answered — radios may be in range, but no app is keeping this list",
+      );
+    } catch (e) {
+      pushLog(`! asking failed: ${e.message}`);
+    } finally {
+      asking = false;
     }
   }
 
@@ -658,6 +703,10 @@
                 // afterwards, or a late-arriving channel would silently undo it.
                 txChannelChosenByHand = true;
                 setTxChannelFn(txChannel);
+                // Another channel is another audience: the apps that answered
+                // on the old one are no evidence about this one.
+                sync?.forgetPeers?.();
+                company = { peers: [], lastHeardAgoMs: null };
                 const ch = channels.find((c) => c.index === txChannel);
                 pushLog(`TX channel → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint}`);
               }}
@@ -761,6 +810,33 @@
           Send {unsent} change{unsent === 1 ? "" : "s"}
         {/if}
       </button>
+      {#if carriedBy === "mesh"}
+        <p class="dim" data-testid="company">
+          {#if asking}
+            asking the air…
+          {:else if company.peers.length > 0}
+            <strong
+              >{company.peers.length} app{company.peers.length === 1 ? "" : "s"} out there</strong
+            >
+            keeping this list{#if company.lastHeardAgoMs != null}, last word {Math.round(
+                company.lastHeardAgoMs / 1000,
+              )} s ago{/if}
+          {:else if askedAt}
+            <strong>nobody answered</strong> — radios can be in range without an app listening
+          {:else}
+            nobody has spoken here yet
+          {/if}
+        </p>
+        <button
+          class="ghost"
+          data-testid="who-is-there"
+          disabled={asking || airtimeBlocked}
+          onclick={askWhoIsThere}
+          title="Two small messages, and the only way to tell an app from a radio"
+        >
+          {#if asking}asking…{:else if airtimeBlocked}Airtime spent{:else}Is anyone out there?{/if}
+        </button>
+      {/if}
       {#if offerTheMesh}
         <div class="offer" data-testid="mesh-offer">
           <p>
@@ -852,7 +928,10 @@
       </h2>
       <p class="dim">
         who else is on this channel's air — on a public channel, this is the
-        audience an invite has.
+        audience an invite has. <strong>Radios, not apps:</strong> a node here
+        may be somebody's router and keep no list at all. Whether another
+        mesh-todo is out there is a question only that app can answer, and
+        <em>Is anyone out there?</em> above asks it.
       </p>
       <button class="ghost" onclick={() => (showNeighbours = !showNeighbours)}>
         {showNeighbours ? "Hide" : `Show ${neighbours.length} nodes`}
