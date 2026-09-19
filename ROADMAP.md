@@ -381,9 +381,30 @@ In order, and the first is the risk:
 
    *Still open from the original gate:* the same script as an e2e in the
    browser, which needs step 2's IP path first.
-2. **An IP path in `mesh-todo`** — a relay and `sync: true`, as `simple-todo`
-   does. `stack.js` then stops being able to say *"every replicated byte travels
-   through the courier or not at all"*; rewrite it rather than leave it wrong.
+2. **An IP path in `mesh-todo`** ✅ *Built 2026-09-18.* A relay, pubsub, WebRTC
+   and `sync: true`, as `simple-todo` does — `createDatabaseStack({ internet })`,
+   off by default under `?mesh=bc` so the e2e suite stays a closed room. Relay
+   addresses come from the registry on Aleph rather than the source, since the
+   one written into `mesh-todo`'s ancestors had been dead for months.
+
+   **The switch enforces step 1's finding in code:** `carryOverInternet` stops
+   the courier before starting OrbitDB's sync, `carryOverMesh` the reverse.
+   Never both on one log.
+
+   Seen in two tabs: both say *carried by the internet · 2 peers over IP*, a
+   write in one appears in the other **with nothing pressed**; after both
+   switch, a write **waits** for the send button and then crosses the mesh.
+   The page's entry graph grows **420.4 → 462.1 kB gzipped** (+23.1) for the
+   whole IP path.
+
+   `stack.js` no longer claims every replicated byte travels through the
+   courier — it says what is true now: two paths, one log, one at a time.
+
+   *One gotcha worth the note:* a relay announces one libp2p protocol per
+   database it holds open, and libp2p rejects an identify response over 8192
+   bytes **whole** — so a busy relay is never recognised as a relay at the
+   default limit (measured: 611 protocols). `identify({ maxMessageSize })` is
+   not optional here.
 3. **Detection that is honest.** Not `navigator.onLine`, which reports the
    interface and not reachability — a captive portal is "online" and reaches
    nobody. Watch what actually matters: libp2p connections to the relay and to

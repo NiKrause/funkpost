@@ -9,6 +9,11 @@
   import { onMount } from "svelte";
   import {
     createDatabaseStack,
+    joinOverInternet,
+    carryOverInternet,
+    carryOverMesh,
+    internetPeers,
+    relaySource,
     connectCourier,
     createList,
     joinList,
@@ -27,6 +32,11 @@
 
   const build = __BUILD_INFO__;
   const params = new URLSearchParams(location.search);
+  // P10: the internet path. On by default with a real radio — that is the case
+  // #82 asks about, internet first and the mesh when it goes — and off with the
+  // fake mesh, so the e2e suite stays a closed room. ?ip=1 / ?ip=0 override.
+  const wantsInternet =
+    params.get("ip") === "1" || (params.get("ip") !== "0" && params.get("mesh") !== "bc");
   const mode =
     params.get("mesh") === "bc"
       ? {
@@ -61,6 +71,10 @@
   // P9: the founding, off the radio. A pointer names a backup; the bytes come
   // over HTTPS when there is internet, and the radio carried one frame.
   let pointer = $state(null);
+  // Which path carries the log right now, and what the internet one is doing.
+  let carriedBy = $state(wantsInternet ? "internet" : "mesh");
+  let ipPeers = $state([]);
+  let switching = $state(false);
   let backingUp = $state(false);
   let restoring = $state(false);
   let online = $state(navigator.onLine);
@@ -254,7 +268,14 @@
         probeResult = `CRASH: ${e.message}`;
       }
     }
-    stack = await createDatabaseStack();
+    stack = await createDatabaseStack({ internet: wantsInternet });
+    if (wantsInternet) {
+      pushLog(`internet path up — relays from ${relaySource}`);
+      // Connections, not navigator.onLine: a captive portal is "online" and
+      // reaches nobody. Honest detection is P10 step 3; this is what it will
+      // watch.
+      setInterval(() => (ipPeers = internetPeers(stack.libp2p)), 2000);
+    }
     phase = "idle";
     if (mode.kind === "bc") connect();
     const ticker = setInterval(() => {
@@ -355,6 +376,10 @@
       wireSyncLog(sync);
       attachDb(made.db);
       pushLog("invite sent over the mesh");
+      if (carriedBy === "internet") {
+        await carryOverInternet({ db: made.db, sync });
+        pushLog("carried by the internet — OrbitDB's own sync, courier quiet");
+      }
     } catch (e) {
       error = e.message;
       pushLog(`! create failed: ${e.message}`);
@@ -368,15 +393,51 @@
     joining = true;
     pushLog("joining — bootstrap request goes on the air…");
     try {
-      const joined = await joinList({ orbitdb: stack.orbitdb, courier, address: invite });
-      sync = joined.sync;
-      wireSyncLog(sync);
-      pushLog("joining — waiting for the first delta…");
+      if (carriedBy === "internet") {
+        const joined = await joinOverInternet({
+          orbitdb: stack.orbitdb,
+          courier,
+          address: invite,
+        });
+        sync = joined.sync;
+        wireSyncLog(sync);
+        attachDb(joined.db);
+        pushLog("joined over the internet — OrbitDB is fetching the log");
+      } else {
+        const joined = await joinList({ orbitdb: stack.orbitdb, courier, address: invite });
+        sync = joined.sync;
+        wireSyncLog(sync);
+        pushLog("joining — waiting for the first delta…");
+      }
     } catch (e) {
       error = e.message;
       pushLog(`! join failed: ${e.message}`);
     } finally {
       joining = false;
+    }
+  }
+
+  /**
+   * Move the log from one path to the other. One at a time, always: both on the
+   * same log stalled every run in test/fallback-one-log.test.js.
+   */
+  async function carryOver(path) {
+    if (!db || switching || path === carriedBy) return;
+    switching = true;
+    try {
+      if (path === "internet") {
+        await carryOverInternet({ db, sync });
+        pushLog("carried by the internet — the courier is quiet");
+      } else {
+        await carryOverMesh({ db, sync });
+        pushLog("carried by the mesh — OrbitDB's own sync is stopped");
+      }
+      carriedBy = path;
+    } catch (e) {
+      error = e.message;
+      pushLog(`! switch failed: ${e.message}`);
+    } finally {
+      switching = false;
     }
   }
 
@@ -670,6 +731,20 @@
           Send {unsent} change{unsent === 1 ? "" : "s"}
         {/if}
       </button>
+      {#if wantsInternet}
+        <p class="dim" data-testid="carried-by">
+          carried by <strong>{carriedBy === "internet" ? "the internet" : "the mesh"}</strong>
+          {#if carriedBy === "internet"}· {ipPeers.length} peer{ipPeers.length === 1 ? "" : "s"} over IP{/if}
+        </p>
+        <button
+          class="ghost"
+          data-testid="carry-over"
+          disabled={switching}
+          onclick={() => carryOver(carriedBy === "internet" ? "mesh" : "internet")}
+        >
+          {#if switching}switching…{:else if carriedBy === "internet"}Carry it over the mesh instead{:else}Carry it over the internet instead{/if}
+        </button>
+      {/if}
       <button class="ghost" disabled={airtimeBlocked} onclick={() => sendInvite(courier, db.address)}>
         Invite again
       </button>
