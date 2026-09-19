@@ -2,7 +2,7 @@
 /**
  * Wires the whole data plane for the demo:
  *
- *   OrbitDB (browser) → courier-sync (orbitdb-storage-bridge, MIT seam)
+ *   OrbitDB (browser) → courier-sync (@le-space/orbitdb-storage-bridge, MIT seam)
  *   → meshtastic courier (framing · ARQ · duty-cycle pacing, this repo)
  *   → a link: Web Bluetooth to a real node, or a BroadcastChannel fake.
  *
@@ -40,15 +40,15 @@ import { withBitswap } from "@helia/bitswap";
 import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
 import { createOrbitDB, IPFSAccessController } from "@orbitdb/core";
-import { createCourierSync, databaseTag } from "orbitdb-storage-bridge/courier-sync";
+import { createCourierSync, databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
 // The two light entries. Through the main entry this would cost 88 kB more, for
 // a Storacha client the demo never calls (bridge #95); these two and the Aleph
 // driver are 18.6 kB gzipped together, and they are imported rather than split
 // off because splitting them measured *worse*: Rollup then duplicates what the
 // page and the chunk share, and the page grew by 280 kB.
-import { backupDatabaseCAR } from "orbitdb-storage-bridge/backup-car";
-import { restoreFromCID } from "orbitdb-storage-bridge/restore-cid";
-import { createAlephBackend } from "orbitdb-storage-bridge/backends/aleph";
+import { backupDatabaseCAR } from "@le-space/orbitdb-storage-bridge/backup-car";
+import { restoreFromCID } from "@le-space/orbitdb-storage-bridge/restore-cid";
+import { createAlephBackend } from "@le-space/orbitdb-storage-bridge/backends/aleph";
 import {
   encodeFoundingPointer,
   decodeFoundingPointer,
