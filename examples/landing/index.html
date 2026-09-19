@@ -149,7 +149,8 @@
         <p class="lede">
           A byte courier for local-first applications over LoRa mesh radios. Two
           demos run here — one per <strong>data plane</strong>, sharing the same
-          courier underneath and nothing else.
+          courier underneath and nothing else — and two instruments that exist
+          for a bench rather than for browsing.
         </p>
       </header>
 
@@ -168,6 +169,12 @@
           bookings in it. The only boundary is the channel key, and on a public
           Meshtastic channel that is no boundary at all.
         </p>
+        <p>
+          The two instruments below go further than reading: one creates a
+          passkey on the security key that taps it, the other publishes a backup
+          of whatever it holds to a public network. Neither asks for anything
+          you have; both do what they say when pressed.
+        </p>
         <p>Open them, read them, measure them — do not point them at a real calendar.</p>
       </section>
 
@@ -179,12 +186,25 @@
             <span class="pill">on hardware</span>
           </span>
           <p>
-            A todo list replicating between two phones with no IP path anywhere.
-            Signed entries and a verifiable log — and a sync pane that prices
-            every frame. It <em>has</em> an access controller, and this demo sets
-            it to allow anyone, which is the honest default for something with no
-            identities in it. This is the demo that first crossed the air, on
-            4 September 2026.
+            A todo list on two phones — the demo that first crossed the air, on
+            4 September 2026. Signed entries, a verifiable log, and a sync pane
+            that prices every frame.
+          </p>
+          <p>
+            Mesh-only is still a mode; with a radio the default is now
+            <strong>internet first</strong>, and when it goes the page works out
+            that it is gone by asking the network rather than believing a flag —
+            then <em>asks you</em> before moving the list onto a carrier that
+            spends a rationed budget. A list&#8217;s founding can arrive
+            <strong>from an IPFS gateway over HTTPS</strong> instead of over the
+            air — the radio carries only the CID, in a single frame — and the
+            page can ask the channel whether another <em>app</em> is out there
+            rather than counting radios.
+          </p>
+          <p>
+            It <em>has</em> an access controller, and this demo sets it to allow
+            anyone, which is the honest default for something with no identities
+            in it.
           </p>
           <span class="path">/funkpost/mesh-todo/</span>
         </a>
@@ -206,6 +226,34 @@
       </section>
 
       <section class="note">
+        <h2>Instruments, not demos</h2>
+        <p>
+          Two more pages live here. They are not demonstrations of anything —
+          they are how the hardware questions in
+          <a href="https://github.com/NiKrause/funkpost/issues/93">issue #93</a>
+          get answered, and each does something real when its buttons are
+          pressed.
+        </p>
+        <ul>
+          <li>
+            <strong>passkey probe</strong> — asks a security key whether it can
+            carry an identity to a second device: the PRF value, a largeBlob,
+            and the public key recovered from two signatures. It
+            <strong>creates a test passkey</strong> on whatever key taps it.
+            <a href="./passkey-probe/"><code>/funkpost/passkey-probe/</code></a>
+          </li>
+          <li>
+            <strong>recovery</strong> — a list, a security key, and a device
+            that has lost everything. Whatever is typed into it is
+            <strong>backed up to a public network</strong>, and the pointer to
+            that backup is derived from the security key, so a second phone
+            finds it with no address and no file.
+            <a href="./recovery/"><code>/funkpost/recovery/</code></a>
+          </li>
+        </ul>
+      </section>
+
+      <section class="note">
         <h2>Trying them without a radio</h2>
         <p>
           Append <code>?mesh=bc</code> and two browser tabs play the two devices,
@@ -216,7 +264,8 @@
         <ul>
           <li>
             <strong>mesh-todo:</strong> open it twice with
-            <code>?mesh=bc</code>.
+            <code>?mesh=bc</code>. That also switches the internet path off, so
+            the two tabs are a closed room; <code>?ip=1</code> brings it back.
           </li>
           <li>
             <strong>Termine:</strong> one tab with

@@ -1,7 +1,7 @@
 {
   "name": "@le-space/funkpost",
   "version": "0.1.0",
-  "description": "Post über Funk: a byte courier for local-first apps over LoRa mesh radios — works with Meshtastic devices. Framing, selective-ACK ARQ, duty-cycle pacing; carries WebRTC handshakes and OrbitDB databases.",
+  "description": "Post \u00fcber Funk: a byte courier for local-first apps over LoRa mesh radios \u2014 works with Meshtastic devices. Framing, selective-ACK ARQ, duty-cycle pacing; carries WebRTC handshakes and OrbitDB databases.",
   "type": "module",
   "license": "GPL-3.0-only",
   "repository": {
@@ -55,7 +55,7 @@
     "datastore-core": "^12.0.1",
     "helia": "^7.1.12",
     "libp2p": "^3.3.6",
-    "@le-space/orbitdb-storage-bridge": "^0.9.0",
+    "@le-space/orbitdb-storage-bridge": "^0.10.0",
     "yjs": "^13.6.27"
   },
   "workspaces": [
