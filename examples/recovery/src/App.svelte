@@ -244,7 +244,7 @@
   <footer>
     <a href="https://github.com/NiKrause/funkpost/blob/main/ROADMAP.md">roadmap</a> ·
     <a
-      href="https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md"
+      href="https://github.com/NiKrause/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md"
       >how it works</a
     >
     · GPL-3.0 ·

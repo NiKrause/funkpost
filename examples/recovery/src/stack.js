@@ -15,7 +15,7 @@
  *     so "forget everything" is a reload away from being true.
  *
  * The procedure itself is the bridge's, written up in
- * https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md
+ * https://github.com/NiKrause/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md
  */
 import { createHelia } from "helia";
 import { webSockets } from "@libp2p/websockets";
