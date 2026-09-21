@@ -132,6 +132,11 @@ was the claim worth testing.
 **31 seconds** later — an appointment the shop never entered. The whole session cost **9.3 s of
 airtime** — about 2.5 % of the hourly allowance.
 
+**21 September 2026 — a list survived a wiped phone.** A Galaxy Fold 5 made a
+list and backed it up, and was reset; a Galaxy A57 with the same YubiKey had
+the same identity, brought the list back with the key alone, and wrote to it —
+nothing typed in, nothing carried over.
+
 What is *not* settled, and what each bench session cost, is kept honestly in
 **[field notes](docs/field-notes.md)**. Sequencing and gates are in
 **[ROADMAP.md](ROADMAP.md)**. What the next bench has to show — two runs, what

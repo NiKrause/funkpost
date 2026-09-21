@@ -153,6 +153,43 @@ range can already do" — true, and the conclusion drawn from it was too generou
 act, and the sentence hid the difference. Recorded in
 [#55](https://github.com/NiKrause/funkpost/issues/55).
 
+## A list back on a phone that never had it
+
+**21 September 2026.** A Galaxy Fold 5 made a list on
+[the recovery page](https://nikrause.github.io/funkpost/recovery/), backed it
+up — the list as a CAR to Aleph, a pointer under a name the key derives — and
+was reset. A Galaxy A57 with the same YubiKey showed the same DID and
+signing-key fingerprints, brought the list back with the key alone, and wrote an
+entry the list accepted. P11's gate, on hardware
+([#93](https://github.com/NiKrause/funkpost/issues/93#issuecomment-5765768993)).
+
+The first run on the phones failed, and so did the next thing behind it. None
+of the three failures had been reached by a test:
+
+- **The third touch threw.** `WebAuthn signing error: Cannot read properties of
+  undefined (reading 'substring')`, after the key had already signed. The
+  provider wants the credential id as text as well as bytes; restore handed
+  out the bytes, under the text's name, and a debug line read the missing text.
+- **Then "Not started"**, found by the browser test written for the first
+  failure. Helia 7's `createHelia()` does not start the node, and an `await` in
+  front of it looks as if it did. The page never started its node, so the first
+  block OrbitDB stored failed. `mesh-todo` composes and starts its node; the
+  recovery page now does the same.
+- **Restore would have asked the wrong gateways.** The backup goes to Aleph;
+  restore asked Storacha's two gateways first and Aleph's not at all.
+
+All three were fixed in #117, the first also in the provider (0.7.0). The
+second run on the phones worked.
+
+**Kept for next time:** a page goes to the bench only after its whole path has
+run in a browser test. Here that is a Chromium virtual authenticator with PRF,
+which reproduced the phones' exception line for line before the fix and passes
+after it, on every PR.
+
+Not settled by this run: whether the backup is *kept* — Aleph's keyless upload
+is ingest, not persistence, and the pointer asks for 30 days from an endpoint
+whose retention is unmeasured — and the timings, which were not recorded.
+
 ---
 
 ← [funkpost](../README.md) · [ROADMAP](../ROADMAP.md)
