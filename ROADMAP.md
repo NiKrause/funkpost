@@ -192,6 +192,12 @@ decision record travels), and an `.ics` on both phones. What the run surfaced
 instead is in #73: `want_ack` on broadcasts may be tripling our airtime, two
 payloads were dropped after 2 rounds, and the store errors on an empty room.
 
+*How to run it:* [run B of the run sheet](docs/run-sheet.md#run-b-a-decision-crosses-the-mesh).
+Writing it found two things the bench cannot do yet. The salon view has **no
+`.ics` button** — the domain writes the salon's file, nothing calls it — so the
+second half of this gate cannot be met as the app stands. And the booking page
+shows no airtime, so the run reads it from the official app.
+
 ### P8 · The change, not the founding — #75
 
 `mesh-todo` keeps OrbitDB; #75 records why reshaping it would buy nothing. Two
@@ -495,7 +501,8 @@ In order, and the first is the risk:
 a list over IP, loses the internet, asks, switches and sends over the mesh, and
 [`mesh-todo.spec.js`](examples/mesh-todo/e2e/mesh-todo.spec.js) asks the air who
 is out there and is told the truth both times. The two nodes are the open half,
-and they need hardware on a bench, not another commit.
+and they need hardware on a bench, not another commit — what that bench does,
+step by step, is [run A of the run sheet](docs/run-sheet.md#run-a-internet-first-the-mesh-when-it-goes).
 
 ### P11 · A lost phone, the same passkey — #93
 
@@ -630,7 +637,9 @@ Independent of the phases above, and driven by field runs rather than a
 schedule: first-contact bootstrap on a congested channel, and how reliably a
 full sync survives repeated BLE drops on a given phone. The standing
 recommendation for any real bench is a **private Meshtastic channel** — it
-removes the congestion that causes most of it.
+removes the congestion that causes most of it. The
+[run sheet](docs/run-sheet.md#watch-during-both-runs) says what to watch for on
+every run.
 
 ## Principles these phases are testing
 

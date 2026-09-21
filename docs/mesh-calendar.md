@@ -283,7 +283,10 @@ it, and a calendar entry from last spring must still lead somewhere useful.
 Structural correctness is tested — every line ≤ 75 octets, CRLF throughout, a
 full parse-back round trip, `SEQUENCE` behaviour. Whether **Apple Calendar,
 Google Calendar and Thunderbird** each accept the file is a manual check, and
-until someone has done it on all three this gate is only half met.
+until someone has done it on all three this gate is only half met. Run B of the
+[run sheet](run-sheet.md#run-b-a-decision-crosses-the-mesh) ends with the
+customer's file opened in a phone's calendar, which covers one of the three at
+most.
 
 ## What the device keeps
 

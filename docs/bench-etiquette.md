@@ -178,10 +178,13 @@ that expires by itself.
 
 ## 6. Watch what you are actually spending
 
-Both demos show the node's **own measured** airtime utilisation (`air_util_tx`)
+`mesh-todo` shows the node's **own measured** airtime utilisation (`air_util_tx`)
 — which counts everything the radio does, including beacons, telemetry and any
 relaying, not just this app. The courier reconciles its budget against that
-number, because the device is what the duty cycle binds.
+number, because the device is what the duty cycle binds. `mesh-calendar`
+reconciles against it too but does not show it yet, so its
+[run](run-sheet.md#run-b-a-decision-crosses-the-mesh) reads the number from the
+official app.
 
 If it climbs while you are idle, something other than your app is spending it.
 
@@ -191,6 +194,7 @@ With three nodes the useful arrangement is **two participants and one witness**:
 two run the demo, the third sits in the official Meshtastic app on the same
 channel and simply watches. It answers the question that costs the most time —
 *is anything reaching the air at all* — without adding traffic of its own.
+What to run on such a bench is on the [run sheet](run-sheet.md).
 
 ## The short version
 
@@ -218,4 +222,4 @@ trade across a desk and a poor one across a valley.
 
 ---
 
-← [funkpost](../README.md) · [ROADMAP](../ROADMAP.md)
+← [funkpost](../README.md) · [ROADMAP](../ROADMAP.md) · [run sheet](run-sheet.md)
