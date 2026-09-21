@@ -24,6 +24,8 @@
     connectCourier,
     createList,
     joinList,
+    attachCourier,
+    startHeartbeat,
     sendInvite,
     watchInvites,
     backUpAndPoint,
@@ -53,6 +55,17 @@
           preset: params.get("preset") ?? undefined,
         }
       : { kind: "ble" };
+  // How long a minute is, for the heartbeat. Only the e2e suite changes it:
+  // ?minute=300 makes a round of five beats last a second and a half, and the
+  // hour between two rounds eighteen seconds.
+  const minuteMs = Math.max(100, Number(params.get("minute")) || 60_000);
+  // A list's link: the page's own address names the list, so a link or the
+  // page's QR code opens it on another device. Nothing else is read from the
+  // hash.
+  const linked = (() => {
+    const named = new URLSearchParams(location.hash.slice(1)).get("list");
+    return named?.startsWith("/orbitdb/") ? named : null;
+  })();
 
   let phase = $state("boot"); // boot → idle → connecting → ready
   let linkKind = $state("");
@@ -75,6 +88,14 @@
   let reconnecting = $state(false);
   let creating = $state(false);
   let joining = $state(false);
+  let openingLink = $state(false);
+  let inviteFrom = $state("mesh"); // or "link": who named the list waiting to be joined
+  // The heartbeat: does another device keeping this list answer on the air?
+  let heartbeat = null;
+  let heartbeatStarting = false;
+  let beat = $state(null);
+  let wiring = null; // an attach in progress, so a second caller can wait for it
+  const nodeReady = $derived(phase === "ready");
   // P9: the founding, off the radio. A pointer names a backup; the bytes come
   // over HTTPS when there is internet, and the radio carried one frame.
   let pointer = $state(null);
@@ -141,6 +162,7 @@
     preferenceApplied = true;
     txChannel = index;
     setTxChannelFn(index);
+    restartHeartbeat();
     const ch = channels.find((c) => c.index === index);
     pushLog(`TX channel → ${index} »${ch?.name}« ⌗${ch?.fingerprint} — chosen automatically`);
   }
@@ -278,7 +300,118 @@
     opened.events.on("update", refreshTodos);
     refreshTodos();
     pushLog(`db open: ${opened.address.slice(0, 24)}…`);
+    // The address bar now names the list: the link to share, and what the
+    // page's QR code shows.
+    history.replaceState(null, "", `${location.pathname}${location.search}#list=${opened.address}`);
+    wireList();
   };
+
+  /**
+   * What the list and the node need from each other once both are here, in
+   * whichever order they came. A list made before the node gets its mesh path
+   * now; the heartbeat starts either way.
+   *
+   * @returns {Promise<void>} settles when the mesh path is attached
+   */
+  function wireList() {
+    if (!db || !courier) return Promise.resolve();
+    if (!sync && !wiring) {
+      wiring = attachCourier({ db, courier, start: carriedBy === "mesh" })
+        .then((attached) => {
+          sync = attached;
+          wireSyncLog(sync);
+          pushLog(
+            carriedBy === "mesh"
+              ? "the node carries the list now — invite sent"
+              : "the list has a mesh path now, quiet while the internet carries it — invite sent",
+          );
+        })
+        .catch((e) => pushLog(`! attaching the node failed: ${e.message}`))
+        .finally(() => (wiring = null));
+    }
+    maybeStartHeartbeat();
+    return wiring ?? Promise.resolve();
+  }
+
+  async function maybeStartHeartbeat() {
+    if (heartbeat || heartbeatStarting || !courier || !db) return;
+    heartbeatStarting = true;
+    try {
+      heartbeat = await startHeartbeat({
+        courier,
+        address: db.address,
+        minuteMs,
+        onChange: (state) => (beat = state),
+        onEvent: logBeat,
+      });
+    } catch (e) {
+      pushLog(`! heartbeat: ${e.message}`);
+    } finally {
+      heartbeatStarting = false;
+    }
+  }
+
+  /** Another channel is another audience: what answered on the old one says nothing. */
+  function restartHeartbeat() {
+    if (!heartbeat) return;
+    heartbeat.stop();
+    heartbeat = null;
+    beat = null;
+    maybeStartHeartbeat();
+  }
+
+  const clockText = (at) =>
+    at == null
+      ? "—"
+      : new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  const agoText = (ms) =>
+    ms == null ? "" : ms < 60_000 ? "just now" : `${Math.round(ms / 60_000)} min ago`;
+
+  const logBeat = (event) => {
+    if (event.kind === "beat") {
+      pushLog(`♥ beat ${event.beat} of ${event.of} — is another device keeping this list?`);
+    }
+    if (event.kind === "heard") pushLog(`♥ ${event.type} from device ${event.from}`);
+    if (event.kind === "echo") pushLog(`♥ echo to device ${event.to}`);
+    if (event.kind === "round" && !event.answered) {
+      pushLog(`♥ nobody with this list answered — next heartbeat at ${clockText(event.nextRoundAt)}`);
+    }
+    if (event.kind === "error") pushLog(`! heartbeat: ${describeError(event.error)}`);
+  };
+
+  // The LED: steady only with a node connected and another device keeping this
+  // list answering its heartbeat. Everything short of that blinks, and says why.
+  const led = $derived.by(() => {
+    if (linkLost) return { steady: false, text: "LoRa node lost — reload to reconnect" };
+    if (reconnecting) return { steady: false, text: "LoRa node dropped — reconnecting…" };
+    if (!nodeReady) {
+      return {
+        steady: false,
+        text: phase === "connecting" ? "connecting to the LoRa node…" : "no LoRa node connected",
+      };
+    }
+    if (!db) return { steady: false, text: "LoRa node connected — no list to listen for yet" };
+    if (!beat) return { steady: false, text: "LoRa node connected — starting the heartbeat…" };
+    if (beat.lastError) return { steady: false, text: `the heartbeat cannot go out: ${beat.lastError}` };
+    const checking = beat.beat > 0 ? ` · checking again, beat ${beat.beat} of ${beat.beatsPerRound}` : "";
+    if (beat.verdict === "answered") {
+      const others = Math.max(1, beat.peers.length);
+      return {
+        steady: true,
+        text: `${others === 1 ? "another device" : `${others} other devices`} with this list answered ${agoText(beat.lastHeardAgoMs)}${checking}`,
+      };
+    }
+    if (beat.verdict === "alone") {
+      return {
+        steady: false,
+        text: `no other device with this list answered${checking || ` — next heartbeat at ${clockText(beat.nextRoundAt)}`}`,
+      };
+    }
+    return {
+      steady: false,
+      text: `looking for another device with this list — beat ${beat.beat} of ${beat.beatsPerRound}`,
+    };
+  });
 
   onMount(async () => {
     // On a phone the console is invisible; surface anything that would
@@ -342,7 +475,18 @@
       });
     }
     phase = "idle";
-    if (mode.kind === "bc") connect();
+    // `autoconnect=0` leaves the fake node unpaired until the button is
+    // pressed, as a real one is — for the path where the list comes first.
+    if (mode.kind === "bc" && params.get("autoconnect") !== "0") connect();
+    if (linked) {
+      // Over the internet a link is enough to open the list. Without an
+      // internet path only the radio can bring it, so it waits as an invite.
+      if (wantsInternet) openLinked(linked);
+      else {
+        invite = linked;
+        inviteFrom = "link";
+      }
+    }
     const ticker = setInterval(() => {
       if (courier) {
         budget = courier.budget();
@@ -356,11 +500,13 @@
       // and a stopped sync hears no answers — reporting its last ones as if
       // they were current would be the same lie as counting radios.
       if (sync && carriedBy === "mesh") company = sync.presence();
+      if (heartbeat) beat = heartbeat.state();
       nowTick = Date.now();
     }, 1000);
     document.addEventListener("visibilitychange", reacquireOnReturn);
     return () => {
       clearInterval(ticker);
+      heartbeat?.stop();
       document.removeEventListener("visibilitychange", reacquireOnReturn);
     };
   });
@@ -421,7 +567,9 @@
       applyPreferredChannel();
       budget = courier.budget();
       watchInvites(courier, (addr) => {
-        if (!db) invite = addr;
+        if (db) return;
+        invite = addr;
+        inviteFrom = "mesh";
       });
       watchFoundingPointers(courier, (p) => {
         if (!db) pointer = p;
@@ -429,6 +577,7 @@
       });
       phase = "ready";
       pushLog(`link up: ${linkKind}, region ${region}`);
+      wireList();
     } catch (e) {
       error = e.message;
       phase = "idle";
@@ -438,16 +587,20 @@
   async function create() {
     error = "";
     creating = true;
-    pushLog("creating list — announce and invite go on the air…");
+    pushLog(
+      courier
+        ? "creating list — announce and invite go on the air…"
+        : "creating list — no node needed; one connected later gives it the mesh",
+    );
     try {
       const made = await createList({ orbitdb: stack.orbitdb, courier });
       sync = made.sync;
-      wireSyncLog(sync);
+      if (sync) wireSyncLog(sync);
       attachDb(made.db);
-      pushLog("invite sent over the mesh");
+      if (made.sync) pushLog("invite sent over the mesh");
       if (carriedBy === "internet") {
         await carryOverInternet({ db: made.db, sync });
-        pushLog("carried by the internet — OrbitDB's own sync, courier quiet");
+        pushLog(`carried by the internet — OrbitDB's own sync${sync ? ", courier quiet" : ""}`);
       }
     } catch (e) {
       error = e.message;
@@ -459,6 +612,10 @@
 
   async function join() {
     error = "";
+    if (carriedBy === "mesh" && !courier) {
+      error = "joining over the mesh needs a node — connect one first";
+      return;
+    }
     joining = true;
     pushLog("joining — bootstrap request goes on the air…");
     try {
@@ -486,12 +643,34 @@
     }
   }
 
+  /** Open the list a link names: over the internet, with or without a node. */
+  async function openLinked(named) {
+    error = "";
+    openingLink = true;
+    pushLog("opening the list from its link — OrbitDB fetches it from the pages that have it…");
+    try {
+      const joined = await joinOverInternet({ orbitdb: stack.orbitdb, courier, address: named });
+      if (joined.sync) {
+        sync = joined.sync;
+        wireSyncLog(sync);
+      }
+      attachDb(joined.db);
+      pushLog(`list open — the internet carries it${courier ? "" : ", no node needed"}`);
+    } catch (e) {
+      error = e.message;
+      pushLog(`! opening the link failed: ${e.message}`);
+    } finally {
+      openingLink = false;
+    }
+  }
+
   /**
    * Move the log from one path to the other. One at a time, always: both on the
    * same log stalled every run in test/fallback-one-log.test.js.
    */
   async function carryOver(path) {
     if (!db || switching || path === carriedBy) return;
+    if (path === "mesh" && !sync) return; // no node yet — connectAndCarry pairs one first
     switching = true;
     try {
       if (path === "internet") {
@@ -513,6 +692,18 @@
     } finally {
       switching = false;
     }
+  }
+
+  /**
+   * The mesh, on a page that has no node yet: pair one, then move the list
+   * onto it. connect() goes first, while the click still counts as the
+   * gesture the Bluetooth chooser needs.
+   */
+  async function connectAndCarry() {
+    await connect();
+    if (phase !== "ready") return;
+    await wireList();
+    await carryOver("mesh");
   }
 
   /**
@@ -679,6 +870,15 @@
     no servers · no accounts ·
     {wantsInternet ? "internet first, the mesh when it goes" : "no IP path"} — a todo list over LoRa
   </p>
+  <p
+    class="led-line"
+    data-testid="led"
+    data-state={led.steady ? "steady" : "blinking"}
+    title="Blinks until a LoRa node is connected and another device keeping this list answers its heartbeat. One round an hour: up to five beats a minute apart, until one is answered."
+  >
+    <span class="led" class:steady={led.steady} aria-hidden="true"></span>
+    <span data-testid="led-label">{led.text}</span>
+  </p>
 
   <!-- Dismissible, and it stays dismissed: somebody using this as a bench
        instrument reads it once and then wants the screen back. -->
@@ -711,8 +911,8 @@
         registered on Aleph, meets other mesh-todo pages on a shared discovery topic, and
         connects to them — directly over WebRTC where it can, through a relay where it
         cannot. A list travels over these connections; the LoRa mesh is for when they are
-        gone. Making or joining a list still needs a node today: the invitation crosses the
-        radio.
+        gone. A list needs no node: make one below, and its link — or this page's QR code —
+        opens it on another device.
       </p>
       <p>
         <strong>{internetReachable ? "online" : "internet gone"}</strong>
@@ -769,6 +969,7 @@
                 // on the old one are no evidence about this one.
                 sync?.forgetPeers?.();
                 company = { peers: [], lastHeardAgoMs: null };
+                restartHeartbeat();
                 const ch = channels.find((c) => c.index === txChannel);
                 pushLog(`TX channel → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint}`);
               }}
@@ -860,19 +1061,26 @@
         {/each}
       </ul>
       <p class="dim">
-        {todos.length} entr{todos.length === 1 ? "y" : "ies"} · changes stay here until you send them
+        {todos.length} entr{todos.length === 1 ? "y" : "ies"} ·
+        {#if carriedBy === "internet"}changes travel over the internet as you make them{:else if nodeReady}changes stay here until you send them{:else}changes stay here until a node carries them{/if}
       </p>
-      <button
-        class="send"
-        data-testid="send-changes"
-        disabled={unsent === 0 || sending || airtimeBlocked}
-        onclick={sendChanges}
-      >
-        {#if airtimeBlocked}Airtime spent{:else if sending}sending…{:else if unsent === 0}Nothing to send{:else}
-          Send {unsent} change{unsent === 1 ? "" : "s"}
-        {/if}
-      </button>
-      {#if carriedBy === "mesh"}
+      <p class="dim">
+        The link to this list — or this page's QR code, top right — opens it on another device:
+        <a data-testid="list-link" href={`#list=${address}`}>link to this list</a>
+      </p>
+      {#if carriedBy === "mesh" && nodeReady}
+        <button
+          class="send"
+          data-testid="send-changes"
+          disabled={unsent === 0 || sending || airtimeBlocked}
+          onclick={sendChanges}
+        >
+          {#if airtimeBlocked}Airtime spent{:else if sending}sending…{:else if unsent === 0}Nothing to send{:else}
+            Send {unsent} change{unsent === 1 ? "" : "s"}
+          {/if}
+        </button>
+      {/if}
+      {#if carriedBy === "mesh" && nodeReady}
         <p class="dim" data-testid="company">
           {#if asking}
             asking the air…
@@ -909,9 +1117,19 @@
             The radio carries what changed, not the whole list, and spends a
             rationed budget: changes then wait for the send button.
           </p>
-          <button data-testid="accept-mesh" disabled={switching} onclick={() => carryOver("mesh")}>
-            {switching ? "switching…" : "Continue over the mesh"}
-          </button>
+          {#if nodeReady}
+            <button data-testid="accept-mesh" disabled={switching} onclick={() => carryOver("mesh")}>
+              {switching ? "switching…" : "Continue over the mesh"}
+            </button>
+          {:else}
+            <button
+              data-testid="accept-mesh"
+              disabled={switching || phase === "connecting"}
+              onclick={connectAndCarry}
+            >
+              {phase === "connecting" ? "connecting…" : "Connect a node and continue over the mesh"}
+            </button>
+          {/if}
           <!-- Dismissed for this outage: the watcher speaks on change, so the
                question is not asked again until the internet comes back and
                goes a second time. The line below still says it is gone. -->
@@ -927,27 +1145,37 @@
         <button
           class="ghost"
           data-testid="carry-over"
-          disabled={switching}
-          onclick={() => carryOver(carriedBy === "internet" ? "mesh" : "internet")}
+          disabled={switching || phase === "connecting"}
+          onclick={() =>
+            carriedBy === "mesh"
+              ? carryOver("internet")
+              : nodeReady
+                ? carryOver("mesh")
+                : connectAndCarry()}
         >
-          {#if switching}switching…{:else if carriedBy === "internet"}Carry it over the mesh instead{:else}Carry it over the internet instead{/if}
+          {#if switching}switching…{:else if carriedBy === "mesh"}Carry it over the internet instead{:else if nodeReady}Carry it over the mesh instead{:else}Connect a node and carry it over the mesh{/if}
         </button>
       {/if}
-      <button class="ghost" disabled={airtimeBlocked} onclick={() => sendInvite(courier, db.address)}>
-        Invite again
-      </button>
-      <button
-        class="ghost"
-        data-testid="back-up-and-point"
-        disabled={!online || backingUp || airtimeBlocked}
-        onclick={backUp}
-        title={online ? "Backs up over the internet, then names it over the radio in one frame" : "Needs internet"}
-      >
-        {#if backingUp}backing up…{:else if !online}Back up (needs internet){:else}Back up & beam pointer{/if}
-      </button>
+      {#if nodeReady}
+        <button class="ghost" disabled={airtimeBlocked} onclick={() => sendInvite(courier, db.address)}>
+          Invite again
+        </button>
+        <button
+          class="ghost"
+          data-testid="back-up-and-point"
+          disabled={!online || backingUp || airtimeBlocked}
+          onclick={backUp}
+          title={online ? "Backs up over the internet, then names it over the radio in one frame" : "Needs internet"}
+        >
+          {#if backingUp}backing up…{:else if !online}Back up (needs internet){:else}Back up & beam pointer{/if}
+        </button>
+      {/if}
       <button class="ghost" onclick={() => location.reload()}>Reset (drops local copy)</button>
     {:else if sync}
       <p>joining — the first delta carries manifest, access controller and entries…</p>
+    {:else if openingLink}
+      <p>opening the list from its link — OrbitDB fetches it from the pages that have it…</p>
+      <p class="dim addr">{linked}</p>
     {:else if pointer}
       <p>a pointer arrived over the mesh — the list itself is on the internet:</p>
       <p class="dim addr">{pointer.address}</p>
@@ -957,15 +1185,26 @@
       </button>
       <button class="ghost" onclick={() => (pointer = null)}>Ignore</button>
     {:else if invite}
-      <p>invitation from the mesh:</p>
+      <p>
+        {inviteFrom === "link"
+          ? "a link names this list — without an internet path only the mesh can bring it here:"
+          : "invitation from the mesh:"}
+      </p>
       <p class="dim addr">{invite}</p>
-      <button onclick={join} disabled={joining}>{joining ? "Joining…" : "Join this list"}</button>
+      <button onclick={join} disabled={joining || (carriedBy === "mesh" && !nodeReady)}>
+        {joining ? "Joining…" : "Join this list"}
+      </button>
       <button class="ghost" onclick={() => (invite = "")}>Ignore</button>
-    {:else if phase === "ready"}
-      <button onclick={create} disabled={creating}>{creating ? "Creating — first frames on the air…" : "Create a list"}</button>
-      <p class="dim">…or wait for an invitation to arrive over the mesh.</p>
+      {#if carriedBy === "mesh" && !nodeReady}<p class="dim">connect a node first.</p>{/if}
+    {:else if phase !== "boot"}
+      <button onclick={create} disabled={creating}>
+        {creating ? (nodeReady ? "Creating — first frames on the air…" : "Creating…") : "Create a list"}
+      </button>
+      <p class="dim">
+        {#if nodeReady}…or wait for an invitation to arrive over the mesh.{:else if wantsInternet}No node needed: the internet carries the list, and its link — or this page's QR code — opens it on another device. A node connected later adds the mesh.{:else}No node needed to make it; one connected later carries it over the mesh.{/if}
+      </p>
     {:else}
-      <p class="dim">connect a node first.</p>
+      <p class="dim">starting the local database stack…</p>
     {/if}
   </section>
 
@@ -1050,6 +1289,48 @@
     margin: 4px 0 0;
     color: #A8B3C7;
     font-size: 0.9rem;
+  }
+  /* The LED: amber and blinking until another device with this list answers,
+     then steady green. With reduced motion the blink becomes a hollow ring, so
+     the two states still differ in form and not only in colour. */
+  .led-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 0;
+    color: #A8B3C7;
+    font-size: 0.88rem;
+  }
+  .led {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #f0c674;
+    box-shadow: 0 0 6px rgba(240, 198, 116, 0.55);
+    animation: led-blink 1.2s infinite;
+  }
+  .led.steady {
+    background: #3EDC97;
+    box-shadow: 0 0 8px rgba(62, 220, 151, 0.6);
+    animation: none;
+  }
+  @keyframes led-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.15; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .led {
+      box-sizing: border-box;
+      background: transparent;
+      border: 2px solid #f0c674;
+      box-shadow: none;
+      animation: none;
+    }
+    .led.steady {
+      background: #3EDC97;
+      border: none;
+    }
   }
   /* Coral rail rather than a filled box: it must read as a caveat on the page,
      not as an error the app is reporting about itself. */
