@@ -107,11 +107,12 @@ Two settings on **your own node**, before you transmit — both explained in
 - **Role `CLIENT_MUTE`.** A default node rebroadcasts everything it hears; on a
   busy mesh that is most of its airtime, spent on strangers' packets. Muted, it
   carries only your own traffic.
-- **Preset `SHORT_TURBO`** for heavy benching — 21 880 bit/s against
-  `LONG_FAST`'s 1 070, so the same frame costs a twentieth of the air, and
-  range is irrelevant across a desk. It is not set here because **the preset is
-  part of the air configuration**: everyone testing together has to change it
-  at once, or they stop hearing each other.
+- **Preset `SHORT_FAST`** for heavy benching — 10 940 bit/s against
+  `LONG_FAST`'s 1 070, so the same frame costs a tenth of the air, and range is
+  irrelevant across a desk. Not `SHORT_TURBO`: it needs 500 kHz, and EU 868 is
+  250 kHz wide. It is not set here because **the preset is part of the air
+  configuration**: everyone testing together has to change it at once, or they
+  stop hearing each other.
 
 ## Status
 
@@ -133,7 +134,8 @@ airtime** — about 2.5 % of the hourly allowance.
 
 What is *not* settled, and what each bench session cost, is kept honestly in
 **[field notes](docs/field-notes.md)**. Sequencing and gates are in
-**[ROADMAP.md](ROADMAP.md)**.
+**[ROADMAP.md](ROADMAP.md)**. What the next bench has to show — two runs, what
+to press, and when each counts — is on the **[run sheet](docs/run-sheet.md)**.
 
 ## The mesh carries the data, not the program
 
@@ -171,6 +173,7 @@ what is built and what is not:
 | **[The signalling plane](docs/signalling.md)** | designed, not built — LoRa carries the handshake, not the connection |
 | **[Channels](docs/channels.md)** | getting two devices onto one channel — `npm run channel`, and why a mismatch is silent |
 | **[Bench etiquette](docs/bench-etiquette.md)** | developing on a shared, legally rationed medium without ruining it for the neighbours |
+| **[Run sheet](docs/run-sheet.md)** | the runs still open on real radios — what to set up, what to press, what to write down, and when a run counts |
 | **[Field notes](docs/field-notes.md)** | what broke on real hardware, and why |
 | **[Why a separate repository](docs/why-separate-repository.md)** | a licence decision, and a one-way door |
 

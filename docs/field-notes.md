@@ -4,6 +4,9 @@
 
 Status: **a running log — every entry cost a bench session**
 
+The next session's runs are on the [run sheet](run-sheet.md); what they find
+lands here.
+
 ## Field notes
 
 Specifics learned building this on real hardware — so the next person doesn't
