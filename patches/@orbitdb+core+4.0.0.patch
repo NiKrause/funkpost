@@ -1,0 +1,54 @@
+diff --git a/node_modules/@orbitdb/core/src/sync.js b/node_modules/@orbitdb/core/src/sync.js
+index e256cd3..5cbb9ab 100644
+--- a/node_modules/@orbitdb/core/src/sync.js
++++ b/node_modules/@orbitdb/core/src/sync.js
+@@ -3,6 +3,8 @@ import { EventEmitter } from 'events'
+ import { TimeoutController } from 'timeout-abort-controller'
+ import pathJoin from './utils/path-join.js'
+ import { Entry } from './oplog/index.js'
++import { decodeFirst } from 'cborg'
++import { decodeOptions } from '@ipld/dag-cbor'
+ 
+ const DefaultTimeout = 30000 // 30 seconds
+ 
+@@ -154,13 +156,36 @@ const Sync = async ({ ipfs, log, events, onSynced, start, timeout }) => {
+   }
+ 
+   const receiveHeads = async (peerId, stream) => {
++    // A stream carries bytes, not messages. Two heads sent back to back can
++    // arrive as one chunk — libp2p hands a reader that starts late everything
++    // buffered at once — and one head can arrive in pieces. So the bytes are
++    // collected and split where each CBOR item ends; an incomplete item waits
++    // for the next chunk.
++    let pending = new Uint8Array(0)
+     for await (const value of stream) {
+-      const headBytes = value.subarray()
+-      if (headBytes && onSynced) {
+-        const entry = await Entry.decode(headBytes, log.encryption.replication?.decrypt, log.encryption.data?.decrypt)
+-        await onSynced(entry)
++      const chunk = value.subarray()
++      const joined = new Uint8Array(pending.length + chunk.length)
++      joined.set(pending, 0)
++      joined.set(chunk, pending.length)
++      pending = joined
++      while (pending.length > 0) {
++        let rest
++        try {
++          [, rest] = decodeFirst(pending, decodeOptions)
++        } catch {
++          break
++        }
++        const headBytes = pending.subarray(0, pending.length - rest.length)
++        pending = rest
++        if (onSynced) {
++          const entry = await Entry.decode(headBytes, log.encryption.replication?.decrypt, log.encryption.data?.decrypt)
++          await onSynced(entry)
++        }
+       }
+     }
++    if (pending.length > 0) {
++      throw new Error(`heads stream from ${peerId} ended inside an entry (${pending.length} bytes)`)
++    }
+     if (started) {
+       await onPeerJoined(peerId)
+     }

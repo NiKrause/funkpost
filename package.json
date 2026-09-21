@@ -1,7 +1,7 @@
 {
   "name": "@le-space/funkpost",
   "version": "0.1.0",
-  "description": "Post \u00fcber Funk: a byte courier for local-first apps over LoRa mesh radios \u2014 works with Meshtastic devices. Framing, selective-ACK ARQ, duty-cycle pacing; carries WebRTC handshakes and OrbitDB databases.",
+  "description": "Post über Funk: a byte courier for local-first apps over LoRa mesh radios — works with Meshtastic devices. Framing, selective-ACK ARQ, duty-cycle pacing; carries WebRTC handshakes and OrbitDB databases.",
   "type": "module",
   "license": "GPL-3.0-only",
   "repository": {
@@ -27,7 +27,8 @@
   "scripts": {
     "test": "node --test --test-force-exit test/*.test.js",
     "bench:goodput": "node scripts/bench-goodput.js",
-    "channel": "node scripts/make-channel.js"
+    "channel": "node scripts/make-channel.js",
+    "prepare": "patch-package"
   },
   "dependencies": {
     "@ipld/dag-cbor": "^9.2.5",
@@ -46,6 +47,7 @@
     "@bufbuild/protobuf": "^2.14.1",
     "@chainsafe/libp2p-noise": "^17.0.0",
     "@chainsafe/libp2p-yamux": "^8.0.1",
+    "@le-space/orbitdb-storage-bridge": "^0.10.0",
     "@libp2p/gossipsub": "^16.1.0",
     "@libp2p/identify": "^4.1.10",
     "@libp2p/tcp": "^11.0.28",
@@ -55,7 +57,7 @@
     "datastore-core": "^12.0.1",
     "helia": "^7.1.12",
     "libp2p": "^3.3.6",
-    "@le-space/orbitdb-storage-bridge": "^0.10.0",
+    "patch-package": "^8.0.1",
     "yjs": "^13.6.27"
   },
   "workspaces": [
