@@ -6,10 +6,10 @@
  * and packages/shared/src/tokens.css — and the names match tokens.css, so a rule
  * reads the same in both repositories. Dark is the brand's ground.
  *
- * Three states, because a page is in one of them: it follows the reader's
- * system (no data-theme), or it has a fixed look and says so on <html> with
- * data-theme="dark" or data-theme="light". The pill, the QR and the credit line
- * take their colours from here, so they match the page they sit on.
+ * Three states: a page follows the reader's system until the reader picks a
+ * theme with the pill's switch, which says so on <html> with data-theme="dark"
+ * or data-theme="light" and is remembered. The pill, the QR and the credit line
+ * take their colours from here, as do the pages, so everything changes at once.
  *
  * Nothing is fetched. The fonts are named, not loaded: a reader with Inter or
  * JetBrains Mono installed gets them, everyone else their system's — as on
@@ -81,6 +81,12 @@
   color-scheme: light;
 }
 
+/* Both languages sit in a static page's markup; <html lang> shows one of them. */
+html[lang="de"] [data-lang="en"],
+html:not([lang="de"]) [data-lang="de"] {
+  display: none !important;
+}
+
 /* Code in the brand's mono wherever a page has not said otherwise (no specificity). */
 :where(code, kbd, samp, pre) {
   font-family: var(--ls-font-mono);
@@ -139,6 +145,68 @@
 .ls-pill .ls-home:hover {
   color: var(--ls-text);
   border-color: var(--ls-card-border);
+}
+/* The flags, as on le-space.de: dim until chosen, the chosen one ringed. */
+.ls-pill .ls-flag {
+  width: 30px;
+  height: 20px;
+  display: flex;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  line-height: 0;
+  overflow: hidden;
+  opacity: 0.45;
+  transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.ls-pill .ls-flag svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.ls-pill .ls-flag:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+.ls-pill .ls-flag.active {
+  opacity: 1;
+  border-color: var(--ls-accent);
+  box-shadow: 0 0 0 1px var(--ls-accent);
+}
+.ls-pill .ls-theme {
+  width: 30px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--ls-text-dim);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+.ls-pill .ls-theme svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+.ls-pill .ls-theme:hover {
+  opacity: 1;
+  color: var(--ls-text);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ls-pill .ls-flag,
+  .ls-pill .ls-theme {
+    transition: none;
+  }
+  .ls-pill .ls-flag:hover,
+  .ls-pill .ls-theme:hover {
+    transform: none;
+  }
 }
 .ls-pill a:focus-visible,
 .ls-pill button:focus-visible,
