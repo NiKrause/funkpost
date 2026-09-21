@@ -79,16 +79,27 @@
     }
   }
 
+  /** What each touch of step 1 is for, shown while it is being asked for. */
+  const TOUCH = {
+    1: "Touch 1 of 3 — the key's secret for this site (with PIN)",
+    2: "Touch 2 of 3 — a second signature, to recover the public key",
+    3: "Touch 3 of 3 — the passkey vouches for the signing key (with PIN)",
+  };
+
   const useTheKey = () =>
     step("key", async () => {
-      say("asking the security key — two touches");
+      say("asking the security key — three touches");
       identity = await identityFromKey({
-        onTouch: ({ touch, of }) => (touches = `touch ${touch} of ${of}`),
+        onTouch: ({ touch }) => {
+          touches = TOUCH[touch];
+          say(TOUCH[touch]);
+        },
       });
       didFingerprint = await fingerprint(identity.did);
       keyFingerprint = await fingerprint(identity.signingKey);
       say(`identity: ${identity.did.slice(0, 24)}…`);
-      touches = "binding the signing key — one more touch";
+      touches = TOUCH[3];
+      say(TOUCH[3]);
       stack = await createStack({ credential: identity.credential });
       say("OrbitDB is running with that identity");
     });
@@ -176,6 +187,66 @@
     >
       {details ? "Hide the technical details" : "Show the technical details"}
     </button>
+
+    <div class="tech explain" data-testid="how-it-works" hidden={!details}>
+      <h3>The three touches of step 1</h3>
+      <ol>
+        <li>
+          <strong>The secret.</strong> <code>navigator.credentials.get()</code> names no
+          credential — the key offers its passkey for this site — and asks the PRF extension with
+          a fixed input: SHA-256 of a label and this site's name, the same on every phone. The
+          key answers with the credential id, a signature, and a 32-byte PRF output computed
+          inside the key from a secret that never leaves it. With PIN, because the key gives a
+          different PRF answer without one.
+        </li>
+        <li>
+          <strong>The public key.</strong> A WebAuthn answer carries no public key, so it is
+          worked out: the same credential signs a second, fresh challenge, every P-256 signature
+          fits exactly two candidate public keys, and only the key's own fits both. Checked
+          against both signatures, it becomes the identity, <code>did:key:z…</code>.
+        </li>
+        <li>
+          <strong>The binding.</strong> An OrbitDB identity carries two signatures: the signing
+          key signs the DID, and the passkey signs the signing key's public key together with
+          that signature. The second is one more WebAuthn call — the passkey vouching that this
+          key writes for it. Every entry the list accepts is checked against it.
+        </li>
+      </ol>
+      <h3>Derived, never stored</h3>
+      <ul>
+        <li>
+          <strong>Signing key</strong> (secp256k1): HKDF-SHA-256 over the PRF output, with the DID
+          in the info.
+        </li>
+        <li>
+          <strong>Pointer key</strong> (Ed25519): HKDF-SHA-256 over the signing key, with this
+          page's label in the info. Its public key is the pointer's name, <code>k51…</code>.
+        </li>
+      </ul>
+      <h3>Every request, and when</h3>
+      <ul>
+        <li>
+          <strong>Steps 1, 2 and 4:</strong> none. The phone talks to the key over USB, NFC or
+          Bluetooth, not over the internet.
+        </li>
+        <li>
+          <strong>Step 3:</strong> <code>POST ipfs.aleph.cloud/api/v0/add</code>, twice — the list
+          as one CAR file, every block it is made of, then a small JSON that names it. Then
+          <code>PUT delegated-ipfs.dev/routing/v1/ipns/k51…</code>: an IPNS record, signed by the
+          pointer key, pointing at the JSON, valid for 30 days.
+        </li>
+        <li>
+          <strong>Step 5:</strong> <code>GET delegated-ipfs.dev/routing/v1/ipns/k51…</code>, and the
+          record is checked against the name. Then <code>GET ipfs.aleph.cloud/ipfs/…</code> for the
+          JSON and the CAR — <code>dweb.link</code>, then <code>ipfs.io</code>, if Aleph does not
+          answer — and every block is checked against its hash before the list opens.
+        </li>
+      </ul>
+      <p class="dim">
+        Each step's own values appear under it once it has run; what happened, line by line, is
+        at the <a href="#log">bottom of the page</a>.
+      </p>
+    </div>
   </section>
 
   {#if error}
@@ -196,8 +267,11 @@
       <span class="chip">your security key</span> — nothing goes on the internet
     </p>
     <button data-testid="use-key" disabled={Boolean(busy)} onclick={useTheKey}>
-      {busy === "key" ? touches || "asking…" : identity ? "Ask again" : "Use my security key"}
+      {busy === "key" ? "asking the key…" : identity ? "Ask again" : "Use my security key"}
     </button>
+    {#if busy === "key" && touches}
+      <p class="touch-now" data-testid="touch-now">{touches}</p>
+    {/if}
     {#if identity}
       <p class="dim">
         To compare two phones, show the technical details: the two lines there must be the
@@ -339,7 +413,7 @@
     {/if}
   </section>
 
-  <section class="tech" hidden={!details}>
+  <section class="tech" id="log" hidden={!details}>
     <h2>What happened</h2>
     <div class="log">
       {#each log as line, index (index)}<div>{line}</div>{/each}
@@ -574,6 +648,30 @@
   }
   button.ghost {
     background: none;
+  }
+  .explain h3 {
+    margin: 14px 0 6px;
+    font-size: 0.95rem;
+  }
+  .explain ol,
+  .explain ul {
+    margin: 0 0 8px;
+    padding-left: 20px;
+  }
+  .explain li {
+    margin: 6px 0;
+  }
+  .explain a {
+    color: #7fb8ff;
+  }
+  code {
+    font-size: 0.85em;
+    color: #c7d7f0;
+    overflow-wrap: anywhere;
+  }
+  .touch-now {
+    color: #ffc24b;
+    font-weight: 600;
   }
   button:focus-visible {
     outline: 2px solid #58c7f3;
