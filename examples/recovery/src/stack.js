@@ -17,7 +17,9 @@
  * The procedure itself is the bridge's, written up in
  * https://github.com/NiKrause/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md
  */
-import { createHelia } from "helia";
+import { createHeliaLight } from "helia";
+import { withLibp2pLight } from "@helia/libp2p";
+import * as dagCbor from "@ipld/dag-cbor";
 import { webSockets } from "@libp2p/websockets";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
@@ -34,7 +36,7 @@ import {
   OrbitDBWebAuthnIdentityProviderFunction,
 } from "@le-space/orbitdb-identity-provider-webauthn-did";
 import { dehydrate, hydrate } from "@le-space/orbitdb-storage-bridge/dehydrate";
-import { createAlephBackend } from "@le-space/orbitdb-storage-bridge/backends/aleph";
+import { createAlephBackend, ALEPH_GATEWAYS } from "@le-space/orbitdb-storage-bridge/backends/aleph";
 
 /** One label for this demo's pointer, so one key can name other things too. */
 export const LABEL = "funkpost-recovery-demo";
@@ -57,11 +59,24 @@ export async function identityFromKey({ onTouch } = {}) {
     did: restored.did,
     signingKey: restored.signingKey,
     credential: {
+      // The provider wants the id twice: as text, which it writes into the
+      // signature envelope, and as bytes, which it asks the key for. Restore
+      // hands out the bytes only, under the name the provider uses for the
+      // text — without this line the third touch succeeds and then throws.
+      credentialId: base64url(restored.credentialId),
       rawCredentialId: restored.credentialId,
       publicKey: restored.publicKey,
       prfInput: restored.prfInput,
     },
   };
+}
+
+/** Bytes as base64url, the way WebAuthn writes a credential id. */
+function base64url(bytes) {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 /**
@@ -71,20 +86,26 @@ export async function identityFromKey({ onTouch } = {}) {
  * it to the DID, which costs one more touch of the key the first time.
  */
 export async function createStack({ credential }) {
-  const helia = await createHelia({
-    blockstore: new MemoryBlockstore(),
-    datastore: new MemoryDatastore(),
-    libp2p: {
+  // Composed and started, as mesh-todo does it. Helia 7's createHelia() does
+  // neither: it returns a node that was never started — the first block
+  // OrbitDB stored then failed with "Not started" — and it lays the options
+  // over its default stack, with a DHT, delegated routing and public gateways.
+  const helia = withLibp2pLight(
+    createHeliaLight({
+      blockstore: new MemoryBlockstore(),
+      datastore: new MemoryDatastore(),
+      codecs: [dagCbor],
+    }),
+    {
       // Listening nowhere and dialling nobody is the point, not a limitation:
       // nothing can quietly sync behind the demo's back.
       addresses: { listen: [] },
       transports: [webSockets()],
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
-      peerDiscovery: [],
-      services: {},
     },
-  });
+  );
+  await helia.start();
 
   useIdentityProvider(OrbitDBWebAuthnIdentityProviderFunction);
   // `ipfs`, so identity documents are blocks: a restored database is full of
@@ -134,6 +155,10 @@ export async function bringBack({ orbitdb, signingKey }) {
     seed: signingKey,
     label: LABEL,
     open: { sync: false },
+    // Aleph's own gateway first: the backup went there, and only Aleph has it
+    // the moment it lands. The bridge's default list starts with Storacha's
+    // two, from before Aleph replaced it, and would ask them for nothing.
+    restore: { gateways: ALEPH_GATEWAYS },
   });
 }
 

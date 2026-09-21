@@ -32,6 +32,13 @@
   let error = $state("");
   let touches = $state("");
   let log = $state([]);
+  let details = $state(false); // the technical layer, behind one button
+  let done = $state({}); // step name → true once it has worked
+  let failedStep = $state("");
+
+  const STATUS_TEXT = { todo: "not yet", running: "running…", done: "done", failed: "failed" };
+  const status = (name) =>
+    busy === name ? "running" : failedStep === name ? "failed" : done[name] ? "done" : "todo";
 
   const say = (line) =>
     (log = [`${new Date().toISOString().slice(11, 19)} ${line}`, ...log].slice(0, 40));
@@ -58,10 +65,13 @@
     if (busy) return;
     busy = name;
     error = "";
+    failedStep = "";
     try {
       await work();
+      done = { ...done, [name]: true };
     } catch (e) {
       error = e?.message ?? String(e);
+      failedStep = name;
       say(`! ${name} failed: ${error}`);
     } finally {
       busy = "";
@@ -138,104 +148,198 @@
 
 <main>
   <h1>recovery</h1>
-  <p class="tag">
-    a list, a security key, and a device that has lost everything — P11 on two phones
-  </p>
+  <p class="tag">A list that survives losing the phone — with nothing but your security key.</p>
 
-  <section>
-    <h2>1 · The key</h2>
-    <p class="dim">
-      Two touches: the first reads the secret with the PIN, the second signs again so the
-      public key can be recovered from the pair. A third binds the signing key.
+  <section class="intro">
+    <p>
+      Your security key holds a secret that never leaves it. From that secret this page works
+      out who you are and where your backup lives — the same on every phone. So a phone that
+      has lost everything, or a new one, needs nothing but the key to find the list again and
+      go on writing to it.
+    </p>
+    <h2>The test, on two phones</h2>
+    <ol class="plan">
+      <li><strong>Phone A:</strong> steps 1, 2 and 3 — who you are, a list, a backup.</li>
+      <li>
+        <strong>Phone B</strong>, or phone A after step 4: step 1 with the same key, then step 5.
+      </li>
+      <li>
+        <strong>It worked</strong> if the list comes back on phone B and accepts a new entry
+        there.
+      </li>
+    </ol>
+    <button
+      class="ghost"
+      data-testid="details"
+      aria-expanded={details}
+      onclick={() => (details = !details)}
+    >
+      {details ? "Hide the technical details" : "Show the technical details"}
+    </button>
+  </section>
+
+  {#if error}
+    <p class="error" data-testid="error">{error}</p>
+  {/if}
+
+  <section class="step" data-status={status("key")}>
+    <header>
+      <h2><span class="n">1</span> Tell the page who you are</h2>
+      <span class="badge">{STATUS_TEXT[status("key")]}</span>
+    </header>
+    <p>
+      Touch your security key three times. The first two touches recover your identity from
+      the secret on the key; the third lets that identity sign what you write. The same key
+      gives the same identity on every phone.
+    </p>
+    <p class="who">
+      <span class="chip">your security key</span> — nothing goes on the internet
     </p>
     <button data-testid="use-key" disabled={Boolean(busy)} onclick={useTheKey}>
       {busy === "key" ? touches || "asking…" : identity ? "Ask again" : "Use my security key"}
     </button>
     {#if identity}
-      <dl>
-        <dt>DID fingerprint</dt>
-        <dd class="fp" data-testid="did-fingerprint">{didFingerprint}</dd>
-        <dt>signing key fingerprint</dt>
-        <dd class="fp" data-testid="key-fingerprint">{keyFingerprint}</dd>
-      </dl>
       <p class="dim">
-        <strong>Compare these two lines on both phones.</strong> If they differ, the identity did
-        not travel and nothing below proves anything — usually the wrong passkey was picked.
+        To compare two phones, show the technical details: the two lines there must be the
+        same on both.
       </p>
+      <div class="tech" hidden={!details}>
+        <dl>
+          <dt>DID fingerprint</dt>
+          <dd class="fp" data-testid="did-fingerprint">{didFingerprint}</dd>
+          <dt>signing key fingerprint</dt>
+          <dd class="fp" data-testid="key-fingerprint">{keyFingerprint}</dd>
+        </dl>
+        <p class="dim">
+          If they differ, the identity did not travel and nothing below proves anything —
+          usually the wrong passkey was picked.
+        </p>
+      </div>
     {/if}
   </section>
 
-  {#if identity && stack}
-    <section>
-      <h2>2 · The list</h2>
-      {#if db}
+  <section class="step" data-status={db ? "done" : status("list")}>
+    <header>
+      <h2><span class="n">2</span> Your list</h2>
+      <span class="badge">{db ? "open" : STATUS_TEXT[status("list")]}</span>
+    </header>
+    {#if db}
+      <ul>
+        {#each entries as entry, index (index)}
+          <li>{entry}</li>
+        {/each}
+      </ul>
+      {#if entries.length === 0}<p class="dim">nothing in it yet</p>{/if}
+      <form
+        onsubmit={(event) => {
+          event.preventDefault();
+          add();
+        }}
+      >
+        <input aria-label="new entry" placeholder="Milch kaufen…" bind:value={newText} />
+        <button type="submit" disabled={!newText.trim() || Boolean(busy)}>Add</button>
+      </form>
+      <div class="tech" hidden={!details}>
         <p class="dim addr">{db.address}</p>
-        <ul>
-          {#each entries as entry, index (index)}
-            <li>{entry}</li>
-          {/each}
-        </ul>
-        {#if entries.length === 0}<p class="dim">nothing in it yet</p>{/if}
-        <form
-          onsubmit={(event) => {
-            event.preventDefault();
-            add();
-          }}
-        >
-          <input aria-label="new entry" placeholder="Milch kaufen…" bind:value={newText} />
-          <button type="submit" disabled={!newText.trim() || Boolean(busy)}>Add</button>
-        </form>
-      {:else}
-        <p class="dim">
-          On the phone that starts: make the list. On the phone that is recovering: skip
-          this and go straight to <em>restore</em>.
-        </p>
-        <button data-testid="make-list" disabled={Boolean(busy)} onclick={makeList}>
-          Make the list
-        </button>
-      {/if}
-    </section>
-
-    <section>
-      <h2>3 · Off this device</h2>
-      <p class="dim">
-        The backup goes to Aleph without an account; the pointer goes under a name this
-        key derives, so the other phone needs no address, no CID and no file.
+      </div>
+    {:else}
+      <p>
+        On phone A: make the list, and write a few entries. On phone B: skip this and go to
+        step 5 — the list comes back here.
       </p>
-      <button data-testid="dehydrate" disabled={!db || Boolean(busy)} onclick={dehydrateNow}>
-        {busy === "backup" ? "backing up…" : "Back up and publish the pointer"}
+      <button data-testid="make-list" disabled={!stack || Boolean(busy)} onclick={makeList}>
+        Make the list
       </button>
-      <button data-testid="hydrate" disabled={Boolean(busy)} onclick={hydrateNow}>
-        {busy === "restore" ? "restoring…" : "Restore with the key alone"}
-      </button>
-      {#if pointer}
+      {#if !stack}<p class="dim">Needs step 1 first.</p>{/if}
+    {/if}
+    <p class="who">
+      <span class="chip">nobody</span> — it stays on this phone until step 3
+    </p>
+  </section>
+
+  <section class="step" data-status={status("backup")}>
+    <header>
+      <h2><span class="n">3</span> Put it somewhere safe</h2>
+      <span class="badge">{STATUS_TEXT[status("backup")]}</span>
+    </header>
+    <p>
+      Uploads the list as one file to Aleph, a public storage network, and publishes a small
+      signed note — the <em>pointer</em> — under a name only your key can work out. The
+      pointer says where the file is, so the other phone needs nothing else.
+    </p>
+    <p class="who">
+      <span class="chip">Aleph · ipfs.aleph.cloud</span> the file, no account
+      <span class="chip">delegated-ipfs.dev</span> the pointer
+    </p>
+    <p class="note">
+      Aleph takes the file but does not promise to keep it: that needs a storage order signed
+      by a wallet with credit on Aleph. Fine for this test, not yet for a list you would miss.
+      The pointer asks to be kept for 30 days.
+    </p>
+    <button data-testid="dehydrate" disabled={!db || Boolean(busy)} onclick={dehydrateNow}>
+      {busy === "backup" ? "backing up…" : "Back up and publish the pointer"}
+    </button>
+    {#if !db}<p class="dim">Needs a list first.</p>{/if}
+    {#if pointer && done.backup}
+      <div class="tech" hidden={!details}>
         <dl>
           <dt>pointer</dt>
           <dd class="fp" data-testid="pointer-name">{pointer.name}</dd>
           <dt>backup</dt>
           <dd class="fp">{pointer.metadataCID}</dd>
         </dl>
+      </div>
+    {/if}
+  </section>
+
+  <section class="step danger">
+    <header>
+      <h2><span class="n">4</span> Lose the phone</h2>
+    </header>
+    <p>
+      Deletes everything this page stored on this phone, and reloads. The security key keeps
+      its secret, which is the point: afterwards, steps 1 and 5 have to be enough.
+    </p>
+    <p class="who"><span class="chip">nobody</span></p>
+    <button data-testid="forget" disabled={Boolean(busy)} onclick={forget}>
+      Forget everything on this phone
+    </button>
+  </section>
+
+  <section class="step" data-status={status("restore")}>
+    <header>
+      <h2><span class="n">5</span> Get it back</h2>
+      <span class="badge">{STATUS_TEXT[status("restore")]}</span>
+    </header>
+    <p>
+      Asks for the pointer under your key's name, fetches the file it names and opens the list
+      — nothing to type in, nothing carried over. Then write an entry in step 2: the list
+      accepts it because it is still you.
+    </p>
+    <p class="who">
+      <span class="chip">delegated-ipfs.dev</span> the pointer
+      <span class="chip">Aleph's gateway, then dweb.link, ipfs.io</span> the file
+    </p>
+    <button data-testid="hydrate" disabled={!stack || Boolean(busy)} onclick={hydrateNow}>
+      {busy === "restore" ? "restoring…" : "Get my list back"}
+    </button>
+    {#if !stack}<p class="dim">Needs step 1 first, with the same key.</p>{/if}
+    {#if done.restore}
+      <p class="ok">Your list is back, in step 2. Write an entry there to prove it is still yours.</p>
+      {#if pointer}
+        <div class="tech" hidden={!details}>
+          <dl>
+            <dt>pointer</dt>
+            <dd class="fp">{pointer.name}</dd>
+            <dt>backup</dt>
+            <dd class="fp">{pointer.metadataCID} · {pointer.blocks} blocks</dd>
+          </dl>
+        </div>
       {/if}
-    </section>
+    {/if}
+  </section>
 
-    <section class="danger">
-      <h2>4 · Lose this device</h2>
-      <p class="dim">
-        Deletes everything this origin holds and reloads. The security key keeps the
-        passkey, which is the whole point: afterwards, <em>Use my security key</em> and
-        <em>Restore</em> have to be enough.
-      </p>
-      <button data-testid="forget" disabled={Boolean(busy)} onclick={forget}>
-        Forget everything on this device
-      </button>
-    </section>
-  {/if}
-
-  {#if error}
-    <p class="error" data-testid="error">{error}</p>
-  {/if}
-
-  <section>
+  <section class="tech" hidden={!details}>
     <h2>What happened</h2>
     <div class="log">
       {#each log as line, index (index)}<div>{line}</div>{/each}
@@ -371,5 +475,108 @@
   }
   .build {
     font-family: var(--ls-font-mono);
+  }
+  .intro p {
+    margin: 0 0 10px;
+  }
+  .plan {
+    margin: 4px 0 12px;
+    padding-left: 20px;
+  }
+  .plan li {
+    margin: 4px 0;
+  }
+  .step header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .step h2 {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .step p {
+    margin: 0 0 10px;
+  }
+  /* The number is the order the test runs in, not decoration. */
+  .n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 1.6em;
+    height: 1.6em;
+    border: 1px solid #2c3648;
+    border-radius: 50%;
+    font-family: var(--ls-font-mono);
+    font-size: 0.85rem;
+  }
+  .badge {
+    flex: none;
+    font-size: 0.75rem;
+    color: #8b93a5;
+  }
+  .step[data-status="running"] {
+    border-color: #6b5a2a;
+  }
+  .step[data-status="running"] .badge {
+    color: #ffc24b;
+  }
+  .step[data-status="done"] {
+    border-color: #1f5a44;
+  }
+  .step[data-status="done"] .badge,
+  .step[data-status="done"] .n {
+    color: #3edc97;
+    border-color: #3edc97;
+  }
+  .step[data-status="failed"] {
+    border-color: #6b2f3f;
+  }
+  .step[data-status="failed"] .badge {
+    color: #ff9c9c;
+  }
+  .who {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    font-size: 0.85rem;
+    color: #8b93a5;
+  }
+  .chip {
+    font-family: var(--ls-font-mono);
+    font-size: 0.75rem;
+    color: #c7d7f0;
+    background: #141c2b;
+    border: 1px solid #2c3648;
+    border-radius: 999px;
+    padding: 2px 9px;
+  }
+  .note {
+    font-size: 0.85rem;
+    color: #d9c38f;
+    border-left: 2px solid #6b5a2a;
+    padding-left: 10px;
+  }
+  .ok {
+    color: #3edc97;
+  }
+  .tech {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #222a38;
+  }
+  section.tech {
+    border-top: 1px solid #222a38;
+  }
+  button.ghost {
+    background: none;
+  }
+  button:focus-visible {
+    outline: 2px solid #58c7f3;
+    outline-offset: 2px;
   }
 </style>
