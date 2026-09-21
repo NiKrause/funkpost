@@ -81,6 +81,22 @@
   // Which path carries the log right now, and what the internet one is doing.
   let carriedBy = $state(wantsInternet ? "internet" : "mesh");
   let ipPeers = $state([]);
+  // What the internet path is doing, shown before any list exists: the page is
+  // a libp2p node from the moment it loads.
+  let selfId = $state("");
+  let relayIds = $state([]);
+  let conns = $state([]);
+  /** How a connection reaches the other side, in the words a reader wants. */
+  const kindOf = (c) =>
+    relayIds.includes(c.peer)
+      ? "relay"
+      : c.addr.includes("/webrtc")
+        ? "direct (WebRTC)"
+        : c.addr.includes("/p2p-circuit")
+          ? "through a relay"
+          : "other";
+  const otherPeers = $derived([...new Set(conns.filter((c) => !relayIds.includes(c.peer)).map((c) => c.peer))]);
+  const relaysConnected = $derived(relayIds.filter((id) => conns.some((c) => c.peer === id)).length);
   let switching = $state(false);
   // P10 step 3/4: the internet going is a question the page asks the network,
   // and an offer it makes the reader — never a switch it throws by itself.
@@ -288,7 +304,23 @@
     stack = await createDatabaseStack({ internet: wantsInternet });
     if (wantsInternet) {
       pushLog(`internet path up — relays from ${relaySource}`);
-      setInterval(() => (ipPeers = internetPeers(stack.libp2p)), 2000);
+      selfId = stack.libp2p.peerId.toString();
+      relayMultiaddrs().then((addresses) => {
+        relayIds = [...new Set(addresses.map((a) => a.match(/\/p2p\/([^/]+)$/)?.[1]).filter(Boolean))];
+        pushLog(`${relayIds.length} relay${relayIds.length === 1 ? "" : "s"} known`);
+      });
+      const look = () => {
+        ipPeers = internetPeers(stack.libp2p);
+        conns = stack.libp2p
+          .getConnections()
+          .filter((connection) => connection.status === "open")
+          .map((connection) => ({
+            peer: connection.remotePeer.toString(),
+            addr: connection.remoteAddr.toString(),
+          }));
+      };
+      look();
+      setInterval(look, 2000);
       // Connections and a probe, not navigator.onLine: it reports the
       // interface, not reachability, so a captive portal is "online" and
       // reaches nobody.
@@ -669,6 +701,35 @@
         Got it — don't show again
       </button>
     </aside>
+  {/if}
+
+  {#if wantsInternet}
+    <section data-testid="internet">
+      <h2>0 · Internet <span class="dim">(the normal path)</span></h2>
+      <p class="dim">
+        This page is a peer-to-peer node from the moment it opens. It finds the relays
+        registered on Aleph, meets other mesh-todo pages on a shared discovery topic, and
+        connects to them — directly over WebRTC where it can, through a relay where it
+        cannot. A list travels over these connections; the LoRa mesh is for when they are
+        gone. Making or joining a list still needs a node today: the invitation crosses the
+        radio.
+      </p>
+      <p>
+        <strong>{internetReachable ? "online" : "internet gone"}</strong>
+        · <span data-testid="relays">relays {relaysConnected} of {relayIds.length} connected</span>
+        · <span data-testid="peer-count"
+          >{otherPeers.length} other page{otherPeers.length === 1 ? "" : "s"}</span
+        >
+      </p>
+      {#if conns.length > 0}
+        <ul class="conns">
+          {#each conns as c (c.peer + c.addr)}
+            <li><span class="mono">…{c.peer.slice(-8)}</span> · {kindOf(c)}</li>
+          {/each}
+        </ul>
+      {/if}
+      {#if selfId}<p class="dim mono">this node …{selfId.slice(-8)}</p>{/if}
+    </section>
   {/if}
 
   <section>
@@ -1186,5 +1247,13 @@
     font-family: var(--ls-font-mono);
     font-size: 0.72rem;
     opacity: 0.75;
+  }
+  .conns {
+    margin: 6px 0 8px;
+    padding-left: 18px;
+    font-size: 0.85rem;
+  }
+  .conns li {
+    margin: 2px 0;
   }
 </style>
