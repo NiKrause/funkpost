@@ -63,6 +63,12 @@ test("the internet carries it; when it goes, the page notices and asks first", a
   await b.getByRole("button", { name: "Join this list" }).click();
   await expect(b.getByText(/0 entries/)).toBeVisible({ timeout: 90_000 });
 
+  // The heartbeat crosses the radio while courier-sync is stopped: the LED
+  // says the mesh would catch the list before it ever has to.
+  for (const page of [a, b]) {
+    await expect(page.getByTestId("led")).toHaveAttribute("data-state", "steady", { timeout: 30_000 });
+  }
+
   // The invite crossed the air; the log does not. A write that arrives with no
   // press on "Send changes" can only have come over IP — on the mesh path the
   // same write waits for the button, which the mesh suite proves.
@@ -139,6 +145,111 @@ test("a browser claiming to be offline is not evidence, and raises no offer", as
   await expect(a.getByTestId("carried-by")).toContainText("the internet");
   await expect(a.getByTestId("carried-by")).not.toContainText("internet gone");
 
+  await a.close();
+  await b.close();
+});
+
+/** Everything that must not leave this machine is refused, and remembered. */
+async function stayLocal(context) {
+  const strayed = [];
+  await context.route(
+    (url) => !["localhost", "127.0.0.1"].includes(url.hostname),
+    async (route) => {
+      strayed.push(new URL(route.request().url()).href);
+      await route.abort();
+    },
+  );
+  return strayed;
+}
+
+test("a list needs no node: made on one page, opened from its link on another", async ({
+  context,
+}) => {
+  const strayed = await stayLocal(context);
+
+  // No `mesh=bc`: these pages would pair a real node over Bluetooth, and
+  // nobody here does.
+  const a = await context.newPage();
+  await a.goto("/?ip=1");
+  await expect(a.getByTestId("relays")).toHaveText("relays 1 of 1 connected", { timeout: 30_000 });
+  await expect(a.getByTestId("led")).toHaveAttribute("data-state", "blinking");
+  await expect(a.getByTestId("led-label")).toHaveText("no LoRa node connected");
+
+  await a.getByRole("button", { name: "Create a list" }).click();
+  await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
+  const address = (await a.locator(".addr").innerText()).trim();
+  expect(new URL(a.url()).hash).toBe(`#list=${address}`);
+
+  // The link is the whole invitation.
+  const b = await context.newPage();
+  await b.goto(a.url());
+  await expect(b.locator(".addr")).toHaveText(address, { timeout: 90_000 });
+  await expect(b.getByText(/0 entries/)).toBeVisible();
+
+  await a.getByLabel("new todo").fill("Milch kaufen");
+  await a.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(b.getByText("Milch kaufen")).toBeVisible({ timeout: 90_000 });
+  await b.getByLabel("new todo").fill("Brot");
+  await b.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(a.getByText("Brot")).toBeVisible({ timeout: 90_000 });
+
+  // Neither page ever had a node, and neither offered to send over one.
+  for (const page of [a, b]) {
+    await expect(page.getByTestId("led-label")).toHaveText("no LoRa node connected");
+    await expect(page.getByTestId("send-changes")).toHaveCount(0);
+  }
+  expect(strayed).toEqual([]);
+
+  await a.close();
+  await b.close();
+});
+
+test("a list made without a node: when the internet goes, pair one then and carry on", async ({
+  context,
+}) => {
+  const strayed = await stayLocal(context);
+  const roomId = room();
+
+  // The fake node, left unpaired (`autoconnect=0`) as a real one would be.
+  const a = await context.newPage();
+  await a.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO&ip=1&autoconnect=0`);
+  await expect(a.getByTestId("relays")).toHaveText("relays 1 of 1 connected", { timeout: 30_000 });
+  await a.getByRole("button", { name: "Create a list" }).click();
+  await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
+
+  const b = await context.newPage();
+  await b.goto(a.url());
+  await expect(b.getByText(/0 entries/)).toBeVisible({ timeout: 90_000 });
+  await a.getByLabel("new todo").fill("Milch kaufen");
+  await a.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(b.getByText("Milch kaufen")).toBeVisible({ timeout: 90_000 });
+
+  await context.setOffline(true);
+
+  // The offer comes as before, and on a page without a node it pairs one.
+  for (const page of [a, b]) {
+    await expect(page.getByTestId("mesh-offer")).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByTestId("accept-mesh")).toHaveText("Connect a node and continue over the mesh");
+  }
+  await a.getByTestId("accept-mesh").click();
+  await b.getByTestId("accept-mesh").click();
+  for (const page of [a, b]) {
+    await expect(page.getByText("BroadcastChannel (fake mesh)", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId("carried-by")).toContainText("the mesh", { timeout: 30_000 });
+    await expect(page.getByTestId("led")).toHaveAttribute("data-state", "steady", { timeout: 30_000 });
+  }
+
+  // And the afternoon goes on over the radio.
+  await a.getByLabel("new todo").fill("Brot");
+  await a.getByRole("button", { name: "Add", exact: true }).click();
+  await a.getByTestId("send-changes").click();
+  await expect(b.getByText("Brot")).toBeVisible({ timeout: 90_000 });
+
+  expect(strayed).toEqual([]);
+
+  await context.setOffline(false);
   await a.close();
   await b.close();
 });
