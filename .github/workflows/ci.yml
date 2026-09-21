@@ -18,7 +18,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # Install scripts one at a time. Three @meshtastic packages each run
+      # `npx only-allow pnpm` on install; in parallel, on a cold npm cache (every
+      # lockfile change), they race to fetch it into one npx directory and one
+      # finds nothing: "sh: only-allow: not found", which failed #115's deploy.
+      - run: npm ci --foreground-scripts
       - run: npm test
       - run: npm test -w @le-space/mesh-calendar-example
       - run: npm run build -w @le-space/mesh-todo-example
