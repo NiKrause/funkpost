@@ -10,59 +10,45 @@
       content="Prüft auf echter Hardware, ob ein Sicherheitsschlüssel eine Identität per PRF oder largeBlob auf ein zweites Gerät tragen kann."
     />
     <meta name="robots" content="noindex" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-    />
+    <link rel="stylesheet" href="../brand/brand.css" />
+    <!-- The page QR is drawn here, not fetched: uqr, copied beside brand.js at deploy. -->
+    <script type="importmap">
+      { "imports": { "uqr": "../brand/uqr.mjs" } }
+    </script>
     <style>
+      /* The page's own names, mapped onto the Le Space palette (brand/brand.css):
+         dark is the brand's ground, light when the reader's system asks for it. */
       :root {
-        --bg: #f4f6f9;
-        --panel: #fff;
-        --ink: #14171f;
-        --ink-2: #5b6478;
-        --ink-3: #8b93a5;
-        --line: #e3e7ee;
-        --accent: #2d4ad0;
-        --accent-soft: #eaeeff;
-        --good: #12855a;
-        --good-soft: #e4f4ec;
-        --bad: #b42318;
-        --bad-soft: #fdecea;
-        --warn: #8a5a00;
-        --warn-soft: #fff4dc;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #0b0e15;
-          --panel: #131826;
-          --ink: #e8eaf0;
-          --ink-2: #9aa3b5;
-          --ink-3: #6f7a8f;
-          --line: #232a3a;
-          --accent: #8fa5ff;
-          --accent-soft: #1a2140;
-          --good: #5dd39e;
-          --good-soft: #12291f;
-          --bad: #ff8a80;
-          --bad-soft: #2c1414;
-          --warn: #e0b85a;
-          --warn-soft: #251d0b;
-        }
+        --bg: var(--ls-bg-0);
+        --panel: var(--ls-bg-2);
+        --ink: var(--ls-text);
+        --ink-2: var(--ls-text-dim);
+        /* dimmer than running text, still AA: the brand's faint grey is ~3.3:1 here */
+        --ink-3: color-mix(in srgb, var(--ls-text-dim) 80%, var(--ls-bg-0));
+        --line: var(--ls-bg-3);
+        --accent: var(--ls-accent);
+        --accent-soft: color-mix(in srgb, var(--ls-accent) 14%, transparent);
+        --good: var(--ls-green);
+        --good-soft: color-mix(in srgb, var(--ls-green) 14%, transparent);
+        --bad: var(--ls-red-strong);
+        --bad-soft: color-mix(in srgb, var(--ls-red) 14%, transparent);
+        --warn: var(--ls-amber);
+        --warn-soft: color-mix(in srgb, var(--ls-amber) 14%, transparent);
       }
       * { box-sizing: border-box; }
+      a { color: var(--accent); }
       body {
         margin: 0;
         background: var(--bg);
         color: var(--ink);
-        font-family: "Public Sans", system-ui, -apple-system, sans-serif;
+        font-family: var(--ls-font);
         line-height: 1.55;
       }
+      /* 72 px on top: the Le Space pill sits in the first 56. */
       main {
         max-width: 720px;
         margin: 0 auto;
-        padding: 32px 16px 64px;
+        padding: 72px 16px 64px;
         display: flex;
         flex-direction: column;
         gap: 16px;
@@ -95,7 +81,7 @@
       button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       button:disabled { opacity: 0.5; cursor: progress; }
       button small { display: block; font-weight: 400; color: var(--ink-2); }
-      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85rem; }
+      .mono { font-family: var(--ls-font-mono); font-size: 0.85rem; }
       /* Stacked on a phone, which is the only place this page is used: side by
          side, the longest label takes the width and a fingerprint — the thing
          being compared — breaks across lines. */
@@ -113,7 +99,7 @@
       .entry.bad { border-color: var(--bad); background: var(--bad-soft); }
       .entry.warn { border-color: var(--warn); background: var(--warn-soft); }
       .entry b { display: block; }
-      .fp { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.15rem; letter-spacing: 0.04em; }
+      .fp { font-family: var(--ls-font-mono); font-size: 1.15rem; letter-spacing: 0.04em; }
       table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
       th, td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
       .scroll { overflow-x: auto; }
@@ -745,6 +731,10 @@
       });
 
       describeEnvironment();
+    </script>
+    <script type="module">
+      import { mountBrand } from "../brand/brand.js";
+      mountBrand();
     </script>
   </body>
 </html>

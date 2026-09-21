@@ -11,6 +11,7 @@
    * internet goes and the list carries on over the air.
    */
   import { onMount } from "svelte";
+  import { creditHTML } from "@le-space/funkpost-brand";
   import {
     createDatabaseStack,
     joinOverInternet,
@@ -963,6 +964,7 @@
       {:else}{build.commit}{/if}
       · {build.builtAt}
     </span>
+    <p class="ls-credit">{@html creditHTML("en")}</p>
   </footer>
 </main>
 
@@ -971,15 +973,13 @@
     margin: 0;
     background: #0B0E15;
     color: #EDF1F8;
-    font-family:
-      system-ui,
-      -apple-system,
-      sans-serif;
+    font-family: var(--ls-font);
   }
+  /* 64 px on top: the Le Space pill sits in the first 56. */
   main {
     max-width: 640px;
     margin: 0 auto;
-    padding: 20px 16px 48px;
+    padding: 64px 16px 48px;
   }
   h1 {
     margin: 0;
@@ -1053,10 +1053,10 @@
   }
   .addr {
     word-break: break-all;
-    font-family: ui-monospace, monospace;
+    font-family: var(--ls-font-mono);
   }
   .mono {
-    font-family: ui-monospace, monospace;
+    font-family: var(--ls-font-mono);
   }
   .awake {
     display: flex;
@@ -1070,7 +1070,7 @@
     border: 1px solid #232B3D;
     background: #141926;
     color: inherit;
-    font-family: ui-monospace, monospace;
+    font-family: var(--ls-font-mono);
     font-size: 0.8rem;
   }
   button {
@@ -1161,12 +1161,16 @@
   .log {
     max-height: 220px;
     overflow-y: auto;
-    font-family: ui-monospace, monospace;
+    font-family: var(--ls-font-mono);
     font-size: 0.78rem;
     line-height: 1.5;
     background: #141926;
     border-radius: 8px;
     padding: 8px 10px;
+  }
+  footer .ls-credit {
+    display: flex;
+    margin-top: 12px;
   }
   footer {
     margin-top: 28px;
@@ -1179,7 +1183,7 @@
   .build {
     display: block;
     margin-top: 6px;
-    font-family: ui-monospace, monospace;
+    font-family: var(--ls-font-mono);
     font-size: 0.72rem;
     opacity: 0.75;
   }

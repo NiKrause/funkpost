@@ -265,6 +265,11 @@ official one from [meshtastic/design](https://github.com/meshtastic/design/tree/
 Commercial use of the Meshtastic firmware and marks carries their own terms in
 addition to the GPLv3.
 
+The Le Space name and mark belong to Le Space UG (haftungsbeschränkt). The pages
+here carry them by the brand's own rules — the control pill and the credit line
+in [`examples/brand`](examples/brand) — and the GPL covers the code that draws
+them, not the right to use them elsewhere.
+
 ## Supporting this
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-NiKrause-FF6B5B?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/NiKrause)

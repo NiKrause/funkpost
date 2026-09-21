@@ -16,7 +16,8 @@
     "@le-space/funkpost": "file:../..",
     "@meshtastic/core": "^2.6.7",
     "@meshtastic/transport-web-bluetooth": "^0.1.5",
-    "yjs": "^13.6.27"
+    "yjs": "^13.6.27",
+    "@le-space/funkpost-brand": "*"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

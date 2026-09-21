@@ -7,6 +7,7 @@
    * what it is.
    */
   import { onMount } from "svelte";
+  import { creditHTML } from "@le-space/funkpost-brand";
   import {
     createStack,
     connectCourier,
@@ -892,6 +893,7 @@ import { wallAt } from "./domain/time.js";
       {:else}{build.commit}{/if}
       · {build.builtAt}
     </span>
+    <p class="ls-credit">{@html creditHTML("de")}</p>
   </footer>
 </main>
 
@@ -900,13 +902,14 @@ import { wallAt } from "./domain/time.js";
     margin: 0;
     background: #f4f6f9;
     color: #141B2E;
-    font-family: "Public Sans", system-ui, sans-serif;
+    font-family: var(--ls-font);
     line-height: 1.55;
   }
+  /* 64 px on top: the Le Space pill sits in the first 56. */
   main {
     max-width: 880px;
     margin: 0 auto;
-    padding: 28px 18px 64px;
+    padding: 64px 18px 64px;
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -914,7 +917,7 @@ import { wallAt } from "./domain/time.js";
   h1 { margin: 2px 0 0; font-size: 1.7rem; letter-spacing: -0.015em; }
   h2 { margin: 0 0 12px; font-size: 1.05rem; }
   .eyebrow {
-    margin: 0; font-family: "IBM Plex Mono", monospace; font-size: 0.72rem;
+    margin: 0; font-family: var(--ls-font-mono); font-size: 0.72rem;
     letter-spacing: 0.13em; text-transform: uppercase; color: #8b93a5;
   }
   .tag { margin: 4px 0 0; color: #5b6478; font-size: 0.92rem; }
@@ -1007,7 +1010,7 @@ import { wallAt } from "./domain/time.js";
 
   .mine { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid #eef1f6; }
   .when { margin: 0; font-size: 0.95rem; font-weight: 600; }
-  .link { font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; color: #5b6478; word-break: break-all; margin: 0 0 8px; }
+  .link { font-family: var(--ls-font-mono); font-size: 0.68rem; color: #5b6478; word-break: break-all; margin: 0 0 8px; }
 
   .pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #eef1f6; color: #5b6478; }
   .pill.confirmed { background: #e4f4ec; color: #12855a; }
@@ -1023,11 +1026,11 @@ import { wallAt } from "./domain/time.js";
     padding: 8px 11px; border: 1px dashed #e3e7ee; border-radius: 8px; background: #fafbfd;
   }
   .slotrow.taken { border-style: solid; background: #fff; }
-  .slotrow .t { font-family: "IBM Plex Mono", monospace; font-size: 0.8rem; color: #5b6478; font-variant-numeric: tabular-nums; }
+  .slotrow .t { font-family: var(--ls-font-mono); font-size: 0.8rem; color: #5b6478; font-variant-numeric: tabular-nums; }
   .slotrow .who { font-size: 0.9rem; font-weight: 600; }
   .slotrow .who.dim { font-weight: 400; }
 
-  .radio { background: #0B0E15; border-radius: 12px; overflow: hidden; font-family: "IBM Plex Mono", monospace; }
+  .radio { background: #0B0E15; border-radius: 12px; overflow: hidden; font-family: var(--ls-font-mono); }
   .radio-head {
     width: 100%; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
     padding: 9px 14px; background: transparent; border: 0; cursor: pointer;
@@ -1058,7 +1061,7 @@ import { wallAt } from "./domain/time.js";
   }
   .channel {
     margin: 0; font-size: 0.82rem; color: #5b6478;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: var(--ls-font-mono);
   }
   .channel select {
     font: inherit; font-size: 0.8rem; padding: 3px 7px;
@@ -1066,6 +1069,7 @@ import { wallAt } from "./domain/time.js";
   }
 
   footer { color: #8b93a5; font-size: 0.8rem; }
+  footer .ls-credit { display: flex; justify-content: center; margin-top: 10px; }
   footer a { color: #0E86C4; }
-  .build { font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; }
+  .build { font-family: var(--ls-font-mono); font-size: 0.7rem; }
 </style>

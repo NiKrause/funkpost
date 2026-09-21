@@ -1,0 +1,19 @@
+{
+  "name": "@le-space/funkpost-brand",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Le Space look on funkpost's pages: the brand tokens, the control pill with the page QR, and the credit line.",
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "exports": {
+    ".": "./brand.js",
+    "./brand.css": "./brand.css"
+  },
+  "files": [
+    "brand.js",
+    "brand.css"
+  ],
+  "dependencies": {
+    "uqr": "^0.1.3"
+  }
+}
