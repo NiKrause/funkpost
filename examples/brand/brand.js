@@ -17,6 +17,9 @@ import { renderSVG } from "uqr";
 
 const HOME = "https://le-space.de/";
 
+/** The menu of all funkpost pages — where the pill's "up" arrow leads. */
+export const FUNKPOST_HOME = "https://nikrause.github.io/funkpost/";
+
 const WORDS = {
   en: {
     home: "Le Space",
@@ -25,6 +28,7 @@ const WORDS = {
     hint: "Scan with your phone — opens exactly this page.",
     madeWith: "Made with",
     heart: "the Le Space mark, its first node drawn as a heart",
+    up: "Up to all funkpost pages",
   },
   de: {
     home: "Le Space",
@@ -33,6 +37,7 @@ const WORDS = {
     hint: "Mit dem Telefon scannen — öffnet genau diese Seite.",
     madeWith: "Gebaut mit",
     heart: "das Le-Space-Zeichen, sein erster Knoten als Herz",
+    up: "Hoch zu allen funkpost-Seiten",
   },
 };
 
@@ -68,6 +73,11 @@ const QR_GLYPH =
   `<path d="M3 3h7v7H3zM5 5h3v3H5zM14 3h7v7h-7zM16 5h3v3h-3zM3 14h7v7H3zM5 16h3v3H5z` +
   `M14 14h2v2h-2zM18 14h3v2h-3zM14 18h3v3h-3zM19 18h2v3h-2z"/></svg>`;
 
+const UP_GLYPH =
+  `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" ` +
+  `stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">` +
+  `<path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>`;
+
 /**
  * The credit line's inner HTML, for a footer that renders its own markup (in
  * Svelte: `<p class="ls-credit">{@html creditHTML("en")}</p>`). Built only from
@@ -102,8 +112,11 @@ export function mountCredit({ lang, into } = {}) {
  * The control pill, top right: the mark, linked home, and the page QR — a
  * phone scans its way to exactly the page under test. Mounted on <body>, outside
  * any framework's root, and only once.
+ *
+ * `up`, a URL, puts an arrow first that leads there — on every page but the
+ * top one, `FUNKPOST_HOME`.
  */
-export function mountPill({ lang } = {}) {
+export function mountPill({ lang, up } = {}) {
   if (document.querySelector(".ls-pill")) return;
   const words = wordsFor(lang);
 
@@ -115,6 +128,18 @@ export function mountPill({ lang } = {}) {
     `<a class="ls-home" href="${HOME}" rel="noopener" title="${words.home}">${mark(ROUND_NODE, words.home)}</a>` +
     `<span class="ls-sep" aria-hidden="true"></span>` +
     `<button type="button" class="ls-qr-btn" aria-expanded="false" aria-label="${words.qr}" title="${words.qr}">${QR_GLYPH}</button>`;
+  if (up) {
+    const arrow = document.createElement("a");
+    arrow.className = "ls-up";
+    arrow.href = up;
+    arrow.title = words.up;
+    arrow.setAttribute("aria-label", words.up);
+    arrow.innerHTML = UP_GLYPH;
+    const sep = document.createElement("span");
+    sep.className = "ls-sep";
+    sep.setAttribute("aria-hidden", "true");
+    pill.prepend(arrow, sep);
+  }
   document.body.append(pill);
 
   const button = pill.querySelector(".ls-qr-btn");
@@ -163,7 +188,7 @@ export function mountPill({ lang } = {}) {
 }
 
 /** Both at once, for a page whose markup is plain HTML. */
-export function mountBrand({ lang, footer } = {}) {
-  mountPill({ lang });
+export function mountBrand({ lang, footer, up } = {}) {
+  mountPill({ lang, up });
   mountCredit({ lang, into: footer });
 }
