@@ -21,6 +21,11 @@
  *
  * Never both at once is not taste: with OrbitDB's sync and courier-sync on one
  * log at the same time, every run stalled — see test/fallback-one-log.test.js.
+ *
+ * A list does not wait for a radio. It can be made and opened with only the
+ * internet; a node connected later attaches the mesh path to the list that is
+ * already there (`attachCourier`), and from then on a heartbeat asks, once an
+ * hour, whether another device keeping this list is within radio reach.
  */
 
 import { webSockets } from "@libp2p/websockets";
@@ -59,6 +64,7 @@ import {
   connectMeshtasticDevice,
   describeMeshtasticError,
 } from "@le-space/funkpost";
+import { createHeartbeat } from "@le-space/funkpost/heartbeat";
 import { createBroadcastChannelLink } from "./fake-bc-link.js";
 import { PUBSUB_TOPICS } from "./pubsub-topics.js";
 
@@ -286,16 +292,20 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
 }
 
 /**
- * Create a fresh list and announce it over the mesh. Write access is open —
- * the demo's channel is the trust boundary; per-identity ACLs are a design
- * conversation in issue #1, not a demo feature.
+ * Create a fresh list, and announce it over the mesh if there is a node. Write
+ * access is open — the demo's channel is the trust boundary; per-identity ACLs
+ * are a design conversation in issue #1, not a demo feature.
+ *
+ * Without a courier the list is only local until a path carries it: the
+ * caller starts OrbitDB's own sync for the internet, or attaches a node later.
  */
-export async function createList({ orbitdb, courier }) {
+export async function createList({ orbitdb, courier = null }) {
   const db = await orbitdb.open("mesh-todo", {
     type: "keyvalue",
     sync: false,
     AccessController: IPFSAccessController({ write: ["*"] }),
   });
+  if (!courier) return { db, sync: null };
   // The radio waits to be asked. Announcing on every write is right when the
   // courier is cheap; here each announce draws a want and a block reply, so
   // five todos become five round trips where one delta would carry all five.
@@ -308,13 +318,50 @@ export async function createList({ orbitdb, courier }) {
 /**
  * Join over the internet: OrbitDB opens the address and replicates it itself.
  *
- * The courier sync is built but not started — it is the other path, and the
- * two do not share a log at the same time.
+ * The courier sync, when there is a node, is built but not started — it is
+ * the other path, and the two do not share a log at the same time.
  */
-export async function joinOverInternet({ orbitdb, courier, address }) {
+export async function joinOverInternet({ orbitdb, courier = null, address }) {
   const db = await orbitdb.open(address, { type: "keyvalue", sync: true });
-  const sync = await createCourierSync({ db, courier, announceOnLocalUpdate: false });
+  const sync = courier
+    ? await createCourierSync({ db, courier, announceOnLocalUpdate: false })
+    : null;
   return { db, sync };
+}
+
+/**
+ * A node, connected after the list was already open: give the list its mesh
+ * path, and name it on the air, as creating it with the node there would have.
+ *
+ * Started only when the mesh is the path that carries the list; on the
+ * internet path it waits, stopped, for the switch.
+ */
+export async function attachCourier({ db, courier, start }) {
+  const sync = await createCourierSync({ db, courier, announceOnLocalUpdate: false });
+  if (start) await sync.start();
+  await sendInvite(courier, db.address);
+  return sync;
+}
+
+/**
+ * Start the list's heartbeat on the node's courier: one round an hour, up to
+ * five beats a minute apart, ending at the first answer. See
+ * lib/heartbeat.js for why it is not courier-sync's `hello`.
+ *
+ * @param {Object} params
+ * @param {number} [params.minuteMs] how long a minute is; the e2e suite
+ *   shortens it, and the hour follows
+ */
+export async function startHeartbeat({ courier, address, minuteMs, onChange, onEvent }) {
+  const heartbeat = createHeartbeat({
+    courier,
+    tag: await databaseTag(address),
+    minuteMs,
+    onChange,
+    onEvent,
+  });
+  heartbeat.start();
+  return heartbeat;
 }
 
 /** Join a list announced by the peer; the first delta materializes it. */

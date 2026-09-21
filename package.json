@@ -22,7 +22,8 @@
     "./links/memory-mesh": "./lib/links/memory-mesh.js",
     "./links/meshtastic-device": "./lib/links/meshtastic-device-link.js",
     "./links/meshtastic-supervisor": "./lib/links/meshtastic-supervisor.js",
-    "./founding-pointer": "./lib/founding-pointer.js"
+    "./founding-pointer": "./lib/founding-pointer.js",
+    "./heartbeat": "./lib/heartbeat.js"
   },
   "scripts": {
     "test": "node --test --test-force-exit test/*.test.js",
