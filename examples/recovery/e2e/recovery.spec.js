@@ -63,6 +63,19 @@ test("the key alone gives an identity OrbitDB takes, and it writes", async ({ pa
   );
 
   await page.goto("/");
+  // Up to the menu of all pages, first in the pill.
+  await expect(page.locator(".ls-pill a.ls-up")).toHaveAttribute(
+    "href",
+    "https://nikrause.github.io/funkpost/",
+  );
+  // The technical layer is closed, and opening it shows something at once —
+  // before any step has run, which is when it used to show nothing.
+  await expect(page.getByTestId("how-it-works")).toBeHidden();
+  await page.getByTestId("details").click();
+  await expect(page.getByTestId("how-it-works")).toBeVisible();
+  await page.getByTestId("details").click();
+  await expect(page.getByTestId("how-it-works")).toBeHidden();
+
   await attachSecurityKey(page);
   await enrolPasskey(page);
 

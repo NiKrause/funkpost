@@ -10,7 +10,7 @@ This is their reading for pages that are not built from that repository.
 | | |
 |---|---|
 | `brand.css` | the brand tokens (`--ls-*`, the same names as the landing's `tokens.css`), the control pill, the QR popover and the credit line. Dark is the ground; light when the reader's system asks, or when `<html data-theme="light">` says the page is light |
-| `brand.js` | `mountPill()` — the mark, linked to le-space.de, and the page QR · `creditHTML()` / `mountCredit()` — *Made with ♥ Le Space* · `mountBrand()` — both |
+| `brand.js` | `mountPill({ up })` — an arrow up to `up` (every page but the menu passes `FUNKPOST_HOME`), the mark, linked to le-space.de, and the page QR · `creditHTML()` / `mountCredit()` — *Made with ♥ Le Space* · `mountBrand()` — both |
 
 **Nothing is fetched.** The QR is drawn on the page with uqr. The fonts are
 named, not loaded — Inter and JetBrains Mono where a reader has them, the

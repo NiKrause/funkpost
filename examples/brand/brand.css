@@ -113,6 +113,7 @@
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
+.ls-pill .ls-up,
 .ls-pill .ls-home,
 .ls-pill .ls-qr-btn {
   width: 28px;
@@ -134,6 +135,7 @@
 }
 .ls-pill .ls-qr-btn:hover,
 .ls-pill .ls-qr-btn.open,
+.ls-pill .ls-up:hover,
 .ls-pill .ls-home:hover {
   color: var(--ls-text);
   border-color: var(--ls-card-border);
