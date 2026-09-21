@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: GPL-3.0-only
+/**
+ * The recovery page with a security key, end to end in a browser.
+ *
+ * A virtual authenticator stands in for the YubiKey — with PRF, as the key on
+ * the two phones has it. The page asks it for an identity (two touches), binds
+ * that identity to OrbitDB (one more), makes a list and writes to it.
+ *
+ * This is the path the phones took on 21 September and fell off at the third
+ * touch, with a TypeError from inside the identity provider. Nothing here
+ * leaves the machine: the backup and the pointer need a public network, and
+ * belong to the bench.
+ */
+import { test, expect } from "@playwright/test";
+
+/** A security key on this page: CTAP2, discoverable credentials, PRF. */
+async function attachSecurityKey(page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable", { enableUI: false });
+  await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      ctap2Version: "ctap2_1",
+      transport: "usb",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      hasPrf: true,
+      automaticPresenceSimulation: true,
+    },
+  });
+}
+
+/** The passkey the phones already hold: discoverable, with PRF, for this origin. */
+async function enrolPasskey(page) {
+  await page.evaluate(async () => {
+    await navigator.credentials.create({
+      publicKey: {
+        rp: { id: location.hostname, name: "funkpost recovery test" },
+        user: {
+          id: crypto.getRandomValues(new Uint8Array(16)),
+          name: "bench",
+          displayName: "bench",
+        },
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+        authenticatorSelection: { residentKey: "required", userVerification: "required" },
+        extensions: { prf: {} },
+      },
+    });
+  });
+}
+
+test("the key alone gives an identity OrbitDB takes, and it writes", async ({ page }) => {
+  // Nothing may leave this machine before backup is pressed.
+  const strayed = [];
+  await page.route(
+    (url) => !["localhost", "127.0.0.1"].includes(url.hostname),
+    async (route) => {
+      strayed.push(route.request().url());
+      await route.abort();
+    },
+  );
+
+  await page.goto("/");
+  await attachSecurityKey(page);
+  await enrolPasskey(page);
+
+  await page.getByTestId("use-key").click();
+  await expect(page.getByTestId("did-fingerprint")).toHaveText(/^[0-9a-f]{4}( [0-9a-f]{4}){3}$/, {
+    timeout: 30_000,
+  });
+  // The third touch: the signing key bound to the identity, OrbitDB running on it.
+  await expect(page.locator(".log")).toContainText("OrbitDB is running with that identity", {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("error")).toHaveCount(0);
+
+  await page.getByTestId("make-list").click();
+  await expect(page.locator(".log")).toContainText("list open:", { timeout: 30_000 });
+
+  await page.getByLabel("new entry").fill("Milch kaufen");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator("li", { hasText: "Milch kaufen" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("error")).toHaveCount(0);
+
+  expect(strayed).toEqual([]);
+});

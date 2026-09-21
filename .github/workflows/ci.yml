@@ -36,3 +36,4 @@ jobs:
       # The booking demo drives two roles over the fake mesh: request, decide,
       # converge, download the .ics and parse it back.
       - run: npm run test:e2e -w @le-space/mesh-calendar-example
+      - run: npm run test:e2e -w @le-space/recovery-example
