@@ -50,6 +50,13 @@ test("the internet carries it; when it goes, the page notices and asks first", a
   const a = await openPhone(context, roomId, "&ip=1");
   const b = await openPhone(context, roomId, "&ip=1");
 
+  // Before any list: each page is a node on the relay, and finds the other —
+  // and says so, which is the part a reader could not see before.
+  for (const page of [a, b]) {
+    await expect(page.getByTestId("relays")).toHaveText("relays 1 of 1 connected", { timeout: 30_000 });
+    await expect(page.getByTestId("peer-count")).toHaveText("1 other page", { timeout: 60_000 });
+  }
+
   await a.getByRole("button", { name: "Create a list" }).click();
   await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
   await a.getByRole("button", { name: "Invite again" }).click();
