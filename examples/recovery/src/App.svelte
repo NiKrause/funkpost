@@ -10,6 +10,7 @@
    * differ, nothing that follows means anything, and the page says so.
    */
   import { onMount } from "svelte";
+  import { creditHTML } from "@le-space/funkpost-brand";
   import {
     identityFromKey,
     createStack,
@@ -249,6 +250,7 @@
     >
     · GPL-3.0 ·
     <span class="build">funkpost {build.version} · {build.commit} · {build.builtAt}</span>
+    <p class="ls-credit">{@html creditHTML("en")}</p>
   </footer>
 </main>
 
@@ -257,14 +259,13 @@
     margin: 0;
     background: #0b0e15;
     color: #e7ebf3;
-    font:
-      15px/1.5 system-ui,
-      sans-serif;
+    font: 15px/1.5 var(--ls-font);
   }
+  /* 64 px on top: the Le Space pill sits in the first 56. */
   main {
     max-width: 44rem;
     margin: 0 auto;
-    padding: 20px 16px 48px;
+    padding: 64px 16px 48px;
   }
   h1 {
     margin: 0;
@@ -292,7 +293,7 @@
   }
   .addr,
   .fp {
-    font-family: ui-monospace, monospace;
+    font-family: var(--ls-font-mono);
     overflow-wrap: anywhere;
   }
   .fp {
@@ -347,7 +348,7 @@
     padding: 10px 12px;
   }
   .log {
-    font-family: ui-monospace, monospace;
+    font-family: var(--ls-font-mono);
     font-size: 0.8rem;
     color: #9fb0c8;
     background: #0d1420;
@@ -355,6 +356,10 @@
     padding: 10px;
     max-height: 220px;
     overflow: auto;
+  }
+  footer .ls-credit {
+    display: flex;
+    margin-top: 12px;
   }
   footer {
     color: #6d768a;
@@ -365,6 +370,6 @@
     color: #7fb8ff;
   }
   .build {
-    font-family: ui-monospace, monospace;
+    font-family: var(--ls-font-mono);
   }
 </style>

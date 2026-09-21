@@ -1,0 +1,232 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/*
+ * The Le Space look, as funkpost's pages carry it.
+ *
+ * The values are the brand's — Le-Space/landing, docs/le-space-brand/README.md
+ * and packages/shared/src/tokens.css — and the names match tokens.css, so a rule
+ * reads the same in both repositories. Dark is the brand's ground.
+ *
+ * Three states, because a page is in one of them: it follows the reader's
+ * system (no data-theme), or it has a fixed look and says so on <html> with
+ * data-theme="dark" or data-theme="light". The pill, the QR and the credit line
+ * take their colours from here, so they match the page they sit on.
+ *
+ * Nothing is fetched. The fonts are named, not loaded: a reader with Inter or
+ * JetBrains Mono installed gets them, everyone else their system's — as on
+ * le-space.de.
+ */
+:root {
+  --ls-bg-0: #0b0e15; /* Deep Space: the ground */
+  --ls-bg-1: #10141f;
+  --ls-bg-2: #141926; /* Nebula: cards, panels */
+  --ls-bg-3: #232b3d; /* Horizon: borders */
+  --ls-text: #edf1f8; /* Starlight: headings */
+  --ls-text-dim: #a8b3c7; /* Stardust: running text */
+  --ls-text-faint: #5c677a;
+  --ls-red: #ff6b5b; /* Signal Coral: the one primary action, the local node */
+  --ls-red-strong: #ff6b5b;
+  --ls-accent: #58c7f3; /* Sync Cyan: links, peers, sync */
+  --ls-accent-2: #a78bfa; /* infrastructure */
+  --ls-green: #3edc97; /* identity, success */
+  --ls-amber: #ffc24b; /* data */
+  --ls-card-border: rgba(255, 255, 255, 0.09);
+  --ls-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --ls-font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --ls-radius: 14px;
+  /* The mark's own colours, exactly as le-space-mark-*-dark.svg draws them. */
+  --ls-mark-cyan: #58c7f3;
+  --ls-mark-coral: #ff6b5b;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --ls-bg-0: #f7f8fb;
+    --ls-bg-1: #eef1f6;
+    --ls-bg-2: #ffffff;
+    --ls-bg-3: #d9dfe9;
+    --ls-text: #10141f;
+    --ls-text-dim: #47536b;
+    --ls-text-faint: #7c879b;
+    --ls-red: #d94733;
+    --ls-red-strong: #c03a26;
+    --ls-accent: #0b7fae;
+    --ls-accent-2: #6d47d9;
+    --ls-green: #12855a;
+    --ls-amber: #a86a00;
+    --ls-card-border: rgba(16, 20, 31, 0.12);
+    --ls-mark-cyan: #0e86c4;
+    --ls-mark-coral: #e8503f;
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --ls-bg-0: #f7f8fb;
+  --ls-bg-1: #eef1f6;
+  --ls-bg-2: #ffffff;
+  --ls-bg-3: #d9dfe9;
+  --ls-text: #10141f;
+  --ls-text-dim: #47536b;
+  --ls-text-faint: #7c879b;
+  --ls-red: #d94733;
+  --ls-red-strong: #c03a26;
+  --ls-accent: #0b7fae;
+  --ls-accent-2: #6d47d9;
+  --ls-green: #12855a;
+  --ls-amber: #a86a00;
+  --ls-card-border: rgba(16, 20, 31, 0.12);
+  --ls-mark-cyan: #0e86c4;
+  --ls-mark-coral: #e8503f;
+  color-scheme: light;
+}
+
+/* Code in the brand's mono wherever a page has not said otherwise (no specificity). */
+:where(code, kbd, samp, pre) {
+  font-family: var(--ls-font-mono);
+}
+
+/* The mark: one geometry, coloured per theme. */
+.ls-mark .c {
+  stroke: var(--ls-mark-cyan);
+}
+.ls-mark .cf {
+  fill: var(--ls-mark-cyan);
+}
+.ls-mark .k {
+  fill: var(--ls-mark-coral);
+}
+
+/* The control pill, top right, as on le-space.de. */
+.ls-pill {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  background: color-mix(in srgb, var(--ls-bg-2) 80%, transparent);
+  border: 1px solid var(--ls-card-border);
+  border-radius: 999px;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.ls-pill .ls-home,
+.ls-pill .ls-qr-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: none;
+  color: var(--ls-text-dim);
+  cursor: pointer;
+}
+.ls-pill .ls-home svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.ls-pill .ls-qr-btn:hover,
+.ls-pill .ls-qr-btn.open,
+.ls-pill .ls-home:hover {
+  color: var(--ls-text);
+  border-color: var(--ls-card-border);
+}
+.ls-pill a:focus-visible,
+.ls-pill button:focus-visible,
+.ls-credit a:focus-visible {
+  outline: 2px solid var(--ls-accent);
+  outline-offset: 2px;
+}
+.ls-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 1px;
+  background: var(--ls-card-border);
+}
+
+/* The page QR. White plaque in both themes: a camera reads it, not the theme. */
+.ls-qr-pop {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 1000;
+  width: 240px;
+  max-width: calc(100vw - 32px);
+  padding: 14px;
+  background: var(--ls-bg-2);
+  color: var(--ls-text);
+  border: 1px solid var(--ls-card-border);
+  border-radius: var(--ls-radius);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  font-family: var(--ls-font);
+  text-align: left;
+}
+.ls-qr-plaque {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 8px;
+  line-height: 0;
+}
+.ls-qr-plaque svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.ls-qr-url {
+  margin: 10px 0 0;
+  font-family: var(--ls-font-mono);
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--ls-text-dim);
+  word-break: break-all;
+}
+.ls-qr-hint {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ls-text-faint);
+}
+
+/* The credit line: "Made with <mark> Le Space", mark and name one link. */
+.ls-credit {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--ls-font);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--ls-text-dim);
+}
+.ls-credit a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: inherit;
+  text-decoration: none;
+}
+.ls-credit a:hover span {
+  color: var(--ls-text);
+  text-decoration: underline;
+}
+/* 22 px, not the mark's 20: the heart needs the two pixels to read as a heart. */
+.ls-credit svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+/* A footer brand.js had to add, on a page that had none. */
+.ls-footer {
+  display: flex;
+  justify-content: center;
+  padding: 24px 16px 32px;
+}

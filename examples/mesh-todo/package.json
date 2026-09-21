@@ -34,7 +34,8 @@
     "datastore-core": "^12.0.1",
     "helia": "^7.1.12",
     "libp2p": "^3.3.6",
-    "@le-space/orbitdb-storage-bridge": "^0.10.0"
+    "@le-space/orbitdb-storage-bridge": "^0.10.0",
+    "@le-space/funkpost-brand": "*"
   },
   "devDependencies": {
     "@libp2p/ping": "^3.1.13",
