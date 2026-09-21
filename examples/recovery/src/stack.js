@@ -48,7 +48,8 @@ const DATABASE_NAME = "recovery-demo";
  * Two touches: the first reads the PRF value with the PIN, the second signs
  * again so the public key — which an assertion does not carry — can be
  * recovered from the pair. Returns the DID, the derived signing key, and the
- * credential the OrbitDB identity provider needs.
+ * credential the OrbitDB identity provider takes as it is (since 0.7.0 of the
+ * provider; before, the page had to build it, and got it wrong once).
  */
 export async function identityFromKey({ onTouch } = {}) {
   const restored = await restoreIdentityFromAuthenticator({
@@ -58,25 +59,8 @@ export async function identityFromKey({ onTouch } = {}) {
   return {
     did: restored.did,
     signingKey: restored.signingKey,
-    credential: {
-      // The provider wants the id twice: as text, which it writes into the
-      // signature envelope, and as bytes, which it asks the key for. Restore
-      // hands out the bytes only, under the name the provider uses for the
-      // text — without this line the third touch succeeds and then throws.
-      credentialId: base64url(restored.credentialId),
-      rawCredentialId: restored.credentialId,
-      publicKey: restored.publicKey,
-      prfInput: restored.prfInput,
-    },
+    credential: restored.credential,
   };
-}
-
-/** Bytes as base64url, the way WebAuthn writes a credential id. */
-function base64url(bytes) {
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
 }
 
 /**
