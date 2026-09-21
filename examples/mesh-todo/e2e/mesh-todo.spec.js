@@ -342,3 +342,40 @@ test("the founding arrives by pointer: one frame over the air, the bytes over HT
   await a.close();
   await b.close();
 });
+
+test("speaks German too, and has a light and a dark look — both kept", async ({ context }) => {
+  const page = await context.newPage();
+  await page.goto(`/?mesh=bc&room=${room()}&preset=SHORT_TURBO`);
+  await expect(page.getByText("BroadcastChannel (fake mesh)", { exact: true })).toBeVisible({ timeout: 30_000 });
+  // The test browser asks for English, and for the light look.
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+
+  await page.getByRole("link", { name: "Deutsch" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await expect(page.getByText("BroadcastChannel (Mesh-Attrappe)", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("led-label")).toHaveText(/noch keine Liste/);
+  await expect(page).toHaveTitle(/eine Todo-Liste über LoRa/);
+
+  // The whole page, not only its labels: a list made in German works in German.
+  await page.getByRole("button", { name: "Liste anlegen" }).click();
+  await expect(page.getByText(/0 Einträge/)).toBeVisible({ timeout: 15_000 });
+  await page.getByLabel("neues Todo").fill("Milch kaufen");
+  await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
+  await expect(page.getByTestId("send-changes")).toHaveText(/1 Änderung senden/);
+  // The address keeps both: the language, and the list.
+  const url = new URL(page.url());
+  expect(url.searchParams.get("lang")).toBe("de");
+  expect(url.hash).toMatch(/^#list=\/orbitdb\//);
+
+  const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const light = await ground();
+  await page.getByRole("button", { name: "Zum dunklen Modus wechseln" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect.poll(ground).not.toBe(light);
+
+  // Both kept: the address no longer says, storage does.
+  await page.goto(`/?mesh=bc&room=${room()}&preset=SHORT_TURBO`);
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByText("BroadcastChannel (Mesh-Attrappe)", { exact: true })).toBeVisible({ timeout: 30_000 });
+});
