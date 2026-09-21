@@ -75,6 +75,13 @@ test("the key alone gives an identity OrbitDB takes, and it writes", async ({ pa
     timeout: 30_000,
   });
   await expect(page.getByTestId("error")).toHaveCount(0);
+  await expect(page.locator(".step").first()).toHaveAttribute("data-status", "done");
+
+  // The numbers two phones are compared by are there, but behind one button.
+  await expect(page.getByTestId("did-fingerprint")).toBeHidden();
+  await page.getByTestId("details").click();
+  await expect(page.getByTestId("did-fingerprint")).toBeVisible();
+  await expect(page.locator(".log")).toBeVisible();
 
   await page.getByTestId("make-list").click();
   await expect(page.locator(".log")).toContainText("list open:", { timeout: 30_000 });
