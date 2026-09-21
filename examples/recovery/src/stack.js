@@ -17,7 +17,9 @@
  * The procedure itself is the bridge's, written up in
  * https://github.com/NiKrause/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md
  */
-import { createHelia } from "helia";
+import { createHeliaLight } from "helia";
+import { withLibp2pLight } from "@helia/libp2p";
+import * as dagCbor from "@ipld/dag-cbor";
 import { webSockets } from "@libp2p/websockets";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
@@ -84,20 +86,26 @@ function base64url(bytes) {
  * it to the DID, which costs one more touch of the key the first time.
  */
 export async function createStack({ credential }) {
-  const helia = await createHelia({
-    blockstore: new MemoryBlockstore(),
-    datastore: new MemoryDatastore(),
-    libp2p: {
+  // Composed and started, as mesh-todo does it. Helia 7's createHelia() does
+  // neither: it returns a node that was never started — the first block
+  // OrbitDB stored then failed with "Not started" — and it lays the options
+  // over its default stack, with a DHT, delegated routing and public gateways.
+  const helia = withLibp2pLight(
+    createHeliaLight({
+      blockstore: new MemoryBlockstore(),
+      datastore: new MemoryDatastore(),
+      codecs: [dagCbor],
+    }),
+    {
       // Listening nowhere and dialling nobody is the point, not a limitation:
       // nothing can quietly sync behind the demo's back.
       addresses: { listen: [] },
       transports: [webSockets()],
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
-      peerDiscovery: [],
-      services: {},
     },
-  });
+  );
+  await helia.start();
 
   useIdentityProvider(OrbitDBWebAuthnIdentityProviderFunction);
   // `ipfs`, so identity documents are blocks: a restored database is full of
