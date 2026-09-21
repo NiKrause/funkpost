@@ -33,7 +33,7 @@ roadmap is built to keep testing.
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
 | **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storage-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
 | **#82** | Internet first, mesh as fallback | **P10, built** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. The loss is established by a failed dial rather than a flag, the switch is a question rather than a reflex, and the app can ask the air whether another app — not another radio — is out there. |
-| **#93** | A lost phone, the same passkey | **Planned, P11** — the design exists in p2pass (PRF seed → deterministic IPNS key → manifest), used as reference and not integrated. The first question is whether PRF works with a YubiKey on the two actual phones. |
+| **#93** | A lost phone, the same passkey | **P11, gate met on hardware 2026-09-21** — a Fold 5 made a list, backed it up and was reset; an A57 with the same YubiKey had the same identity, brought the list back with the key alone, and wrote to it ([#93](https://github.com/NiKrause/funkpost/issues/93#issuecomment-5765768993)). Open: keeping the backup, since Aleph's keyless upload is not retained. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -611,9 +611,12 @@ In order — check before design:
    A device holding another key restores the same database, reads it, and is
    **refused** on write, which is what makes the acceptance mean anything.
 
-   *Still the gate, and not claimed:* the hardware. Phone A **wiped**, not a
-   cleared tab, and phone B writing with the same YubiKey. The mechanism holds;
-   that is a different sentence from "it happened on the bench".
+   **On the bench, 21 September 2026, it happened.** A Galaxy Fold 5 made a
+   list and backed it up, and was reset; a Galaxy A57 with the same YubiKey
+   showed the same DID and signing-key fingerprints, brought the list back with
+   the key alone, and wrote an entry the list accepted
+   ([#93](https://github.com/NiKrause/funkpost/issues/93#issuecomment-5765768993)). The first run failed at the third touch; what the second
+   one took is in the [field notes](docs/field-notes.md).
 
    Two traps turned up on the way, both silent, both now in the write-up:
    `Identities({ keystore })` without `ipfs` verifies only identities it minted
@@ -630,6 +633,12 @@ promises:
 same YubiKey restores the list, its identity equals the original, and it writes
 an entry the original access controller accepts. Missing PRF produces a
 refusal, never the fallback.
+
+**Met on the bench, 2026-09-21**, as above. The last clause is shown by the
+provider's tests (*is refused when the authenticator has no PRF, never
+substituted*); this run did not repeat it on hardware. Not settled either:
+whether the backup is *kept* — Aleph's keyless upload is ingest, not
+persistence — and the timings, which were not recorded.
 
 ### Running alongside: #1 reliability
 
