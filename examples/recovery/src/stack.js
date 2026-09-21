@@ -36,7 +36,7 @@ import {
   OrbitDBWebAuthnIdentityProviderFunction,
 } from "@le-space/orbitdb-identity-provider-webauthn-did";
 import { dehydrate, hydrate } from "@le-space/orbitdb-storage-bridge/dehydrate";
-import { createAlephBackend } from "@le-space/orbitdb-storage-bridge/backends/aleph";
+import { createAlephBackend, ALEPH_GATEWAYS } from "@le-space/orbitdb-storage-bridge/backends/aleph";
 
 /** One label for this demo's pointer, so one key can name other things too. */
 export const LABEL = "funkpost-recovery-demo";
@@ -155,6 +155,10 @@ export async function bringBack({ orbitdb, signingKey }) {
     seed: signingKey,
     label: LABEL,
     open: { sync: false },
+    // Aleph's own gateway first: the backup went there, and only Aleph has it
+    // the moment it lands. The bridge's default list starts with Storacha's
+    // two, from before Aleph replaced it, and would ask them for nothing.
+    restore: { gateways: ALEPH_GATEWAYS },
   });
 }
 
