@@ -31,7 +31,7 @@ roadmap is built to keep testing.
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
-| **#68** | The founding off the radio | **P9, half built** — the pointer it was waiting for already existed, and the bundle that blocked it is fixed ([bridge#59](https://github.com/NiKrause/orbitdb-storage-bridge/pull/59): +12 kB instead of +617). The backend that was missing now exists — Aleph, keyless upload with STORE for retention (bridge 0.5.3). What is left is this side: the pointer message and its UI. |
+| **#68** | The founding off the radio | **P9, built** — one frame over the radio names a backup, and the bytes come over HTTPS: a page that has never seen a list restores it from the CID alone, with no account, and the courier carries the changes from there (e2e, 2026-09-18). +3.8 kB gzipped. Not yet on hardware, and not an archive: Aleph's keyless upload is not kept. |
 | **#82** | Internet first, mesh as fallback | **P10, built** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. The loss is established by a failed dial rather than a flag, the switch is a question rather than a reflex, and the app can ask the air whether another app — not another radio — is out there. |
 | **#93** | A lost phone, the same passkey | **P11, gate met on hardware 2026-09-21** — a Fold 5 made a list, backed it up and was reset; an A57 with the same YubiKey had the same identity, brought the list back with the key alone, and wrote to it ([#93](https://github.com/NiKrause/funkpost/issues/93#issuecomment-5765768993)). Open: keeping the backup, since Aleph's keyless upload is not retained. |
 
@@ -254,7 +254,7 @@ reads true afterwards.
 way the app bundle does — Wi-Fi, a QR, or a pointer (#68). *The mesh carries the
 change, not the founding.*
 
-### P9 · The founding, off the radio — #68
+### P9 · The founding, off the radio — #68 ✅
 
 P8 ends by naming what it deliberately does not fix: Bob without the database
 costs ~2 KB, inherent to a hash-linked log, and *the mesh carries the change,
@@ -336,6 +336,25 @@ today's first contact. The seam costs **+3.8 kB gzipped**. What is left is the
 wiring — backing up when there is internet, restoring on the far side, and the
 UI around both — and the backup half needs the browser fix released in
 orbitdb-storage-bridge 0.8.0, since every backup here happens in a browser.
+
+*Step 2 (2026-09-18):* the wiring. `mesh-todo` backs a list up to Aleph when
+there is internet — one CAR and the metadata that names it, with no account —
+and beams the pointer in one frame (*Back up & beam pointer*). A page without
+the list sees the pointer arrive, fetches both files over HTTPS and opens the
+same address (*Restore from the pointer*); from then on the courier carries the
+changes, exactly as after a join. And `stack.js` says where bytes travel again:
+the courier carries every change, and a founding may arrive by CID over HTTPS.
+
+*Gate met:* one frame, counted in
+[`test/founding-pointer.test.js`](test/founding-pointer.test.js); a page that has
+never seen the list restores it from the CID alone, with no account, while the
+radio carries nothing but the pointer —
+[`mesh-todo.spec.js`](examples/mesh-todo/e2e/mesh-todo.spec.js), with Aleph
+played by the test so the run leaves the machine for nothing; the bundle grew by
+**3.8 kB** gzipped, against a limit of 20; and `stack.js`'s claim reads true.
+Not yet run on hardware. And not an archive: Aleph's keyless upload is ingest,
+not persistence, so a pointer is a shortcut for a peer who is listening now.
+Keeping a backup is the same open decision as in P11.
 
 ### P10 · Internet first, the mesh when it is gone — #82
 
