@@ -106,7 +106,7 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
       onEvent,
     });
     return {
-      ...start(courier, "BroadcastChannel (Mesh-Attrappe)", "EU_868"),
+      ...start(courier, "bc", "EU_868"),
       device: null,
       setTxChannel: () => {},
       close: () => courier.close(),
@@ -179,7 +179,7 @@ export async function connectCourier({ stack, mode, onEvent, onChange, onStatus,
     },
   });
 
-  started = start(managed.courier, "Meshtastic-Knoten (Web Bluetooth)", "UNSET");
+  started = start(managed.courier, "ble", "UNSET");
   return {
     ...started,
     get device() {

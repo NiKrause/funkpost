@@ -11,7 +11,8 @@
    * internet goes and the list carries on over the air.
    */
   import { onMount } from "svelte";
-  import { creditHTML } from "@le-space/funkpost-brand";
+  import { creditHTML, lang } from "@le-space/funkpost-brand";
+  import { WORDS } from "./words.js";
   import {
     createDatabaseStack,
     joinOverInternet,
@@ -40,6 +41,13 @@
   } from "@le-space/funkpost";
 
   const build = __BUILD_INFO__;
+  // The page's words in its current language; a log line keeps the language it
+  // was written in.
+  const t = $derived(WORDS[$lang]);
+  const w = () => WORDS[lang.get()];
+  $effect(() => {
+    document.title = t.title;
+  });
   const params = new URLSearchParams(location.search);
   // P10: the internet path. On by default with a real radio — that is the case
   // #82 asks about, internet first and the mesh when it goes — and off with the
@@ -109,13 +117,15 @@
   let conns = $state([]);
   /** How a connection reaches the other side, in the words a reader wants. */
   const kindOf = (c) =>
-    relayIds.includes(c.peer)
-      ? "relay"
-      : c.addr.includes("/webrtc")
-        ? "direct (WebRTC)"
-        : c.addr.includes("/p2p-circuit")
-          ? "through a relay"
-          : "other";
+    t.connKinds[
+      relayIds.includes(c.peer)
+        ? "relay"
+        : c.addr.includes("/webrtc")
+          ? "direct"
+          : c.addr.includes("/p2p-circuit")
+            ? "relayed"
+            : "other"
+    ];
   const otherPeers = $derived([...new Set(conns.filter((c) => !relayIds.includes(c.peer)).map((c) => c.peer))]);
   const relaysConnected = $derived(relayIds.filter((id) => conns.some((c) => c.peer === id)).length);
   let switching = $state(false);
@@ -164,7 +174,7 @@
     setTxChannelFn(index);
     restartHeartbeat();
     const ch = channels.find((c) => c.index === index);
-    pushLog(`TX channel → ${index} »${ch?.name}« ⌗${ch?.fingerprint} — chosen automatically`);
+    pushLog(w().log.autoChannel(index, ch?.name, ch?.fingerprint));
   }
 
   /** One channel as the node reports it. Named, so a test can hand one over. */
@@ -183,9 +193,7 @@
     if (entry.role === 1) {
       primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
     }
-    pushLog(
-      `node reports channel ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primary" : ""}`,
-    );
+    pushLog(w().log.nodeChannel(entry.index, entry.name, entry.fingerprint, entry.role === 1));
     // Channels arrive one at a time and the wanted one need not be first.
     // Before the connection resolves this is a no-op, so the call after it is
     // the one that lands in the common case.
@@ -213,12 +221,12 @@
       wakeSentinel = await navigator.wakeLock.request("screen");
       wakeSentinel.addEventListener("release", () => {
         wakeSentinel = null;
-        if (keepAwake) pushLog("screen wake lock released by the system");
+        if (keepAwake) pushLog(w().log.wakeReleased);
       });
-      pushLog("screen wake lock on");
+      pushLog(w().log.wakeOn);
     } catch (e) {
       keepAwake = false;
-      pushLog(`! wake lock refused: ${e.message}`);
+      pushLog(w().log.wakeRefused(e.message));
     }
   }
 
@@ -228,7 +236,7 @@
     } else {
       await wakeSentinel?.release();
       wakeSentinel = null;
-      pushLog("screen wake lock off");
+      pushLog(w().log.wakeOff);
     }
   }
 
@@ -267,12 +275,9 @@
   const describeError = describeMeshtasticError;
 
   const onCourierEvent = (event) => {
-    if (event.kind === "payload-rx") pushLog(`⇠ payload ${event.bytes} B (msg ${event.msgId})`);
-    if (event.kind === "delivered") pushLog(`✓ delivered msg ${event.msgId} after ${event.rounds} round(s)`);
-    if (event.kind === "giveup")
-      pushLog(
-        `✗ gave up on msg ${event.msgId} after ${event.rounds} round(s)${event.reason ? ` — ${event.reason}` : ""}`,
-      );
+    if (event.kind === "payload-rx") pushLog(w().log.payloadRx(event.bytes, event.msgId));
+    if (event.kind === "delivered") pushLog(w().log.delivered(event.msgId, event.rounds));
+    if (event.kind === "giveup") pushLog(w().log.giveup(event.msgId, event.rounds, event.reason));
     if (event.kind === "error") pushLog(`! ${describeError(event.error)}`);
   };
 
@@ -280,8 +285,8 @@
     s.on("message", ({ direction, type, bytes }) =>
       pushLog(`${direction === "out" ? "→" : "←"} ${type} ${bytes} B`),
     );
-    s.on("synced", ({ joined }) => pushLog(`⇅ joined ${joined} entr${joined === 1 ? "y" : "ies"}`));
-    s.on("error", (e) => pushLog(`! sync: ${e.message}`));
+    s.on("synced", ({ joined }) => pushLog(w().log.synced(joined)));
+    s.on("error", (e) => pushLog(w().log.syncError(e.message)));
   };
 
   const refreshTodos = async () => {
@@ -299,7 +304,7 @@
     invite = "";
     opened.events.on("update", refreshTodos);
     refreshTodos();
-    pushLog(`db open: ${opened.address.slice(0, 24)}…`);
+    pushLog(w().log.dbOpen(opened.address.slice(0, 24)));
     // The address bar now names the list: the link to share, and what the
     // page's QR code shows.
     history.replaceState(null, "", `${location.pathname}${location.search}#list=${opened.address}`);
@@ -320,13 +325,9 @@
         .then((attached) => {
           sync = attached;
           wireSyncLog(sync);
-          pushLog(
-            carriedBy === "mesh"
-              ? "the node carries the list now — invite sent"
-              : "the list has a mesh path now, quiet while the internet carries it — invite sent",
-          );
+          pushLog(carriedBy === "mesh" ? w().log.attachedMesh : w().log.attachedQuiet);
         })
-        .catch((e) => pushLog(`! attaching the node failed: ${e.message}`))
+        .catch((e) => pushLog(w().log.attachFailed(e.message)))
         .finally(() => (wiring = null));
     }
     maybeStartHeartbeat();
@@ -345,7 +346,7 @@
         onEvent: logBeat,
       });
     } catch (e) {
-      pushLog(`! heartbeat: ${e.message}`);
+      pushLog(w().log.heartbeatError(e.message));
     } finally {
       heartbeatStarting = false;
     }
@@ -365,52 +366,47 @@
       ? "—"
       : new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
   const agoText = (ms) =>
-    ms == null ? "" : ms < 60_000 ? "just now" : `${Math.round(ms / 60_000)} min ago`;
+    ms == null ? "" : ms < 60_000 ? t.led.justNow : t.led.minAgo(Math.round(ms / 60_000));
 
   const logBeat = (event) => {
     if (event.kind === "beat") {
-      pushLog(`♥ beat ${event.beat} of ${event.of} — is another device keeping this list?`);
+      pushLog(w().log.beat(event.beat, event.of));
     }
-    if (event.kind === "heard") pushLog(`♥ ${event.type} from device ${event.from}`);
-    if (event.kind === "echo") pushLog(`♥ echo to device ${event.to}`);
+    if (event.kind === "heard") pushLog(w().log.heard(event.type, event.from));
+    if (event.kind === "echo") pushLog(w().log.echo(event.to));
     if (event.kind === "round" && !event.answered) {
-      pushLog(`♥ nobody with this list answered — next heartbeat at ${clockText(event.nextRoundAt)}`);
+      pushLog(w().log.alone(clockText(event.nextRoundAt)));
     }
-    if (event.kind === "error") pushLog(`! heartbeat: ${describeError(event.error)}`);
+    if (event.kind === "error") pushLog(w().log.heartbeatError(describeError(event.error)));
   };
 
   // The LED: steady only with a node connected and another device keeping this
   // list answering its heartbeat. Everything short of that blinks, and says why.
   const led = $derived.by(() => {
-    if (linkLost) return { steady: false, text: "LoRa node lost — reload to reconnect" };
-    if (reconnecting) return { steady: false, text: "LoRa node dropped — reconnecting…" };
+    const words = t.led;
+    if (linkLost) return { steady: false, text: words.lost };
+    if (reconnecting) return { steady: false, text: words.reconnecting };
     if (!nodeReady) {
-      return {
-        steady: false,
-        text: phase === "connecting" ? "connecting to the LoRa node…" : "no LoRa node connected",
-      };
+      return { steady: false, text: phase === "connecting" ? words.connecting : words.none };
     }
-    if (!db) return { steady: false, text: "LoRa node connected — no list to listen for yet" };
-    if (!beat) return { steady: false, text: "LoRa node connected — starting the heartbeat…" };
-    if (beat.lastError) return { steady: false, text: `the heartbeat cannot go out: ${beat.lastError}` };
-    const checking = beat.beat > 0 ? ` · checking again, beat ${beat.beat} of ${beat.beatsPerRound}` : "";
+    if (!db) return { steady: false, text: words.noList };
+    if (!beat) return { steady: false, text: words.starting };
+    if (beat.lastError) return { steady: false, text: words.cannot(beat.lastError) };
+    const checking = beat.beat > 0 ? words.checking(beat.beat, beat.beatsPerRound) : "";
     if (beat.verdict === "answered") {
       const others = Math.max(1, beat.peers.length);
       return {
         steady: true,
-        text: `${others === 1 ? "another device" : `${others} other devices`} with this list answered ${agoText(beat.lastHeardAgoMs)}${checking}`,
+        text: words.answered(others, agoText(beat.lastHeardAgoMs)) + checking,
       };
     }
     if (beat.verdict === "alone") {
       return {
         steady: false,
-        text: `no other device with this list answered${checking || ` — next heartbeat at ${clockText(beat.nextRoundAt)}`}`,
+        text: words.alone + (checking || words.nextAt(clockText(beat.nextRoundAt))),
       };
     }
-    return {
-      steady: false,
-      text: `looking for another device with this list — beat ${beat.beat} of ${beat.beatsPerRound}`,
-    };
+    return { steady: false, text: words.looking(beat.beat, beat.beatsPerRound) };
   });
 
   onMount(async () => {
@@ -418,7 +414,7 @@
     // otherwise tear the connection down silently — an exception in a
     // config handler, a rejecting promise, a polyfill edge case.
     const onWinError = (e) =>
-      pushLog(`! window ${e.type}: ${describeError(e.reason ?? e.error ?? e.message ?? e)}`);
+      pushLog(w().log.windowError(e.type, describeError(e.reason ?? e.error ?? e.message ?? e)));
     window.addEventListener("error", onWinError);
     window.addEventListener("unhandledrejection", onWinError);
     // The pointer path is the only thing here that wants the internet, so the
@@ -436,11 +432,11 @@
     }
     stack = await createDatabaseStack({ internet: wantsInternet });
     if (wantsInternet) {
-      pushLog(`internet path up — relays from ${relaySource}`);
+      pushLog(w().log.internetUp(relaySource));
       selfId = stack.libp2p.peerId.toString();
       relayMultiaddrs().then((addresses) => {
         relayIds = [...new Set(addresses.map((a) => a.match(/\/p2p\/([^/]+)$/)?.[1]).filter(Boolean))];
-        pushLog(`${relayIds.length} relay${relayIds.length === 1 ? "" : "s"} known`);
+        pushLog(w().log.relaysKnown(relayIds.length));
       });
       const look = () => {
         ipPeers = internetPeers(stack.libp2p);
@@ -463,11 +459,7 @@
         onChange: ({ reachable, peers }) => {
           internetReachable = reachable;
           ipPeers = reachable ? ipPeers : [];
-          pushLog(
-            reachable
-              ? `internet back — ${peers} peer${peers === 1 ? "" : "s"} over IP`
-              : "internet gone — no peer answers, and a dial to the relay failed too",
-          );
+          pushLog(reachable ? w().log.internetBack(peers) : w().log.internetGone);
           // The offer, not the switch: the radio spends a rationed budget, and
           // pairing a node needs a gesture anyway.
           if (!reachable && carriedBy === "internet" && db) offerTheMesh = true;
@@ -521,7 +513,7 @@
         onTelemetry: (value) => (airUtil = value),
         onRegion: (name) => {
           region = name;
-          pushLog(`node reports region: ${name}`);
+          pushLog(w().log.region(name));
         },
         onChannel: handleChannel,
         onMyNodeInfo: (info) => {
@@ -534,14 +526,14 @@
           );
         },
         onError: (msg) => pushLog(`! ${msg}`),
-        onStatus: (name) => pushLog(`node status: ${name}`),
+        onStatus: (name) => pushLog(w().log.nodeStatus(name)),
         onReconnecting: (n) => {
           reconnecting = true;
-          pushLog(`link dropped — reconnecting (attempt ${n})…`);
+          pushLog(w().log.linkDropped(n));
         },
         onReconnected: () => {
           reconnecting = false;
-          pushLog("reconnected — resuming sync");
+          pushLog(w().log.reconnected);
           // Re-announce so the peer re-diffs heads and the courier's ARQ
           // re-sends whatever the drop interrupted (e.g. the bootstrap blocks).
           sync?.announce?.();
@@ -549,8 +541,8 @@
         onGaveUp: () => {
           reconnecting = false;
           linkLost = true;
-          error = "the radio link keeps dropping — this phone's Bluetooth is too unstable; reload to retry, or use desktop Chrome";
-          pushLog("gave up reconnecting after repeated drops");
+          error = w().errors.gaveUp;
+          pushLog(w().log.gaveUp);
         },
       });
       courier = connected.courier;
@@ -573,10 +565,10 @@
       });
       watchFoundingPointers(courier, (p) => {
         if (!db) pointer = p;
-        pushLog(`pointer for ${p.address.slice(0, 20)}… → ${p.cid.slice(0, 12)}…`);
+        pushLog(w().log.pointerHeard(p.address.slice(0, 20), p.cid.slice(0, 12)));
       });
       phase = "ready";
-      pushLog(`link up: ${linkKind}, region ${region}`);
+      pushLog(w().log.linkUp(w().linkKinds[linkKind] ?? linkKind, region));
       wireList();
     } catch (e) {
       error = e.message;
@@ -587,24 +579,20 @@
   async function create() {
     error = "";
     creating = true;
-    pushLog(
-      courier
-        ? "creating list — announce and invite go on the air…"
-        : "creating list — no node needed; one connected later gives it the mesh",
-    );
+    pushLog(courier ? w().log.creatingOnAir : w().log.creatingNoNode);
     try {
       const made = await createList({ orbitdb: stack.orbitdb, courier });
       sync = made.sync;
       if (sync) wireSyncLog(sync);
       attachDb(made.db);
-      if (made.sync) pushLog("invite sent over the mesh");
+      if (made.sync) pushLog(w().log.inviteSent);
       if (carriedBy === "internet") {
         await carryOverInternet({ db: made.db, sync });
-        pushLog(`carried by the internet — OrbitDB's own sync${sync ? ", courier quiet" : ""}`);
+        pushLog(w().log.carriedInternetCreate(Boolean(sync)));
       }
     } catch (e) {
       error = e.message;
-      pushLog(`! create failed: ${e.message}`);
+      pushLog(w().log.createFailed(e.message));
     } finally {
       creating = false;
     }
@@ -613,11 +601,11 @@
   async function join() {
     error = "";
     if (carriedBy === "mesh" && !courier) {
-      error = "joining over the mesh needs a node — connect one first";
+      error = w().errors.joinNeedsNode;
       return;
     }
     joining = true;
-    pushLog("joining — bootstrap request goes on the air…");
+    pushLog(w().log.joiningOnAir);
     try {
       if (carriedBy === "internet") {
         const joined = await joinOverInternet({
@@ -628,16 +616,16 @@
         sync = joined.sync;
         wireSyncLog(sync);
         attachDb(joined.db);
-        pushLog("joined over the internet — OrbitDB is fetching the log");
+        pushLog(w().log.joinedInternet);
       } else {
         const joined = await joinList({ orbitdb: stack.orbitdb, courier, address: invite });
         sync = joined.sync;
         wireSyncLog(sync);
-        pushLog("joining — waiting for the first delta…");
+        pushLog(w().log.joiningDelta);
       }
     } catch (e) {
       error = e.message;
-      pushLog(`! join failed: ${e.message}`);
+      pushLog(w().log.joinFailed(e.message));
     } finally {
       joining = false;
     }
@@ -647,7 +635,7 @@
   async function openLinked(named) {
     error = "";
     openingLink = true;
-    pushLog("opening the list from its link — OrbitDB fetches it from the pages that have it…");
+    pushLog(w().log.openingLink);
     try {
       const joined = await joinOverInternet({ orbitdb: stack.orbitdb, courier, address: named });
       if (joined.sync) {
@@ -655,10 +643,10 @@
         wireSyncLog(sync);
       }
       attachDb(joined.db);
-      pushLog(`list open — the internet carries it${courier ? "" : ", no node needed"}`);
+      pushLog(w().log.listOpen(!courier));
     } catch (e) {
       error = e.message;
-      pushLog(`! opening the link failed: ${e.message}`);
+      pushLog(w().log.openFailed(e.message));
     } finally {
       openingLink = false;
     }
@@ -675,10 +663,10 @@
     try {
       if (path === "internet") {
         await carryOverInternet({ db, sync });
-        pushLog("carried by the internet — the courier is quiet");
+        pushLog(w().log.carriedInternet);
       } else {
         await carryOverMesh({ db, sync });
-        pushLog("carried by the mesh — OrbitDB's own sync is stopped");
+        pushLog(w().log.carriedMesh);
       }
       carriedBy = path;
       if (path === "mesh") {
@@ -688,7 +676,7 @@
       }
     } catch (e) {
       error = e.message;
-      pushLog(`! switch failed: ${e.message}`);
+      pushLog(w().log.switchFailed(e.message));
     } finally {
       switching = false;
     }
@@ -719,7 +707,7 @@
     if (!sync || asking || carriedBy !== "mesh") return;
     asking = true;
     askedAt = Date.now();
-    pushLog("asking the air: is another mesh-todo keeping this list?");
+    pushLog(w().log.askingAir);
     try {
       await sync.hello();
       // An answer has to travel, and this carrier is slow on purpose.
@@ -727,11 +715,11 @@
       company = sync.presence();
       pushLog(
         company.peers.length > 0
-          ? `${company.peers.length} app${company.peers.length === 1 ? "" : "s"} answered: ${company.peers.map((peer) => peer.id).join(", ")}`
-          : "nobody answered — radios may be in range, but no app is keeping this list",
+          ? w().log.appsAnswered(company.peers.length, company.peers.map((peer) => peer.id).join(", "))
+          : w().log.nobodyAnswered,
       );
     } catch (e) {
-      pushLog(`! asking failed: ${e.message}`);
+      pushLog(w().log.askFailed(e.message));
     } finally {
       asking = false;
     }
@@ -741,13 +729,13 @@
   async function backUp() {
     error = "";
     backingUp = true;
-    pushLog("backing up over the internet — the radio only carries the pointer…");
+    pushLog(w().log.backingUp);
     try {
       const { cid, blocks } = await backUpAndPoint({ orbitdb: stack.orbitdb, db, courier });
-      pushLog(`pointer sent: ${blocks} blocks backed up, cid ${cid.slice(0, 12)}…`);
+      pushLog(w().log.pointerSent(blocks, cid.slice(0, 12)));
     } catch (e) {
       error = e.message;
-      pushLog(`! backup failed: ${e.message}`);
+      pushLog(w().log.backupFailed(e.message));
     } finally {
       backingUp = false;
     }
@@ -757,17 +745,17 @@
   async function restorePointed() {
     error = "";
     restoring = true;
-    pushLog("restoring from the pointer — fetching the backup over the internet…");
+    pushLog(w().log.restoring);
     try {
       const restored = await restoreFromPointer({ orbitdb: stack.orbitdb, courier, pointer });
       sync = restored.sync;
       wireSyncLog(sync);
       attachDb(restored.db);
       pointer = null;
-      pushLog(`restored ${restored.entries} entries from ${restored.blocks} blocks — no radio`);
+      pushLog(w().log.restored(restored.entries, restored.blocks));
     } catch (e) {
       error = e.message;
-      pushLog(`! restore failed: ${e.message}`);
+      pushLog(w().log.restoreFailed(e.message));
     } finally {
       restoring = false;
     }
@@ -804,9 +792,9 @@
       // lands, and claiming otherwise here would be a lie the courier can see
       // through. What was written is now the peer's business to ask for.
       unsent = 0;
-      pushLog(`→ announced${carried ? ` — ${carried} local change(s) offered` : ""}`);
+      pushLog(w().log.announced(carried));
     } catch (e) {
-      pushLog(`! send failed: ${describeError(e)}`);
+      pushLog(w().log.sendFailed(describeError(e)));
     } finally {
       sending = false;
     }
@@ -815,9 +803,9 @@
   const heardAgo = (node) => {
     if (!node.lastHeard) return "—";
     const seconds = Math.max(0, Math.round(nowTick / 1000 - node.lastHeard));
-    if (seconds < 90) return `${seconds}s ago`;
-    if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
-    return `${Math.round(seconds / 3600)}h ago`;
+    if (seconds < 90) return t.ago.s(seconds);
+    if (seconds < 5400) return t.ago.m(Math.round(seconds / 60));
+    return t.ago.h(Math.round(seconds / 3600));
   };
 
   // Airtime is rationed by law and the node enforces it: past the limit it
@@ -829,12 +817,12 @@
   const untilFree = $derived.by(() => {
     if (blockedForMs <= 0) return "";
     const minutes = Math.ceil(blockedForMs / 60_000);
-    return minutes <= 1 ? "in under a minute" : `in about ${minutes} minutes`;
+    return minutes <= 1 ? t.underAMinute : t.inMinutes(minutes);
   });
   const dutyCycleText = $derived(
     budget?.dutyCycle == null
       ? ""
-      : `${(budget.dutyCycle * 100).toFixed(budget.dutyCycle < 0.05 ? 1 : 0)} % of an hour`,
+      : t.perHour((budget.dutyCycle * 100).toFixed(budget.dutyCycle < 0.05 ? 1 : 0)),
   );
 
   const budgetPercent = () => {
@@ -866,15 +854,12 @@
 
 <main>
   <h1>mesh-todo</h1>
-  <p class="tag">
-    no servers · no accounts ·
-    {wantsInternet ? "internet first, the mesh when it goes" : "no IP path"} — a todo list over LoRa
-  </p>
+  <p class="tag">{t.tagline(wantsInternet)}</p>
   <p
     class="led-line"
     data-testid="led"
     data-state={led.steady ? "steady" : "blinking"}
-    title="Blinks until a LoRa node is connected and another device keeping this list answers its heartbeat. One round an hour: up to five beats a minute apart, until one is answered."
+    title={t.led.title}
   >
     <span class="led" class:steady={led.steady} aria-hidden="true"></span>
     <span data-testid="led-label">{led.text}</span>
@@ -884,42 +869,68 @@
        instrument reads it once and then wants the screen back. -->
   {#if showNotice}
     <aside class="notice" data-testid="experimental-notice">
-      <p>
-        <strong>Experimental.</strong> A research demo, not audited, not for
-        production — and anyone who can hear the channel may write to this list.
-      </p>
-      <p>
-        It is also <strong>the measurement, not the product</strong>: this
-        arrangement ships whole OrbitDB blocks, and a three-entry list is
-        noticeably slow over the mesh. That result is the point of the
-        experiment. A lighter shape — a few bytes per event instead of block
-        transfers — is what
-        <a href="https://nikrause.github.io/funkpost/mesh-calendar/">mesh-calendar</a>
-        already does, and where this is heading.
-      </p>
+      {#if $lang === "de"}
+        <p>
+          <strong>Experimentell.</strong> Eine Forschungsdemo, nicht auditiert,
+          nicht für den Produktiveinsatz — und wer den Kanal empfängt, kann in
+          diese Liste schreiben.
+        </p>
+        <p>
+          Sie ist auch <strong>die Messung, nicht das Produkt</strong>: Diese
+          Anordnung verschickt ganze OrbitDB-Blöcke, und eine Liste mit drei
+          Einträgen ist über das Mesh spürbar langsam. Dieses Ergebnis ist der
+          Zweck des Experiments. Eine leichtere Form — wenige Bytes pro Ereignis
+          statt Blockübertragungen — setzt
+          <a href="https://nikrause.github.io/funkpost/mesh-calendar/">mesh-calendar</a>
+          bereits um, und dorthin geht die Entwicklung.
+        </p>
+      {:else}
+        <p>
+          <strong>Experimental.</strong> A research demo, not audited, not for
+          production — and anyone who can hear the channel may write to this list.
+        </p>
+        <p>
+          It is also <strong>the measurement, not the product</strong>: this
+          arrangement ships whole OrbitDB blocks, and a three-entry list is
+          noticeably slow over the mesh. That result is the point of the
+          experiment. A lighter shape — a few bytes per event instead of block
+          transfers — is what
+          <a href="https://nikrause.github.io/funkpost/mesh-calendar/">mesh-calendar</a>
+          already does, and where this is heading.
+        </p>
+      {/if}
       <button class="dismiss" onclick={dismissNotice} data-testid="dismiss-notice">
-        Got it — don't show again
+        {t.dismiss}
       </button>
     </aside>
   {/if}
 
   {#if wantsInternet}
     <section data-testid="internet">
-      <h2>0 · Internet <span class="dim">(the normal path)</span></h2>
-      <p class="dim">
-        This page is a peer-to-peer node from the moment it opens. It finds the relays
-        registered on Aleph, meets other mesh-todo pages on a shared discovery topic, and
-        connects to them — directly over WebRTC where it can, through a relay where it
-        cannot. A list travels over these connections; the LoRa mesh is for when they are
-        gone. A list needs no node: make one below, and its link — or this page's QR code —
-        opens it on another device.
-      </p>
+      <h2>{t.internet} <span class="dim">{t.normalPath}</span></h2>
+      {#if $lang === "de"}
+        <p class="dim">
+          Diese Seite ist vom Öffnen an ein Peer-to-Peer-Knoten. Sie findet die auf Aleph
+          registrierten Relays, trifft andere mesh-todo-Seiten auf einem gemeinsamen
+          Discovery-Topic und verbindet sich mit ihnen — direkt über WebRTC, wo es geht, über
+          ein Relay, wo nicht. Eine Liste reist über diese Verbindungen; das LoRa-Mesh ist für
+          den Fall, dass sie wegfallen. Eine Liste braucht keinen Knoten: unten eine anlegen,
+          und ihr Link — oder der QR-Code dieser Seite — öffnet sie auf einem anderen Gerät.
+        </p>
+      {:else}
+        <p class="dim">
+          This page is a peer-to-peer node from the moment it opens. It finds the relays
+          registered on Aleph, meets other mesh-todo pages on a shared discovery topic, and
+          connects to them — directly over WebRTC where it can, through a relay where it
+          cannot. A list travels over these connections; the LoRa mesh is for when they are
+          gone. A list needs no node: make one below, and its link — or this page's QR code —
+          opens it on another device.
+        </p>
+      {/if}
       <p>
-        <strong>{internetReachable ? "online" : "internet gone"}</strong>
-        · <span data-testid="relays">relays {relaysConnected} of {relayIds.length} connected</span>
-        · <span data-testid="peer-count"
-          >{otherPeers.length} other page{otherPeers.length === 1 ? "" : "s"}</span
-        >
+        <strong>{internetReachable ? t.online : t.internetGone}</strong>
+        · <span data-testid="relays">{t.relays(relaysConnected, relayIds.length)}</span>
+        · <span data-testid="peer-count">{t.otherPages(otherPeers.length)}</span>
       </p>
       {#if conns.length > 0}
         <ul class="conns">
@@ -928,36 +939,34 @@
           {/each}
         </ul>
       {/if}
-      {#if selfId}<p class="dim mono">this node …{selfId.slice(-8)}</p>{/if}
+      {#if selfId}<p class="dim mono">{t.thisNode} …{selfId.slice(-8)}</p>{/if}
     </section>
   {/if}
 
   <section>
-    <h2>1 · Node</h2>
+    <h2>{t.node}</h2>
     {#if phase === "boot"}
-      <p>starting the local database stack…</p>
+      <p>{t.startingStack}</p>
     {:else if phase === "connecting"}
-      <p>connecting…</p>
+      <p>{t.connecting}</p>
     {:else if phase === "ready"}
       <p>
-        <strong>{linkKind}</strong> — region <strong>{region}</strong>
+        <strong>{t.linkKinds[linkKind] ?? linkKind}</strong> — {t.region} <strong>{region}</strong>
         {#if airUtil != null}
-          · <span title="the node's own measured TX utilisation — all of its traffic (beacons, telemetry, relaying), not just this app">node airtime {airUtil.toFixed(1)} %</span>
+          · <span title={t.nodeAirtimeTitle}>{t.nodeAirtime(airUtil.toFixed(1))}</span>
         {/if}
       </p>
       {#if primaryChannel || myNode}
-        <p class="dim mono" title="same channel name + key fingerprint on both phones = the nodes can decrypt each other">
-          {#if primaryChannel}primary channel »{primaryChannel.name}« · key ⌗{primaryChannel.fingerprint}{/if}
+        <p class="dim mono" title={t.channelTitle}>
+          {#if primaryChannel}{t.primaryChannel} »{primaryChannel.name}« · {t.key} ⌗{primaryChannel.fingerprint}{/if}
           {#if myNode}
-            · this node {myNode}{/if}
+            · {t.thisNode} {myNode}{/if}
         </p>
       {/if}
       {#if channels.length > 0}
         <p class="dim mono">
-          <label
-            title="transmissions go on this channel — pick the same »name« ⌗fingerprint on both phones. Reception decodes every channel the node holds a key for."
-          >
-            TX channel:
+          <label title={t.txChannelTitle}>
+            {t.txChannel}
             <select
               bind:value={txChannel}
               onchange={() => {
@@ -971,12 +980,12 @@
                 company = { peers: [], lastHeardAgoMs: null };
                 restartHeartbeat();
                 const ch = channels.find((c) => c.index === txChannel);
-                pushLog(`TX channel → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint}`);
+                pushLog(w().log.handChannel(txChannel, ch?.name, ch?.fingerprint));
               }}
             >
               {#each channels as ch (ch.index)}
                 <option value={ch.index}>
-                  {ch.index} »{ch.name}« ⌗{ch.fingerprint}{ch.role === 1 ? " · primary" : ""}
+                  {ch.index} »{ch.name}« ⌗{ch.fingerprint}{ch.role === 1 ? ` · ${t.primary}` : ""}
                 </option>
               {/each}
             </select>
@@ -985,50 +994,78 @@
       {/if}
       {#if airtimeBlocked}
         <p class="warn" data-testid="airtime-blocked">
-          <strong>Airtime spent.</strong> This node has used its legal hourly
-          allowance{#if dutyCycleText} ({region} · {dutyCycleText}){/if} and will
-          not transmit. Receiving continues; adding and inviting resume
-          <strong>{untilFree}</strong>.
+          {#if $lang === "de"}
+            <strong>Sendezeit aufgebraucht.</strong> Dieser Knoten hat sein gesetzliches
+            Stundenkontingent ausgeschöpft{#if dutyCycleText} ({region} · {dutyCycleText}){/if}
+            und sendet nicht mehr. Empfangen geht weiter; Hinzufügen und Einladen sind wieder
+            möglich <strong>{untilFree}</strong>.
+          {:else}
+            <strong>Airtime spent.</strong> This node has used its legal hourly
+            allowance{#if dutyCycleText} ({region} · {dutyCycleText}){/if} and will
+            not transmit. Receiving continues; adding and inviting resume
+            <strong>{untilFree}</strong>.
+          {/if}
         </p>
       {/if}
       {#if budgetPercent() != null}
-        <div class="bar" title="airtime budget left this hour">
+        <div class="bar" title={t.budgetTitle}>
           <div class="fill" style={`width:${budgetPercent()}%`}></div>
         </div>
-        <p class="dim">
-          courier airtime budget: <strong>{budgetPercent()} % remaining</strong> this hour ({region})
-        </p>
+        {#if $lang === "de"}
+          <p class="dim">
+            Sendezeit-Budget des Kuriers: <strong>{budgetPercent()} % übrig</strong> in dieser Stunde ({region})
+          </p>
+        {:else}
+          <p class="dim">
+            courier airtime budget: <strong>{budgetPercent()} % remaining</strong> this hour ({region})
+          </p>
+        {/if}
       {:else}
-        <p class="dim">no duty cycle in this region — pacing off, politeness on</p>
+        <p class="dim">{t.noDutyCycle}</p>
       {/if}
     {:else}
-      <button onclick={connect}>Connect node</button>
-      <p class="dim">
-        opens the browser's Bluetooth chooser — Chrome/Edge only, and the first
-        pairing always needs this button. Append <code>?mesh=bc</code> to fake
-        the mesh with a second tab instead.
-      </p>
+      <button onclick={connect}>{t.connectNode}</button>
+      {#if $lang === "de"}
+        <p class="dim">
+          öffnet die Bluetooth-Auswahl des Browsers — nur Chrome/Edge, und die erste
+          Kopplung braucht immer diesen Knopf. Mit <code>?mesh=bc</code> spielt stattdessen
+          ein zweiter Tab das Mesh.
+        </p>
+      {:else}
+        <p class="dim">
+          opens the browser's Bluetooth chooser — Chrome/Edge only, and the first
+          pairing always needs this button. Append <code>?mesh=bc</code> to fake
+          the mesh with a second tab instead.
+        </p>
+      {/if}
     {/if}
     {#if wakeLockSupported && isMobileDevice}
       <label class="dim awake">
         <input type="checkbox" bind:checked={keepAwake} onchange={toggleAwake} />
-        keep the screen awake — Web Bluetooth pauses when the screen sleeps
+        {t.keepAwake}
       </label>
     {/if}
     {#if budget?.misconfigured}
       <p class="warn">
-        ⚠ this node reports region <strong>UNSET</strong> — the courier refuses to
-        transmit until it knows the local airtime law. Set the region (e.g.
-        EU_868) in the Meshtastic app, then reconnect. Importing a shared
-        channel often resets it, so check the region after every import.
+        {#if $lang === "de"}
+          ⚠ dieser Knoten meldet die Region <strong>UNSET</strong> — der Kurier sendet
+          nicht, solange er das örtliche Sendezeitrecht nicht kennt. Die Region (z. B.
+          EU_868) in der Meshtastic-App setzen und neu verbinden. Das Importieren eines
+          geteilten Kanals setzt sie oft zurück, deshalb nach jedem Import die Region prüfen.
+        {:else}
+          ⚠ this node reports region <strong>UNSET</strong> — the courier refuses to
+          transmit until it knows the local airtime law. Set the region (e.g.
+          EU_868) in the Meshtastic app, then reconnect. Importing a shared
+          channel often resets it, so check the region after every import.
+        {/if}
       </p>
     {/if}
     {#if reconnecting}
-      <p class="dim">link dropped — reconnecting automatically…</p>
+      <p class="dim">{t.linkDroppedNote}</p>
     {/if}
     {#if error}<p class="error">{error}</p>{/if}
     {#if linkLost}
-      <button onclick={() => location.reload()}>Reload &amp; reconnect</button>
+      <button onclick={() => location.reload()}>{t.reload}</button>
     {/if}
     {#if probeResult}
       <p class="dim" data-probe={probeResult}>meshtastic-core probe: {probeResult}</p>
@@ -1036,7 +1073,7 @@
   </section>
 
   <section>
-    <h2>2 · List</h2>
+    <h2>{t.list}</h2>
     {#if db}
       <p class="dim addr">{address}</p>
       <form
@@ -1045,9 +1082,9 @@
           add();
         }}
       >
-        <input bind:value={newText} placeholder="Milch kaufen…" aria-label="new todo" />
+        <input bind:value={newText} placeholder={t.placeholder} aria-label={t.newTodo} />
         <button type="submit" disabled={!newText.trim() || airtimeBlocked}>
-          {airtimeBlocked ? "Airtime spent" : "Add"}
+          {airtimeBlocked ? t.airtimeSpent : t.add}
         </button>
       </form>
       <ul class="todos">
@@ -1061,12 +1098,12 @@
         {/each}
       </ul>
       <p class="dim">
-        {todos.length} entr{todos.length === 1 ? "y" : "ies"} ·
-        {#if carriedBy === "internet"}changes travel over the internet as you make them{:else if nodeReady}changes stay here until you send them{:else}changes stay here until a node carries them{/if}
+        {t.entries(todos.length)} ·
+        {carriedBy === "internet" ? t.viaInternet : nodeReady ? t.untilSent : t.untilNode}
       </p>
       <p class="dim">
-        The link to this list — or this page's QR code, top right — opens it on another device:
-        <a data-testid="list-link" href={`#list=${address}`}>link to this list</a>
+        {t.linkLine}
+        <a data-testid="list-link" href={`#list=${address}`}>{t.linkText}</a>
       </p>
       {#if carriedBy === "mesh" && nodeReady}
         <button
@@ -1075,26 +1112,24 @@
           disabled={unsent === 0 || sending || airtimeBlocked}
           onclick={sendChanges}
         >
-          {#if airtimeBlocked}Airtime spent{:else if sending}sending…{:else if unsent === 0}Nothing to send{:else}
-            Send {unsent} change{unsent === 1 ? "" : "s"}
+          {#if airtimeBlocked}{t.airtimeSpent}{:else if sending}{t.sending}{:else if unsent === 0}{t.nothingToSend}{:else}
+            {t.sendChanges(unsent)}
           {/if}
         </button>
       {/if}
       {#if carriedBy === "mesh" && nodeReady}
         <p class="dim" data-testid="company">
           {#if asking}
-            asking the air…
+            {t.askingAir}
           {:else if company.peers.length > 0}
-            <strong
-              >{company.peers.length} app{company.peers.length === 1 ? "" : "s"} out there</strong
-            >
-            keeping this list{#if company.lastHeardAgoMs != null}, last word {Math.round(
-                company.lastHeardAgoMs / 1000,
-              )} s ago{/if}
+            <strong>{t.appsOutThere(company.peers.length)}</strong>
+            {t.keepingList}{#if company.lastHeardAgoMs != null}{t.lastWord(
+                Math.round(company.lastHeardAgoMs / 1000),
+              )}{/if}
           {:else if askedAt}
-            <strong>nobody answered</strong> — radios can be in range without an app listening
+            <strong>{t.nobodyAnswered}</strong> {t.radiosWithoutApp}
           {:else}
-            nobody has spoken here yet
+            {t.nobodySpoken}
           {/if}
         </p>
         <button
@@ -1102,24 +1137,36 @@
           data-testid="who-is-there"
           disabled={asking || airtimeBlocked}
           onclick={askWhoIsThere}
-          title="Two small messages, and the only way to tell an app from a radio"
+          title={t.whoTitle}
         >
-          {#if asking}asking…{:else if airtimeBlocked}Airtime spent{:else}Is anyone out there?{/if}
+          {#if asking}{t.asking}{:else if airtimeBlocked}{t.airtimeSpent}{:else}{t.anyone}{/if}
         </button>
       {/if}
       {#if offerTheMesh}
         <div class="offer" data-testid="mesh-offer">
-          <p>
-            The peer-to-peer connection dropped — probably the internet.
-            Continue over the LoRa mesh?
-          </p>
-          <p class="dim">
-            The radio carries what changed, not the whole list, and spends a
-            rationed budget: changes then wait for the send button.
-          </p>
+          {#if $lang === "de"}
+            <p>
+              Die Peer-to-Peer-Verbindung ist abgerissen — vermutlich das Internet.
+              Über das LoRa-Mesh weitermachen?
+            </p>
+            <p class="dim">
+              Der Funk trägt, was sich geändert hat, nicht die ganze Liste, und
+              verbraucht ein rationiertes Budget: Änderungen warten dann auf den
+              Senden-Knopf.
+            </p>
+          {:else}
+            <p>
+              The peer-to-peer connection dropped — probably the internet.
+              Continue over the LoRa mesh?
+            </p>
+            <p class="dim">
+              The radio carries what changed, not the whole list, and spends a
+              rationed budget: changes then wait for the send button.
+            </p>
+          {/if}
           {#if nodeReady}
             <button data-testid="accept-mesh" disabled={switching} onclick={() => carryOver("mesh")}>
-              {switching ? "switching…" : "Continue over the mesh"}
+              {switching ? t.switching : t.continueMesh}
             </button>
           {:else}
             <button
@@ -1127,20 +1174,20 @@
               disabled={switching || phase === "connecting"}
               onclick={connectAndCarry}
             >
-              {phase === "connecting" ? "connecting…" : "Connect a node and continue over the mesh"}
+              {phase === "connecting" ? t.connecting : t.connectContinue}
             </button>
           {/if}
           <!-- Dismissed for this outage: the watcher speaks on change, so the
                question is not asked again until the internet comes back and
                goes a second time. The line below still says it is gone. -->
-          <button class="ghost" onclick={() => (offerTheMesh = false)}>Stay on the internet</button>
+          <button class="ghost" onclick={() => (offerTheMesh = false)}>{t.stayInternet}</button>
         </div>
       {/if}
       {#if wantsInternet}
         <p class="dim" data-testid="carried-by">
-          carried by <strong>{carriedBy === "internet" ? "the internet" : "the mesh"}</strong>
-          {#if carriedBy === "internet"}· {ipPeers.length} peer{ipPeers.length === 1 ? "" : "s"} over IP{/if}
-          {#if !internetReachable}· <strong>internet gone</strong>{/if}
+          {t.carriedBy} <strong>{carriedBy === "internet" ? t.theInternet : t.theMesh}</strong>
+          {#if carriedBy === "internet"}· {t.peersOverIp(ipPeers.length)}{/if}
+          {#if !internetReachable}· <strong>{t.internetGone}</strong>{/if}
         </p>
         <button
           class="ghost"
@@ -1153,89 +1200,97 @@
                 ? carryOver("mesh")
                 : connectAndCarry()}
         >
-          {#if switching}switching…{:else if carriedBy === "mesh"}Carry it over the internet instead{:else if nodeReady}Carry it over the mesh instead{:else}Connect a node and carry it over the mesh{/if}
+          {#if switching}{t.switching}{:else if carriedBy === "mesh"}{t.carryInternet}{:else if nodeReady}{t.carryMesh}{:else}{t.connectCarry}{/if}
         </button>
       {/if}
       {#if nodeReady}
         <button class="ghost" disabled={airtimeBlocked} onclick={() => sendInvite(courier, db.address)}>
-          Invite again
+          {t.inviteAgain}
         </button>
         <button
           class="ghost"
           data-testid="back-up-and-point"
           disabled={!online || backingUp || airtimeBlocked}
           onclick={backUp}
-          title={online ? "Backs up over the internet, then names it over the radio in one frame" : "Needs internet"}
+          title={online ? t.backUpTitle : t.needsInternet}
         >
-          {#if backingUp}backing up…{:else if !online}Back up (needs internet){:else}Back up & beam pointer{/if}
+          {#if backingUp}{t.backingUp}{:else if !online}{t.backUpOffline}{:else}{t.backUp}{/if}
         </button>
       {/if}
-      <button class="ghost" onclick={() => location.reload()}>Reset (drops local copy)</button>
+      <button class="ghost" onclick={() => location.reload()}>{t.reset}</button>
     {:else if sync}
-      <p>joining — the first delta carries manifest, access controller and entries…</p>
+      <p>{t.joiningDelta}</p>
     {:else if openingLink}
-      <p>opening the list from its link — OrbitDB fetches it from the pages that have it…</p>
+      <p>{t.openingLink}</p>
       <p class="dim addr">{linked}</p>
     {:else if pointer}
-      <p>a pointer arrived over the mesh — the list itself is on the internet:</p>
+      <p>{t.pointerArrived}</p>
       <p class="dim addr">{pointer.address}</p>
-      <p class="dim addr">backup {pointer.cid}</p>
+      <p class="dim addr">{t.backup} {pointer.cid}</p>
       <button data-testid="restore-from-pointer" onclick={restorePointed} disabled={restoring || !online}>
-        {#if restoring}Restoring…{:else if !online}Restore (needs internet){:else}Restore from the pointer{/if}
+        {#if restoring}{t.restoring}{:else if !online}{t.restoreOffline}{:else}{t.restore}{/if}
       </button>
-      <button class="ghost" onclick={() => (pointer = null)}>Ignore</button>
+      <button class="ghost" onclick={() => (pointer = null)}>{t.ignore}</button>
     {:else if invite}
       <p>
-        {inviteFrom === "link"
-          ? "a link names this list — without an internet path only the mesh can bring it here:"
-          : "invitation from the mesh:"}
+        {inviteFrom === "link" ? t.linkInvite : t.meshInvite}
       </p>
       <p class="dim addr">{invite}</p>
       <button onclick={join} disabled={joining || (carriedBy === "mesh" && !nodeReady)}>
-        {joining ? "Joining…" : "Join this list"}
+        {joining ? t.joining : t.join}
       </button>
-      <button class="ghost" onclick={() => (invite = "")}>Ignore</button>
-      {#if carriedBy === "mesh" && !nodeReady}<p class="dim">connect a node first.</p>{/if}
+      <button class="ghost" onclick={() => (invite = "")}>{t.ignore}</button>
+      {#if carriedBy === "mesh" && !nodeReady}<p class="dim">{t.connectFirst}</p>{/if}
     {:else if phase !== "boot"}
       <button onclick={create} disabled={creating}>
-        {creating ? (nodeReady ? "Creating — first frames on the air…" : "Creating…") : "Create a list"}
+        {creating ? (nodeReady ? t.creatingOnAir : t.creating) : t.create}
       </button>
       <p class="dim">
-        {#if nodeReady}…or wait for an invitation to arrive over the mesh.{:else if wantsInternet}No node needed: the internet carries the list, and its link — or this page's QR code — opens it on another device. A node connected later adds the mesh.{:else}No node needed to make it; one connected later carries it over the mesh.{/if}
+        {nodeReady ? t.waitForInvite : wantsInternet ? t.noNodeInternet : t.noNodeMesh}
       </p>
     {:else}
-      <p class="dim">starting the local database stack…</p>
+      <p class="dim">{t.startingStack}</p>
     {/if}
   </section>
 
   <section>
-    <h2>3 · Sync pane <span class="dim">(the bench instrument)</span></h2>
+    <h2>{t.syncPane} <span class="dim">{t.benchInstrument}</span></h2>
     <p class="dim">
-      frames {totals.framesTx} → · ← {totals.framesRx} · retransmit rounds
-      {totals.retransmitRounds} · est. airtime {(totals.airtimeSpentMs / 1000).toFixed(1)} s{#if refusals.soft > 0} · radio gave up on {refusals.soft} frame{refusals.soft === 1 ? "" : "s"} ({refusals.last}){/if}
+      {t.frames} {totals.framesTx} → · ← {totals.framesRx} · {t.retransmitRounds}
+      {totals.retransmitRounds} · {t.estAirtime} {(totals.airtimeSpentMs / 1000).toFixed(1)} s{#if refusals.soft > 0} · {t.radioGaveUp(refusals.soft, refusals.last)}{/if}
     </p>
     <div class="log">
       {#each log as line (line.id)}
         <div><span class="dim">{line.ts}</span> {line.text}</div>
       {/each}
-      {#if log.length === 0}<div class="dim">quiet.</div>{/if}
+      {#if log.length === 0}<div class="dim">{t.quiet}</div>{/if}
     </div>
   </section>
 
   {#if mode.kind !== "bc" && neighbours.length > 0}
     <section>
       <h2>
-        4 · Mesh neighbours <span class="dim">({neighbours.length} heard by this node)</span>
+        {t.neighbours} <span class="dim">{t.heardByNode(neighbours.length)}</span>
       </h2>
-      <p class="dim">
-        who else is on this channel's air — on a public channel, this is the
-        audience an invite has. <strong>Radios, not apps:</strong> a node here
-        may be somebody's router and keep no list at all. Whether another
-        mesh-todo is out there is a question only that app can answer, and
-        <em>Is anyone out there?</em> above asks it.
-      </p>
+      {#if $lang === "de"}
+        <p class="dim">
+          wer sonst auf diesem Kanal funkt — auf einem öffentlichen Kanal ist das das
+          Publikum einer Einladung. <strong>Funkgeräte, keine Apps:</strong> ein Knoten
+          hier kann jemandes Router sein und gar keine Liste führen. Ob eine andere
+          mesh-todo da ist, kann nur diese App beantworten, und <em>Ist da jemand?</em>
+          oben fragt danach.
+        </p>
+      {:else}
+        <p class="dim">
+          who else is on this channel's air — on a public channel, this is the
+          audience an invite has. <strong>Radios, not apps:</strong> a node here
+          may be somebody's router and keep no list at all. Whether another
+          mesh-todo is out there is a question only that app can answer, and
+          <em>Is anyone out there?</em> above asks it.
+        </p>
+      {/if}
       <button class="ghost" onclick={() => (showNeighbours = !showNeighbours)}>
-        {showNeighbours ? "Hide" : `Show ${neighbours.length} nodes`}
+        {showNeighbours ? t.hide : t.showNodes(neighbours.length)}
       </button>
       {#if showNeighbours}
         <div class="log neighbours">
@@ -1244,7 +1299,7 @@
               <span class="nn">{node.user?.shortName ?? "?"}</span>
               {node.user?.longName ?? node.user?.id ?? node.num}
               <span class="dim">
-                · {heardAgo(node)}{node.hopsAway ? ` · ${node.hopsAway} hop${node.hopsAway === 1 ? "" : "s"}` : ""}{node.snr ? ` · SNR ${node.snr.toFixed(1)}` : ""}{node.viaMqtt ? " · via mqtt" : ""}
+                · {heardAgo(node)}{node.hopsAway ? t.hops(node.hopsAway) : ""}{node.snr ? ` · SNR ${node.snr.toFixed(1)}` : ""}{node.viaMqtt ? t.viaMqtt : ""}
               </span>
             </div>
           {/each}
@@ -1254,25 +1309,25 @@
   {/if}
 
   <footer>
-    <a href="https://github.com/NiKrause/funkpost/issues/1">design issue #1</a>
+    <a href="https://github.com/NiKrause/funkpost/issues/1">{t.designIssue}</a>
     · GPL-3.0 ·
-    <a href="https://github.com/NiKrause/funkpost">source</a>
-    <span class="build" title="version · commit · built (UTC)">
+    <a href="https://github.com/NiKrause/funkpost">{t.source}</a>
+    <span class="build" title={t.buildTitle}>
       funkpost {build.version} ·
       {#if build.commit && build.commit !== "local"}
         <a href="https://github.com/NiKrause/funkpost/commit/{build.commit}">{build.commit}</a>
       {:else}{build.commit}{/if}
       · {build.builtAt}
     </span>
-    <p class="ls-credit">{@html creditHTML("en")}</p>
+    <p class="ls-credit">{@html creditHTML($lang)}</p>
   </footer>
 </main>
 
 <style>
   :global(body) {
     margin: 0;
-    background: #0B0E15;
-    color: #EDF1F8;
+    background: var(--ls-bg-0);
+    color: var(--ls-text);
     font-family: var(--ls-font);
   }
   /* 64 px on top: the Le Space pill sits in the first 56. */
@@ -1287,7 +1342,7 @@
   }
   .tag {
     margin: 4px 0 0;
-    color: #A8B3C7;
+    color: var(--ls-text-dim);
     font-size: 0.9rem;
   }
   /* The LED: amber and blinking until another device with this list answers,
@@ -1298,7 +1353,7 @@
     align-items: center;
     gap: 10px;
     margin: 14px 0 0;
-    color: #A8B3C7;
+    color: var(--ls-text-dim);
     font-size: 0.88rem;
   }
   .led {
@@ -1306,13 +1361,13 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #f0c674;
-    box-shadow: 0 0 6px rgba(240, 198, 116, 0.55);
+    background: var(--ls-amber);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--ls-amber) 55%, transparent);
     animation: led-blink 1.2s infinite;
   }
   .led.steady {
-    background: #3EDC97;
-    box-shadow: 0 0 8px rgba(62, 220, 151, 0.6);
+    background: var(--ls-green);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--ls-green) 60%, transparent);
     animation: none;
   }
   @keyframes led-blink {
@@ -1323,12 +1378,12 @@
     .led {
       box-sizing: border-box;
       background: transparent;
-      border: 2px solid #f0c674;
+      border: 2px solid var(--ls-amber);
       box-shadow: none;
       animation: none;
     }
     .led.steady {
-      background: #3EDC97;
+      background: var(--ls-green);
       border: none;
     }
   }
@@ -1337,10 +1392,10 @@
   .notice {
     margin-top: 20px;
     padding: 14px 16px;
-    border: 1px solid #232B3D;
-    border-left: 3px solid #FF6B5B;
+    border: 1px solid var(--ls-bg-3);
+    border-left: 3px solid var(--ls-red);
     border-radius: 10px;
-    background: #141926;
+    background: var(--ls-bg-2);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -1349,27 +1404,27 @@
     margin: 0;
     font-size: 0.86rem;
     line-height: 1.55;
-    color: #A8B3C7;
+    color: var(--ls-text-dim);
   }
-  .notice strong { color: #EDF1F8; }
-  .notice a { color: #58C7F3; }
+  .notice strong { color: var(--ls-text); }
+  .notice a { color: var(--ls-accent); }
   .dismiss {
     align-self: flex-start;
     margin-top: 2px;
     padding: 5px 12px;
-    border: 1px solid #232B3D;
+    border: 1px solid var(--ls-bg-3);
     border-radius: 999px;
     background: transparent;
-    color: #A8B3C7;
+    color: var(--ls-text-dim);
     font: inherit;
     font-size: 0.8rem;
     cursor: pointer;
   }
-  .dismiss:hover { border-color: #58C7F3; color: #EDF1F8; }
+  .dismiss:hover { border-color: var(--ls-accent); color: var(--ls-text); }
   section {
     margin-top: 28px;
     padding: 14px 16px;
-    border: 1px solid #232B3D;
+    border: 1px solid var(--ls-bg-3);
     border-radius: 10px;
   }
   h2 {
@@ -1377,19 +1432,19 @@
     font-size: 1rem;
   }
   .dim {
-    color: #A8B3C7;
+    color: var(--ls-text-dim);
     font-size: 0.85rem;
   }
   .error {
-    color: #FF6B5B;
+    color: var(--ls-red);
   }
   .warn {
     margin: 10px 0 0;
     padding: 8px 10px;
-    border: 1px solid #7a5a1a;
+    border: 1px solid color-mix(in srgb, var(--ls-amber) 45%, var(--ls-bg-0));
     border-radius: 8px;
-    background: #241d0d;
-    color: #f0c674;
+    background: color-mix(in srgb, var(--ls-amber) 10%, var(--ls-bg-0));
+    color: color-mix(in srgb, var(--ls-amber) 75%, var(--ls-text));
     font-size: 0.85rem;
     line-height: 1.5;
   }
@@ -1409,8 +1464,8 @@
   select {
     padding: 4px 8px;
     border-radius: 6px;
-    border: 1px solid #232B3D;
-    background: #141926;
+    border: 1px solid var(--ls-bg-3);
+    background: var(--ls-bg-2);
     color: inherit;
     font-family: var(--ls-font-mono);
     font-size: 0.8rem;
@@ -1418,8 +1473,8 @@
   button {
     padding: 8px 14px;
     border-radius: 8px;
-    border: 1px solid #232B3D;
-    background: #141926;
+    border: 1px solid var(--ls-bg-3);
+    background: var(--ls-bg-2);
     color: inherit;
     font-size: 0.95rem;
     cursor: pointer;
@@ -1432,14 +1487,14 @@
      looks like an action rather than a link. */
   .send {
     margin-top: 10px;
-    border-color: #58C7F3;
-    color: #EDF1F8;
+    border-color: var(--ls-accent);
+    color: var(--ls-text);
   }
-  .send:not(:disabled):hover { background: #1a2436; }
+  .send:not(:disabled):hover { background: color-mix(in srgb, var(--ls-accent) 12%, var(--ls-bg-2)); }
   .ghost {
     background: none;
-    border-color: #232B3D;
-    color: #A8B3C7;
+    border-color: var(--ls-bg-3);
+    color: var(--ls-text-dim);
     margin-top: 8px;
     margin-right: 8px;
   }
@@ -1449,7 +1504,7 @@
     margin: 10px 0;
   }
   .offer {
-    border: 1px solid var(--accent, #888);
+    border: 1px solid var(--ls-accent);
     border-radius: 6px;
     padding: 12px;
     margin: 12px 0;
@@ -1462,8 +1517,8 @@
     flex: 1;
     padding: 8px 10px;
     border-radius: 8px;
-    border: 1px solid #232B3D;
-    background: #141926;
+    border: 1px solid var(--ls-bg-3);
+    background: var(--ls-bg-2);
     color: inherit;
   }
   .todos {
@@ -1480,25 +1535,25 @@
   }
   .done {
     text-decoration: line-through;
-    color: #A8B3C7;
+    color: var(--ls-text-dim);
   }
   .bar {
     height: 8px;
     border-radius: 999px;
-    background: #141926;
+    background: var(--ls-bg-2);
     overflow: hidden;
     margin: 8px 0 4px;
   }
   .fill {
     height: 100%;
-    background: #3EDC97;
+    background: var(--ls-green);
     transition: width 0.5s;
   }
   .neighbours .nn {
     display: inline-block;
     min-width: 4.5ch;
     font-weight: 650;
-    color: #58C7F3;
+    color: var(--ls-accent);
   }
   .log {
     max-height: 220px;
@@ -1506,7 +1561,7 @@
     font-family: var(--ls-font-mono);
     font-size: 0.78rem;
     line-height: 1.5;
-    background: #141926;
+    background: var(--ls-bg-2);
     border-radius: 8px;
     padding: 8px 10px;
   }
@@ -1516,11 +1571,11 @@
   }
   footer {
     margin-top: 28px;
-    color: #A8B3C7;
+    color: var(--ls-text-dim);
     font-size: 0.8rem;
   }
   footer a {
-    color: #58C7F3;
+    color: var(--ls-accent);
   }
   .build {
     display: block;

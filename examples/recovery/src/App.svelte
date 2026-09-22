@@ -10,7 +10,8 @@
    * differ, nothing that follows means anything, and the page says so.
    */
   import { onMount } from "svelte";
-  import { creditHTML } from "@le-space/funkpost-brand";
+  import { creditHTML, lang } from "@le-space/funkpost-brand";
+  import { WORDS } from "./words.js";
   import {
     identityFromKey,
     createStack,
@@ -36,7 +37,14 @@
   let done = $state({}); // step name → true once it has worked
   let failedStep = $state("");
 
-  const STATUS_TEXT = { todo: "not yet", running: "running…", done: "done", failed: "failed" };
+  // The page's words in its current language; a log line takes the language of
+  // the moment it was written.
+  const t = $derived(WORDS[$lang]);
+  const w = () => WORDS[lang.get()];
+  $effect(() => {
+    document.title = t.title;
+  });
+
   const status = (name) =>
     busy === name ? "running" : failedStep === name ? "failed" : done[name] ? "done" : "todo";
 
@@ -72,42 +80,35 @@
     } catch (e) {
       error = e?.message ?? String(e);
       failedStep = name;
-      say(`! ${name} failed: ${error}`);
+      say(w().log.failed(name, error));
     } finally {
       busy = "";
       touches = "";
     }
   }
 
-  /** What each touch of step 1 is for, shown while it is being asked for. */
-  const TOUCH = {
-    1: "Touch 1 of 3 — the key's secret for this site (with PIN)",
-    2: "Touch 2 of 3 — a second signature, to recover the public key",
-    3: "Touch 3 of 3 — the passkey vouches for the signing key (with PIN)",
-  };
-
   const useTheKey = () =>
     step("key", async () => {
-      say("asking the security key — three touches");
+      say(w().log.asking);
       identity = await identityFromKey({
         onTouch: ({ touch }) => {
-          touches = TOUCH[touch];
-          say(TOUCH[touch]);
+          touches = w().touch[touch];
+          say(w().touch[touch]);
         },
       });
       didFingerprint = await fingerprint(identity.did);
       keyFingerprint = await fingerprint(identity.signingKey);
-      say(`identity: ${identity.did.slice(0, 24)}…`);
-      touches = TOUCH[3];
-      say(TOUCH[3]);
+      say(w().log.identity(identity.did.slice(0, 24)));
+      touches = w().touch[3];
+      say(w().touch[3]);
       stack = await createStack({ credential: identity.credential });
-      say("OrbitDB is running with that identity");
+      say(w().log.running);
     });
 
   const makeList = () =>
     step("list", async () => {
       db = await createList({ orbitdb: stack.orbitdb, identity: stack.identity });
-      say(`list open: ${db.address}`);
+      say(w().log.listOpen(db.address));
       await refresh();
     });
 
@@ -117,135 +118,225 @@
       if (!text) return;
       await db.add(text);
       newText = "";
-      say(`wrote »${text}«`);
+      say(w().log.wrote(text));
       await refresh();
     });
 
   const dehydrateNow = () =>
     step("backup", async () => {
-      say("backing up, and publishing the pointer…");
+      say(w().log.backingUp);
       pointer = await backUp({
         orbitdb: stack.orbitdb,
         address: db.address,
         signingKey: identity.signingKey,
       });
-      say(`pointer ${pointer.name} → ${pointer.metadataCID} (${pointer.blocks} blocks)`);
+      say(w().log.published(pointer.name, pointer.metadataCID, pointer.blocks));
     });
 
   const hydrateNow = () =>
     step("restore", async () => {
-      say("asking for the pointer, with the key alone…");
+      say(w().log.askingPointer);
       const found = await bringBack({
         orbitdb: stack.orbitdb,
         signingKey: identity.signingKey,
       });
       db = found.db;
       pointer = { name: found.name, metadataCID: found.metadataCID, blocks: found.blocks };
-      say(`restored ${found.address} — ${found.blocks} blocks, nothing carried over`);
+      say(w().log.restored(found.address, found.blocks));
       await refresh();
     });
 
   const forget = () =>
     step("forget", async () => {
       await forgetEverything();
-      say("everything on this device is gone — reloading");
+      say(w().log.gone);
       setTimeout(() => location.reload(), 600);
     });
 
   onMount(() => {
-    say("nothing is stored here; the key is asked every time");
+    say(w().log.nothingStored);
   });
 </script>
 
 <main>
   <h1>recovery</h1>
-  <p class="tag">A list that survives losing the phone — with nothing but your security key.</p>
+  {#if $lang === "de"}
+    <p class="tag">Eine Liste, die den Verlust des Telefons übersteht — mit nichts als dem Sicherheitsschlüssel.</p>
+  {:else}
+    <p class="tag">A list that survives losing the phone — with nothing but your security key.</p>
+  {/if}
 
   <section class="intro">
-    <p>
-      Your security key holds a secret that never leaves it. From that secret this page works
-      out who you are and where your backup lives — the same on every phone. So a phone that
-      has lost everything, or a new one, needs nothing but the key to find the list again and
-      go on writing to it.
-    </p>
-    <h2>The test, on two phones</h2>
-    <ol class="plan">
-      <li><strong>Phone A:</strong> steps 1, 2 and 3 — who you are, a list, a backup.</li>
-      <li>
-        <strong>Phone B</strong>, or phone A after step 4: step 1 with the same key, then step 5.
-      </li>
-      <li>
-        <strong>It worked</strong> if the list comes back on phone B and accepts a new entry
-        there.
-      </li>
-    </ol>
+    {#if $lang === "de"}
+      <p>
+        Ein Sicherheitsschlüssel hält ein Geheimnis, das ihn nie verlässt. Aus diesem Geheimnis
+        leitet die Seite die Identität ab und den Ort der Sicherung — auf jedem Telefon dieselben.
+        Ein Telefon, das alles verloren hat, oder ein neues braucht deshalb nur den Schlüssel, um
+        die Liste wiederzufinden und weiter hineinzuschreiben.
+      </p>
+      <h2>Der Test, auf zwei Telefonen</h2>
+      <ol class="plan">
+        <li><strong>Telefon A:</strong> Schritte 1, 2 und 3 — Identität, Liste, Sicherung.</li>
+        <li>
+          <strong>Telefon B</strong> oder Telefon A nach Schritt 4: Schritt 1 mit demselben
+          Schlüssel, dann Schritt 5.
+        </li>
+        <li>
+          <strong>Gelungen</strong> ist es, wenn die Liste auf Telefon B zurückkommt und dort einen
+          neuen Eintrag annimmt.
+        </li>
+      </ol>
+    {:else}
+      <p>
+        Your security key holds a secret that never leaves it. From that secret this page works
+        out who you are and where your backup lives — the same on every phone. So a phone that
+        has lost everything, or a new one, needs nothing but the key to find the list again and
+        go on writing to it.
+      </p>
+      <h2>The test, on two phones</h2>
+      <ol class="plan">
+        <li><strong>Phone A:</strong> steps 1, 2 and 3 — who you are, a list, a backup.</li>
+        <li>
+          <strong>Phone B</strong>, or phone A after step 4: step 1 with the same key, then step 5.
+        </li>
+        <li>
+          <strong>It worked</strong> if the list comes back on phone B and accepts a new entry
+          there.
+        </li>
+      </ol>
+    {/if}
     <button
       class="ghost"
       data-testid="details"
       aria-expanded={details}
       onclick={() => (details = !details)}
     >
-      {details ? "Hide the technical details" : "Show the technical details"}
+      {details ? t.hideDetails : t.showDetails}
     </button>
 
     <div class="tech explain" data-testid="how-it-works" hidden={!details}>
-      <h3>The three touches of step 1</h3>
-      <ol>
-        <li>
-          <strong>The secret.</strong> <code>navigator.credentials.get()</code> names no
-          credential — the key offers its passkey for this site — and asks the PRF extension with
-          a fixed input: SHA-256 of a label and this site's name, the same on every phone. The
-          key answers with the credential id, a signature, and a 32-byte PRF output computed
-          inside the key from a secret that never leaves it. With PIN, because the key gives a
-          different PRF answer without one.
-        </li>
-        <li>
-          <strong>The public key.</strong> A WebAuthn answer carries no public key, so it is
-          worked out: the same credential signs a second, fresh challenge, every P-256 signature
-          fits exactly two candidate public keys, and only the key's own fits both. Checked
-          against both signatures, it becomes the identity, <code>did:key:z…</code>.
-        </li>
-        <li>
-          <strong>The binding.</strong> An OrbitDB identity carries two signatures: the signing
-          key signs the DID, and the passkey signs the signing key's public key together with
-          that signature. The second is one more WebAuthn call — the passkey vouching that this
-          key writes for it. Every entry the list accepts is checked against it.
-        </li>
-      </ol>
-      <h3>Derived, never stored</h3>
-      <ul>
-        <li>
-          <strong>Signing key</strong> (secp256k1): HKDF-SHA-256 over the PRF output, with the DID
-          in the info.
-        </li>
-        <li>
-          <strong>Pointer key</strong> (Ed25519): HKDF-SHA-256 over the signing key, with this
-          page's label in the info. Its public key is the pointer's name, <code>k51…</code>.
-        </li>
-      </ul>
-      <h3>Every request, and when</h3>
-      <ul>
-        <li>
-          <strong>Steps 1, 2 and 4:</strong> none. The phone talks to the key over USB, NFC or
-          Bluetooth, not over the internet.
-        </li>
-        <li>
-          <strong>Step 3:</strong> <code>POST ipfs.aleph.cloud/api/v0/add</code>, twice — the list
-          as one CAR file, every block it is made of, then a small JSON that names it. Then
-          <code>PUT delegated-ipfs.dev/routing/v1/ipns/k51…</code>: an IPNS record, signed by the
-          pointer key, pointing at the JSON, valid for 30 days.
-        </li>
-        <li>
-          <strong>Step 5:</strong> <code>GET delegated-ipfs.dev/routing/v1/ipns/k51…</code>, and the
-          record is checked against the name. Then <code>GET ipfs.aleph.cloud/ipfs/…</code> for the
-          JSON and the CAR — <code>dweb.link</code>, then <code>ipfs.io</code>, if Aleph does not
-          answer — and every block is checked against its hash before the list opens.
-        </li>
-      </ul>
-      <p class="dim">
-        Each step's own values appear under it once it has run; what happened, line by line, is
-        at the <a href="#log">bottom of the page</a>.
-      </p>
+      {#if $lang === "de"}
+        <h3>Die drei Berührungen in Schritt 1</h3>
+        <ol>
+          <li>
+            <strong>Das Geheimnis.</strong> <code>navigator.credentials.get()</code> nennt keinen
+            Credential — der Schlüssel bietet seinen Passkey für diese Seite an — und fragt die
+            PRF-Erweiterung mit einer festen Eingabe: SHA-256 aus einem Label und dem Namen dieser
+            Seite, auf jedem Telefon gleich. Der Schlüssel antwortet mit der Credential-ID, einer
+            Signatur und einer 32-Byte-PRF-Ausgabe, berechnet im Schlüssel aus einem Geheimnis, das
+            ihn nie verlässt. Mit PIN, weil der Schlüssel ohne PIN eine andere PRF-Antwort gibt.
+          </li>
+          <li>
+            <strong>Der öffentliche Schlüssel.</strong> Eine WebAuthn-Antwort enthält keinen
+            öffentlichen Schlüssel, also wird er errechnet: Derselbe Credential signiert eine zweite,
+            frische Challenge; zu jeder P-256-Signatur passen genau zwei Kandidaten, und nur der
+            eigene Schlüssel passt zu beiden. Gegen beide Signaturen geprüft, wird er zur Identität,
+            <code>did:key:z…</code>.
+          </li>
+          <li>
+            <strong>Die Bindung.</strong> Eine OrbitDB-Identität trägt zwei Signaturen: Der
+            Signierschlüssel signiert die DID, und der Passkey signiert den öffentlichen
+            Signierschlüssel zusammen mit dieser Signatur. Die zweite ist ein weiterer
+            WebAuthn-Aufruf — der Passkey bürgt dafür, dass dieser Schlüssel in seinem Namen
+            schreibt. Jeder Eintrag, den die Liste annimmt, wird dagegen geprüft.
+          </li>
+        </ol>
+        <h3>Abgeleitet, nie gespeichert</h3>
+        <ul>
+          <li>
+            <strong>Signierschlüssel</strong> (secp256k1): HKDF-SHA-256 über die PRF-Ausgabe, mit
+            der DID im Info-Feld.
+          </li>
+          <li>
+            <strong>Zeigerschlüssel</strong> (Ed25519): HKDF-SHA-256 über den Signierschlüssel, mit
+            dem Label dieser Seite im Info-Feld. Sein öffentlicher Schlüssel ist der Name des
+            Zeigers, <code>k51…</code>.
+          </li>
+        </ul>
+        <h3>Jede Anfrage, und wann</h3>
+        <ul>
+          <li>
+            <strong>Schritte 1, 2 und 4:</strong> keine. Das Telefon spricht mit dem Schlüssel über
+            USB, NFC oder Bluetooth, nicht über das Internet.
+          </li>
+          <li>
+            <strong>Schritt 3:</strong> <code>POST ipfs.aleph.cloud/api/v0/add</code>, zweimal — die
+            Liste als eine CAR-Datei mit allen Blöcken, aus denen sie besteht, dann ein kleines
+            JSON, das sie benennt. Danach <code>PUT delegated-ipfs.dev/routing/v1/ipns/k51…</code>:
+            ein IPNS-Eintrag, signiert mit dem Zeigerschlüssel, der auf das JSON zeigt, 30 Tage
+            gültig.
+          </li>
+          <li>
+            <strong>Schritt 5:</strong> <code>GET delegated-ipfs.dev/routing/v1/ipns/k51…</code>, und
+            der Eintrag wird gegen den Namen geprüft. Dann <code>GET ipfs.aleph.cloud/ipfs/…</code>
+            für das JSON und die CAR-Datei — <code>dweb.link</code>, dann <code>ipfs.io</code>, falls
+            Aleph nicht antwortet — und jeder Block wird gegen seinen Hash geprüft, bevor die Liste
+            öffnet.
+          </li>
+        </ul>
+        <p class="dim">
+          Die Werte eines Schritts erscheinen darunter, sobald er gelaufen ist; was geschah, Zeile
+          für Zeile, steht <a href="#log">unten auf der Seite</a>.
+        </p>
+      {:else}
+        <h3>The three touches of step 1</h3>
+        <ol>
+          <li>
+            <strong>The secret.</strong> <code>navigator.credentials.get()</code> names no
+            credential — the key offers its passkey for this site — and asks the PRF extension with
+            a fixed input: SHA-256 of a label and this site's name, the same on every phone. The
+            key answers with the credential id, a signature, and a 32-byte PRF output computed
+            inside the key from a secret that never leaves it. With PIN, because the key gives a
+            different PRF answer without one.
+          </li>
+          <li>
+            <strong>The public key.</strong> A WebAuthn answer carries no public key, so it is
+            worked out: the same credential signs a second, fresh challenge, every P-256 signature
+            fits exactly two candidate public keys, and only the key's own fits both. Checked
+            against both signatures, it becomes the identity, <code>did:key:z…</code>.
+          </li>
+          <li>
+            <strong>The binding.</strong> An OrbitDB identity carries two signatures: the signing
+            key signs the DID, and the passkey signs the signing key's public key together with
+            that signature. The second is one more WebAuthn call — the passkey vouching that this
+            key writes for it. Every entry the list accepts is checked against it.
+          </li>
+        </ol>
+        <h3>Derived, never stored</h3>
+        <ul>
+          <li>
+            <strong>Signing key</strong> (secp256k1): HKDF-SHA-256 over the PRF output, with the DID
+            in the info.
+          </li>
+          <li>
+            <strong>Pointer key</strong> (Ed25519): HKDF-SHA-256 over the signing key, with this
+            page's label in the info. Its public key is the pointer's name, <code>k51…</code>.
+          </li>
+        </ul>
+        <h3>Every request, and when</h3>
+        <ul>
+          <li>
+            <strong>Steps 1, 2 and 4:</strong> none. The phone talks to the key over USB, NFC or
+            Bluetooth, not over the internet.
+          </li>
+          <li>
+            <strong>Step 3:</strong> <code>POST ipfs.aleph.cloud/api/v0/add</code>, twice — the list
+            as one CAR file, every block it is made of, then a small JSON that names it. Then
+            <code>PUT delegated-ipfs.dev/routing/v1/ipns/k51…</code>: an IPNS record, signed by the
+            pointer key, pointing at the JSON, valid for 30 days.
+          </li>
+          <li>
+            <strong>Step 5:</strong> <code>GET delegated-ipfs.dev/routing/v1/ipns/k51…</code>, and the
+            record is checked against the name. Then <code>GET ipfs.aleph.cloud/ipfs/…</code> for the
+            JSON and the CAR — <code>dweb.link</code>, then <code>ipfs.io</code>, if Aleph does not
+            answer — and every block is checked against its hash before the list opens.
+          </li>
+        </ul>
+        <p class="dim">
+          Each step's own values appear under it once it has run; what happened, line by line, is
+          at the <a href="#log">bottom of the page</a>.
+        </p>
+      {/if}
     </div>
   </section>
 
@@ -255,47 +346,50 @@
 
   <section class="step" data-status={status("key")}>
     <header>
-      <h2><span class="n">1</span> Tell the page who you are</h2>
-      <span class="badge">{STATUS_TEXT[status("key")]}</span>
+      <h2><span class="n">1</span> {t.step1}</h2>
+      <span class="badge">{t.status[status("key")]}</span>
     </header>
-    <p>
-      Touch your security key three times. The first two touches recover your identity from
-      the secret on the key; the third lets that identity sign what you write. The same key
-      gives the same identity on every phone.
-    </p>
+    {#if $lang === "de"}
+      <p>
+        Den Sicherheitsschlüssel dreimal berühren. Die ersten beiden Berührungen gewinnen die
+        Identität aus dem Geheimnis auf dem Schlüssel zurück; die dritte lässt diese Identität
+        signieren, was geschrieben wird. Derselbe Schlüssel ergibt auf jedem Telefon dieselbe
+        Identität.
+      </p>
+    {:else}
+      <p>
+        Touch your security key three times. The first two touches recover your identity from
+        the secret on the key; the third lets that identity sign what you write. The same key
+        gives the same identity on every phone.
+      </p>
+    {/if}
     <p class="who">
-      <span class="chip">your security key</span> — nothing goes on the internet
+      <span class="chip">{t.yourKey}</span> {t.nothingOnline}
     </p>
     <button data-testid="use-key" disabled={Boolean(busy)} onclick={useTheKey}>
-      {busy === "key" ? "asking the key…" : identity ? "Ask again" : "Use my security key"}
+      {busy === "key" ? t.asking : identity ? t.askAgain : t.useKey}
     </button>
     {#if busy === "key" && touches}
       <p class="touch-now" data-testid="touch-now">{touches}</p>
     {/if}
     {#if identity}
-      <p class="dim">
-        To compare two phones, show the technical details: the two lines there must be the
-        same on both.
-      </p>
+      <p class="dim">{t.compareHint}</p>
       <div class="tech" hidden={!details}>
         <dl>
-          <dt>DID fingerprint</dt>
+          <dt>{t.didFingerprint}</dt>
           <dd class="fp" data-testid="did-fingerprint">{didFingerprint}</dd>
-          <dt>signing key fingerprint</dt>
+          <dt>{t.keyFingerprint}</dt>
           <dd class="fp" data-testid="key-fingerprint">{keyFingerprint}</dd>
         </dl>
-        <p class="dim">
-          If they differ, the identity did not travel and nothing below proves anything —
-          usually the wrong passkey was picked.
-        </p>
+        <p class="dim">{t.differ}</p>
       </div>
     {/if}
   </section>
 
   <section class="step" data-status={db ? "done" : status("list")}>
     <header>
-      <h2><span class="n">2</span> Your list</h2>
-      <span class="badge">{db ? "open" : STATUS_TEXT[status("list")]}</span>
+      <h2><span class="n">2</span> {t.step2}</h2>
+      <span class="badge">{db ? t.open : t.status[status("list")]}</span>
     </header>
     {#if db}
       <ul>
@@ -303,63 +397,78 @@
           <li>{entry}</li>
         {/each}
       </ul>
-      {#if entries.length === 0}<p class="dim">nothing in it yet</p>{/if}
+      {#if entries.length === 0}<p class="dim">{t.empty}</p>{/if}
       <form
         onsubmit={(event) => {
           event.preventDefault();
           add();
         }}
       >
-        <input aria-label="new entry" placeholder="Milch kaufen…" bind:value={newText} />
-        <button type="submit" disabled={!newText.trim() || Boolean(busy)}>Add</button>
+        <input aria-label={t.newEntry} placeholder={t.placeholder} bind:value={newText} />
+        <button type="submit" disabled={!newText.trim() || Boolean(busy)}>{t.add}</button>
       </form>
       <div class="tech" hidden={!details}>
         <p class="dim addr">{db.address}</p>
       </div>
     {:else}
-      <p>
-        On phone A: make the list, and write a few entries. On phone B: skip this and go to
-        step 5 — the list comes back here.
-      </p>
+      <p>{t.makeListHint}</p>
       <button data-testid="make-list" disabled={!stack || Boolean(busy)} onclick={makeList}>
-        Make the list
+        {t.makeList}
       </button>
-      {#if !stack}<p class="dim">Needs step 1 first.</p>{/if}
+      {#if !stack}<p class="dim">{t.needsStep1}</p>{/if}
     {/if}
     <p class="who">
-      <span class="chip">nobody</span> — it stays on this phone until step 3
+      <span class="chip">{t.nobody}</span> {t.staysHere}
     </p>
   </section>
 
   <section class="step" data-status={status("backup")}>
     <header>
-      <h2><span class="n">3</span> Put it somewhere safe</h2>
-      <span class="badge">{STATUS_TEXT[status("backup")]}</span>
+      <h2><span class="n">3</span> {t.step3}</h2>
+      <span class="badge">{t.status[status("backup")]}</span>
     </header>
-    <p>
-      Uploads the list as one file to Aleph, a public storage network, and publishes a small
-      signed note — the <em>pointer</em> — under a name only your key can work out. The
-      pointer says where the file is, so the other phone needs nothing else.
-    </p>
+    {#if $lang === "de"}
+      <p>
+        Lädt die Liste als eine Datei zu Aleph hoch, einem öffentlichen Speichernetz, und
+        veröffentlicht eine kleine signierte Notiz — den <em>Zeiger</em> — unter einem Namen, den
+        nur dieser Schlüssel errechnen kann. Der Zeiger sagt, wo die Datei liegt; das andere
+        Telefon braucht sonst nichts.
+      </p>
+    {:else}
+      <p>
+        Uploads the list as one file to Aleph, a public storage network, and publishes a small
+        signed note — the <em>pointer</em> — under a name only your key can work out. The
+        pointer says where the file is, so the other phone needs nothing else.
+      </p>
+    {/if}
     <p class="who">
-      <span class="chip">Aleph · ipfs.aleph.cloud</span> the file, no account
-      <span class="chip">delegated-ipfs.dev</span> the pointer
+      <span class="chip">Aleph · ipfs.aleph.cloud</span> {t.theFile}
+      <span class="chip">delegated-ipfs.dev</span> {t.thePointer}
     </p>
-    <p class="note">
-      Aleph takes the file but does not promise to keep it: that needs a storage order signed
-      by a wallet with credit on Aleph. Fine for this test, not yet for a list you would miss.
-      The pointer asks to be kept for 30 days.
-    </p>
+    {#if $lang === "de"}
+      <p class="note">
+        Aleph nimmt die Datei an, verspricht aber nicht, sie zu behalten: Dafür braucht es einen
+        Speicherauftrag, signiert von einer Wallet mit Guthaben bei Aleph. Für diesen Test genügt
+        das, für eine Liste, die fehlen würde, noch nicht. Der Zeiger bittet um 30 Tage
+        Aufbewahrung.
+      </p>
+    {:else}
+      <p class="note">
+        Aleph takes the file but does not promise to keep it: that needs a storage order signed
+        by a wallet with credit on Aleph. Fine for this test, not yet for a list you would miss.
+        The pointer asks to be kept for 30 days.
+      </p>
+    {/if}
     <button data-testid="dehydrate" disabled={!db || Boolean(busy)} onclick={dehydrateNow}>
-      {busy === "backup" ? "backing up…" : "Back up and publish the pointer"}
+      {busy === "backup" ? t.backingUp : t.backUp}
     </button>
-    {#if !db}<p class="dim">Needs a list first.</p>{/if}
+    {#if !db}<p class="dim">{t.needsList}</p>{/if}
     {#if pointer && done.backup}
       <div class="tech" hidden={!details}>
         <dl>
-          <dt>pointer</dt>
+          <dt>{t.pointer}</dt>
           <dd class="fp" data-testid="pointer-name">{pointer.name}</dd>
-          <dt>backup</dt>
+          <dt>{t.backup}</dt>
           <dd class="fp">{pointer.metadataCID}</dd>
         </dl>
       </div>
@@ -368,45 +477,61 @@
 
   <section class="step danger">
     <header>
-      <h2><span class="n">4</span> Lose the phone</h2>
+      <h2><span class="n">4</span> {t.step4}</h2>
     </header>
-    <p>
-      Deletes everything this page stored on this phone, and reloads. The security key keeps
-      its secret, which is the point: afterwards, steps 1 and 5 have to be enough.
-    </p>
-    <p class="who"><span class="chip">nobody</span></p>
+    {#if $lang === "de"}
+      <p>
+        Löscht alles, was diese Seite auf diesem Telefon gespeichert hat, und lädt neu. Der
+        Sicherheitsschlüssel behält sein Geheimnis — genau darum geht es: Danach müssen die
+        Schritte 1 und 5 genügen.
+      </p>
+    {:else}
+      <p>
+        Deletes everything this page stored on this phone, and reloads. The security key keeps
+        its secret, which is the point: afterwards, steps 1 and 5 have to be enough.
+      </p>
+    {/if}
+    <p class="who"><span class="chip">{t.nobody}</span></p>
     <button data-testid="forget" disabled={Boolean(busy)} onclick={forget}>
-      Forget everything on this phone
+      {t.forget}
     </button>
   </section>
 
   <section class="step" data-status={status("restore")}>
     <header>
-      <h2><span class="n">5</span> Get it back</h2>
-      <span class="badge">{STATUS_TEXT[status("restore")]}</span>
+      <h2><span class="n">5</span> {t.step5}</h2>
+      <span class="badge">{t.status[status("restore")]}</span>
     </header>
-    <p>
-      Asks for the pointer under your key's name, fetches the file it names and opens the list
-      — nothing to type in, nothing carried over. Then write an entry in step 2: the list
-      accepts it because it is still you.
-    </p>
+    {#if $lang === "de"}
+      <p>
+        Fragt nach dem Zeiger unter dem Namen des Schlüssels, holt die Datei, die er nennt, und
+        öffnet die Liste — nichts einzutippen, nichts mitgebracht. Danach in Schritt 2 einen
+        Eintrag schreiben: Die Liste nimmt ihn an, weil es dieselbe Identität ist.
+      </p>
+    {:else}
+      <p>
+        Asks for the pointer under your key's name, fetches the file it names and opens the list
+        — nothing to type in, nothing carried over. Then write an entry in step 2: the list
+        accepts it because it is still you.
+      </p>
+    {/if}
     <p class="who">
-      <span class="chip">delegated-ipfs.dev</span> the pointer
-      <span class="chip">Aleph's gateway, then dweb.link, ipfs.io</span> the file
+      <span class="chip">delegated-ipfs.dev</span> {t.thePointer}
+      <span class="chip">{t.gateways}</span> {t.fileOnly}
     </p>
     <button data-testid="hydrate" disabled={!stack || Boolean(busy)} onclick={hydrateNow}>
-      {busy === "restore" ? "restoring…" : "Get my list back"}
+      {busy === "restore" ? t.restoring : t.getBack}
     </button>
-    {#if !stack}<p class="dim">Needs step 1 first, with the same key.</p>{/if}
+    {#if !stack}<p class="dim">{t.needsStep1SameKey}</p>{/if}
     {#if done.restore}
-      <p class="ok">Your list is back, in step 2. Write an entry there to prove it is still yours.</p>
+      <p class="ok">{t.back}</p>
       {#if pointer}
         <div class="tech" hidden={!details}>
           <dl>
-            <dt>pointer</dt>
+            <dt>{t.pointer}</dt>
             <dd class="fp">{pointer.name}</dd>
-            <dt>backup</dt>
-            <dd class="fp">{pointer.metadataCID} · {pointer.blocks} blocks</dd>
+            <dt>{t.backup}</dt>
+            <dd class="fp">{pointer.metadataCID} · {t.blocks(pointer.blocks)}</dd>
           </dl>
         </div>
       {/if}
@@ -414,29 +539,29 @@
   </section>
 
   <section class="tech" id="log" hidden={!details}>
-    <h2>What happened</h2>
+    <h2>{t.whatHappened}</h2>
     <div class="log">
       {#each log as line, index (index)}<div>{line}</div>{/each}
     </div>
   </section>
 
   <footer>
-    <a href="https://github.com/NiKrause/funkpost/blob/main/ROADMAP.md">roadmap</a> ·
+    <a href="https://github.com/NiKrause/funkpost/blob/main/ROADMAP.md">{t.roadmap}</a> ·
     <a
       href="https://github.com/NiKrause/orbitdb-storage-bridge/blob/main/docs/RECOVERY-ON-A-SECOND-DEVICE.md"
-      >how it works</a
+      >{t.howItWorks}</a
     >
     · GPL-3.0 ·
     <span class="build">funkpost {build.version} · {build.commit} · {build.builtAt}</span>
-    <p class="ls-credit">{@html creditHTML("en")}</p>
+    <p class="ls-credit">{@html creditHTML($lang)}</p>
   </footer>
 </main>
 
 <style>
   :global(body) {
     margin: 0;
-    background: #0b0e15;
-    color: #e7ebf3;
+    background: var(--ls-bg-0);
+    color: var(--ls-text);
     font: 15px/1.5 var(--ls-font);
   }
   /* 64 px on top: the Le Space pill sits in the first 56. */
@@ -454,20 +579,20 @@
     font-size: 1.05rem;
   }
   .tag {
-    color: #8b93a5;
+    color: var(--ls-text-dim);
     margin: 4px 0 20px;
   }
   section {
-    border: 1px solid #222a38;
+    border: 1px solid var(--ls-bg-3);
     border-radius: 10px;
     padding: 14px 16px;
     margin: 0 0 14px;
   }
   section.danger {
-    border-color: #4a2330;
+    border-color: color-mix(in srgb, var(--ls-red) 40%, var(--ls-bg-0));
   }
   .dim {
-    color: #8b93a5;
+    color: var(--ls-text-dim);
   }
   .addr,
   .fp {
@@ -483,13 +608,13 @@
     margin: 12px 0 0;
   }
   dt {
-    color: #8b93a5;
+    color: var(--ls-text-dim);
     font-size: 0.85rem;
   }
   button {
-    background: #1b2433;
-    color: #e7ebf3;
-    border: 1px solid #2c3648;
+    background: var(--ls-bg-2);
+    color: var(--ls-text);
+    border: 1px solid var(--ls-bg-3);
     border-radius: 8px;
     padding: 10px 14px;
     font: inherit;
@@ -499,7 +624,7 @@
     opacity: 0.5;
   }
   .danger button {
-    border-color: #6b2f3f;
+    border-color: color-mix(in srgb, var(--ls-red) 55%, var(--ls-bg-0));
   }
   form {
     display: flex;
@@ -508,9 +633,9 @@
   }
   input {
     flex: 1;
-    background: #111827;
+    background: var(--ls-bg-1);
     color: inherit;
-    border: 1px solid #2c3648;
+    border: 1px solid var(--ls-bg-3);
     border-radius: 8px;
     padding: 10px;
     font: inherit;
@@ -520,16 +645,16 @@
     padding-left: 20px;
   }
   .error {
-    color: #ff9c9c;
-    border: 1px solid #6b2f3f;
+    color: var(--ls-red);
+    border: 1px solid color-mix(in srgb, var(--ls-red) 55%, var(--ls-bg-0));
     border-radius: 8px;
     padding: 10px 12px;
   }
   .log {
     font-family: var(--ls-font-mono);
     font-size: 0.8rem;
-    color: #9fb0c8;
-    background: #0d1420;
+    color: var(--ls-text-dim);
+    background: var(--ls-bg-1);
     border-radius: 8px;
     padding: 10px;
     max-height: 220px;
@@ -540,12 +665,13 @@
     margin-top: 12px;
   }
   footer {
-    color: #6d768a;
+    /* dimmer than running text, still AA, as on the menu */
+    color: color-mix(in srgb, var(--ls-text-dim) 80%, var(--ls-bg-0));
     font-size: 0.8rem;
     margin-top: 18px;
   }
   footer a {
-    color: #7fb8ff;
+    color: var(--ls-accent);
   }
   .build {
     font-family: var(--ls-font-mono);
@@ -582,7 +708,7 @@
     flex: none;
     width: 1.6em;
     height: 1.6em;
-    border: 1px solid #2c3648;
+    border: 1px solid var(--ls-bg-3);
     border-radius: 50%;
     font-family: var(--ls-font-mono);
     font-size: 0.85rem;
@@ -590,27 +716,27 @@
   .badge {
     flex: none;
     font-size: 0.75rem;
-    color: #8b93a5;
+    color: var(--ls-text-dim);
   }
   .step[data-status="running"] {
-    border-color: #6b5a2a;
+    border-color: color-mix(in srgb, var(--ls-amber) 50%, var(--ls-bg-0));
   }
   .step[data-status="running"] .badge {
-    color: #ffc24b;
+    color: var(--ls-amber);
   }
   .step[data-status="done"] {
-    border-color: #1f5a44;
+    border-color: color-mix(in srgb, var(--ls-green) 45%, var(--ls-bg-0));
   }
   .step[data-status="done"] .badge,
   .step[data-status="done"] .n {
-    color: #3edc97;
-    border-color: #3edc97;
+    color: var(--ls-green);
+    border-color: var(--ls-green);
   }
   .step[data-status="failed"] {
-    border-color: #6b2f3f;
+    border-color: color-mix(in srgb, var(--ls-red) 55%, var(--ls-bg-0));
   }
   .step[data-status="failed"] .badge {
-    color: #ff9c9c;
+    color: var(--ls-red);
   }
   .who {
     display: flex;
@@ -618,33 +744,33 @@
     align-items: center;
     gap: 6px 8px;
     font-size: 0.85rem;
-    color: #8b93a5;
+    color: var(--ls-text-dim);
   }
   .chip {
     font-family: var(--ls-font-mono);
     font-size: 0.75rem;
-    color: #c7d7f0;
-    background: #141c2b;
-    border: 1px solid #2c3648;
+    color: var(--ls-text);
+    background: var(--ls-bg-2);
+    border: 1px solid var(--ls-bg-3);
     border-radius: 999px;
     padding: 2px 9px;
   }
   .note {
     font-size: 0.85rem;
-    color: #d9c38f;
-    border-left: 2px solid #6b5a2a;
+    color: var(--ls-amber);
+    border-left: 2px solid color-mix(in srgb, var(--ls-amber) 50%, var(--ls-bg-0));
     padding-left: 10px;
   }
   .ok {
-    color: #3edc97;
+    color: var(--ls-green);
   }
   .tech {
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px dashed #222a38;
+    border-top: 1px dashed var(--ls-bg-3);
   }
   section.tech {
-    border-top: 1px solid #222a38;
+    border-top: 1px solid var(--ls-bg-3);
   }
   button.ghost {
     background: none;
@@ -662,19 +788,19 @@
     margin: 6px 0;
   }
   .explain a {
-    color: #7fb8ff;
+    color: var(--ls-accent);
   }
   code {
     font-size: 0.85em;
-    color: #c7d7f0;
+    color: var(--ls-text);
     overflow-wrap: anywhere;
   }
   .touch-now {
-    color: #ffc24b;
+    color: var(--ls-amber);
     font-weight: 600;
   }
   button:focus-visible {
-    outline: 2px solid #58c7f3;
+    outline: 2px solid var(--ls-accent);
     outline-offset: 2px;
   }
 </style>

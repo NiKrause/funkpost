@@ -412,3 +412,59 @@ test("the experimental notice can be dismissed for good", async ({ context }) =>
 
   await guest.page.close();
 });
+
+test("speaks German and English, and has a light and a dark look — both kept", async ({ page }) => {
+  await page.goto(`/?mesh=bc&room=${nextRoom()}&today=${MONDAY}`);
+  // This suite's browser asks for German, and for the light look.
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await expect(page.getByRole("heading", { name: "Wer bist du?" })).toBeVisible();
+
+  await page.getByRole("link", { name: "English" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("heading", { name: "Who are you?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "I am the salon" })).toBeVisible();
+  await expect(page).toHaveTitle(/appointments over the radio/);
+  // The address says it too, so the page QR opens in the same language.
+  expect(new URL(page.url()).searchParams.get("lang")).toBe("en");
+
+  const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const light = await ground();
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect.poll(ground).not.toBe(light);
+
+  // Both kept: the address no longer says, storage does.
+  await page.goto(`/?mesh=bc&room=${nextRoom()}&today=${MONDAY}`);
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("heading", { name: "Who are you?" })).toBeVisible();
+});
+
+test("a booking in English: ask, approve, and the times in English", async ({ context }) => {
+  const id = nextRoom();
+  const query = (role) => `/?mesh=bc&room=${id}&role=${role}&today=${MONDAY}&lang=en`;
+  const salon = await context.newPage();
+  await salon.goto(query("salon"));
+  await ready(salon);
+  await salon.getByTestId("mode-ask").click();
+
+  const guest = await context.newPage();
+  await guest.goto(query("customer"));
+  await ready(guest);
+  await expect(guest.getByTestId("book")).toHaveText("Request the appointment", { timeout: 20_000 });
+
+  await bookSlot(guest, { time: "14:00", handle: "Anna" });
+  const ask = salon.getByTestId("pending");
+  await expect(ask).toContainText("Anna would like Mon 7 Sep, 14:00", { timeout: 20_000 });
+  await expect(guest.getByTestId("booking")).toContainText("waiting for the salon");
+
+  await salon.getByTestId("confirm").click();
+  await expect(guest.getByTestId("booking")).toHaveAttribute("data-status", "confirmed", {
+    timeout: 20_000,
+  });
+  await expect(guest.getByTestId("booking")).toContainText("confirmed");
+  await expect(guest.getByRole("button", { name: "Cancel" })).toBeVisible();
+
+  await salon.close();
+  await guest.close();
+});

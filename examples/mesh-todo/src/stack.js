@@ -219,7 +219,7 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
     });
     return {
       courier,
-      kind: "BroadcastChannel (fake mesh)",
+      kind: "bc", // the page words it
       region: "EU_868",
       device: null,
       setTxChannel: () => {},
@@ -277,7 +277,7 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
 
   return {
     courier: managed.courier,
-    kind: "Meshtastic node (Web Bluetooth)",
+    kind: "ble",
     region: "UNSET", // provisional; onRegion carries the live value
     get device() {
       return managed.device;

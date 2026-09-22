@@ -106,3 +106,31 @@ test("the key alone gives an identity OrbitDB takes, and it writes", async ({ pa
 
   expect(strayed).toEqual([]);
 });
+
+test("speaks German and English, and has a light and a dark look — both kept", async ({ page }) => {
+  await page.goto("/");
+  // The test browser asks for English, and for the light look.
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("heading", { name: /Tell the page who you are/ })).toBeVisible();
+
+  await page.getByRole("link", { name: "Deutsch" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await expect(page.getByRole("heading", { name: /Identität vom Schlüssel/ })).toBeVisible();
+  await expect(page.getByTestId("use-key")).toHaveText("Sicherheitsschlüssel verwenden");
+  await expect(page).toHaveTitle(/eine Liste, die das Telefon übersteht/);
+  // The address says it too, so the page QR opens in the same language.
+  expect(new URL(page.url()).searchParams.get("lang")).toBe("de");
+
+  const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const light = await ground();
+  await page.getByRole("button", { name: "Zum dunklen Modus wechseln" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect.poll(ground).not.toBe(light);
+
+  // Both kept: the address no longer says, storage does.
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByTestId("use-key")).toHaveText("Sicherheitsschlüssel verwenden");
+  expect(await ground()).not.toBe(light);
+});

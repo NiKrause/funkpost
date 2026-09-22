@@ -9,6 +9,11 @@
       name="description"
       content="Two demos, one per data plane: a todo list and an appointment book, both replicating over a LoRa mesh with no IP path."
     />
+    <!-- Before the first paint: the language (the address, then the last choice,
+         then the browser) and a theme chosen earlier — brand.js keeps both. -->
+    <script>
+      (function(){var d=document.documentElement,s=function(k){try{return localStorage.getItem(k)}catch(e){return null}},q=new URLSearchParams(location.search).get("lang"),l=q==="de"||q==="en"?q:s("ls-locale");if(l!=="de"&&l!=="en"){l="en";var a=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language];for(var i=0;i<a.length;i++){if(/^de\b/i.test(a[i])){l="de";break}if(/^en\b/i.test(a[i]))break}}d.lang=l;var t=s("ls-theme");if(t==="dark"||t==="light")d.dataset.theme=t})();
+    </script>
     <link rel="stylesheet" href="./brand/brand.css" />
     <!-- The page QR is drawn here, not fetched: uqr, copied beside brand.js at deploy. -->
     <script type="importmap">
@@ -16,7 +21,8 @@
     </script>
     <style>
       /* The page's own names, mapped onto the Le Space palette (brand/brand.css):
-         dark is the brand's ground, light when the reader's system asks for it. */
+         dark is the brand's ground, light when the reader's system asks for it
+         or the pill's switch says so. */
       :root {
         --bg: var(--ls-bg-0);
         --panel: var(--ls-bg-2);
@@ -134,22 +140,33 @@
       <header>
         <p class="eyebrow">funkpost</p>
         <h1>Post über Funk</h1>
-        <p class="lede">
+        <p class="lede" data-lang="en">
           A byte courier for local-first applications over LoRa mesh radios. Two
           demos run here — one per <strong>data plane</strong>, sharing the same
           courier underneath and nothing else — and two instruments that exist
           for a bench rather than for browsing.
         </p>
+        <p class="lede" data-lang="de">
+          Ein Byte-Kurier für Local-first-Anwendungen über LoRa-Mesh-Funk. Hier
+          laufen zwei Demos — eine je <strong>Datenebene</strong>, darunter
+          derselbe Kurier und sonst nichts Gemeinsames — und zwei Instrumente, die
+          für den Messplatz gebaut sind, nicht zum Stöbern.
+        </p>
       </header>
 
       <section class="warn">
-        <h2>⚠ Demonstrators, not products</h2>
-        <p>
+        <h2><span data-lang="en">⚠ Demonstrators, not products</span><span data-lang="de">⚠ Demonstratoren, keine Produkte</span></h2>
+        <p data-lang="en">
           A research project, <strong>not audited</strong> and not for
           production use. Its purpose is to measure what a LoRa mesh can carry
           and how two devices reconcile data over it.
         </p>
-        <p>
+        <p data-lang="de">
+          Ein Forschungsprojekt, <strong>nicht auditiert</strong> und nicht für
+          den Produktiveinsatz. Es misst, was ein LoRa-Mesh tragen kann und wie
+          zwei Geräte darüber ihre Daten abgleichen.
+        </p>
+        <p data-lang="en">
           <strong>Authorisation has not been designed</strong> — a known gap,
           not an undiscovered one. The todo list is opened for anyone to write
           to; a booking request carries no signature, so a neighbour on the same
@@ -157,13 +174,29 @@
           bookings in it. The only boundary is the channel key, and on a public
           Meshtastic channel that is no boundary at all.
         </p>
-        <p>
+        <p data-lang="de">
+          <strong>Autorisierung ist noch nicht entworfen</strong> — eine bekannte
+          Lücke, keine unentdeckte. In die Todo-Liste darf jeder schreiben; eine
+          Buchungsanfrage trägt keine Signatur, sodass ein Nachbar auf demselben
+          Kanal einen ganzen Drei-Wochen-Kalender füllen und die echten Buchungen
+          darin verdrängen kann. Die einzige Grenze ist der Kanalschlüssel, und
+          auf einem öffentlichen Meshtastic-Kanal ist das keine Grenze.
+        </p>
+        <p data-lang="en">
           The two instruments below go further than reading: one creates a
           passkey on the security key that taps it, the other publishes a backup
           of whatever it holds to a public network. Neither asks for anything
           you have; both do what they say when pressed.
         </p>
-        <p>Open them, read them, measure them — do not point them at a real calendar.</p>
+        <p data-lang="de">
+          Die beiden Instrumente weiter unten tun mehr als lesen: Das eine legt
+          einen Passkey auf dem Sicherheitsschlüssel an, der ans Telefon gehalten
+          wird, das andere veröffentlicht eine Sicherung seines Inhalts in einem
+          öffentlichen Netz. Keines verlangt Zugangsdaten oder persönliche
+          Angaben; beide tun beim Drücken genau, was sie ankündigen.
+        </p>
+        <p data-lang="en">Open them, read them, measure them — do not point them at a real calendar.</p>
+        <p data-lang="de">Zum Öffnen, Lesen und Messen — nicht für einen echten Kalender.</p>
       </section>
 
       <section class="demos">
@@ -171,28 +204,59 @@
           <span class="head">
             <h2>mesh-todo</h2>
             <span class="plane">OrbitDB</span>
-            <span class="pill">on hardware</span>
+            <span class="pill"><span data-lang="en">on hardware</span><span data-lang="de">auf Hardware</span></span>
           </span>
-          <p>
+          <p data-lang="en">
             A todo list on two phones — the demo that first crossed the air, on
             4 September 2026. Signed entries, a verifiable log, and a sync pane
             that prices every frame.
           </p>
-          <p>
+          <p data-lang="de">
+            Eine Todo-Liste auf zwei Telefonen — die Demo, die am 4. September 2026
+            als erste über die Luft ging. Signierte Einträge, ein überprüfbares Log
+            und ein Sync-Bereich, der jeden Frame beziffert.
+          </p>
+          <p data-lang="en">
             Mesh-only is still a mode; with a radio the default is now
             <strong>internet first</strong>, and when it goes the page works out
             that it is gone by asking the network rather than believing a flag —
             then <em>asks you</em> before moving the list onto a carrier that
-            spends a rationed budget. A list&#8217;s founding can arrive
+            spends a rationed budget. A list’s founding can arrive
             <strong>from an IPFS gateway over HTTPS</strong> instead of over the
             air — the radio carries only the CID, in a single frame — and the
             page can ask the channel whether another <em>app</em> is out there
             rather than counting radios.
           </p>
-          <p>
+          <p data-lang="de">
+            Nur-Mesh bleibt ein Modus; mit Funk gilt jetzt <strong>zuerst das
+            Internet</strong>. Fällt es weg, stellt die Seite das fest, indem sie
+            das Netz fragt, statt einem Flag zu glauben — und fragt nach, bevor sie
+            die Liste auf einen Träger verlegt, der ein rationiertes Budget
+            verbraucht. Die Gründung einer Liste kann <strong>über HTTPS von einem
+            IPFS-Gateway</strong> kommen statt über die Luft — der Funk trägt nur
+            die CID, in einem einzigen Frame —, und die Seite kann den Kanal
+            fragen, ob eine andere <em>App</em> da ist, statt Funkgeräte zu zählen.
+          </p>
+          <p data-lang="en">
+            A list no longer waits for a node: its link, or the page’s QR code,
+            opens it on another device over the internet — and an LED under the
+            title blinks until another device keeping the list answers over the
+            radio, checked once an hour.
+          </p>
+          <p data-lang="de">
+            Eine Liste wartet nicht mehr auf einen Knoten: Ihr Link oder der
+            QR-Code der Seite öffnet sie über das Internet auf einem anderen Gerät
+            — und eine LED unter dem Titel blinkt, bis ein anderes Gerät mit dieser
+            Liste über Funk antwortet, geprüft einmal pro Stunde.
+          </p>
+          <p data-lang="en">
             It <em>has</em> an access controller, and this demo sets it to allow
             anyone, which is the honest default for something with no identities
             in it.
+          </p>
+          <p data-lang="de">
+            Sie <em>hat</em> einen Access Controller, und diese Demo stellt ihn auf
+            »jeder darf« — der ehrliche Standard für etwas ohne Identitäten.
           </p>
           <span class="path">/funkpost/mesh-todo/</span>
         </a>
@@ -202,35 +266,58 @@
             <h2>Termine über Funk</h2>
             <span class="plane">Yjs</span>
           </span>
-          <p>
+          <p data-lang="en">
             An appointment book for a shop around the corner, in the shape of
             Calendly. Availability travels as a rule rather than a list, two
             customers racing for one slot resolve identically on both phones
             without a packet spent deciding, and the <code>.ics</code> you take
             away carries a link that still works over the mesh.
           </p>
+          <p data-lang="de">
+            Ein Terminbuch für das Geschäft um die Ecke, nach dem Vorbild von
+            Calendly. Verfügbarkeit reist als Regel statt als Liste; zwei Kunden,
+            die um denselben Termin konkurrieren, kommen auf beiden Telefonen zum
+            selben Ergebnis, ohne dass für die Entscheidung ein Paket gesendet
+            wird; und die mitgenommene <code>.ics</code>-Datei enthält einen Link,
+            der auch über das Mesh funktioniert.
+          </p>
           <span class="path">/funkpost/mesh-calendar/</span>
         </a>
       </section>
 
       <section class="note">
-        <h2>Instruments, not demos</h2>
-        <p>
+        <h2><span data-lang="en">Instruments, not demos</span><span data-lang="de">Instrumente, keine Demos</span></h2>
+        <p data-lang="en">
           Two more pages live here. They are not demonstrations of anything —
           they are how the hardware questions in
           <a href="https://github.com/NiKrause/funkpost/issues/93">issue #93</a>
           get answered, and each does something real when its buttons are
           pressed.
         </p>
+        <p data-lang="de">
+          Zwei weitere Seiten liegen hier. Sie demonstrieren nichts — mit ihnen
+          werden die Hardware-Fragen aus
+          <a href="https://github.com/NiKrause/funkpost/issues/93">Issue #93</a>
+          beantwortet, und jede tut etwas Echtes, wenn ihre Knöpfe gedrückt
+          werden.
+        </p>
         <ul>
-          <li>
+          <li data-lang="en">
             <strong>passkey probe</strong> — asks a security key whether it can
             carry an identity to a second device: the PRF value, a largeBlob,
             and the public key recovered from two signatures. It
             <strong>creates a test passkey</strong> on whatever key taps it.
             <a href="./passkey-probe/"><code>/funkpost/passkey-probe/</code></a>
           </li>
-          <li>
+          <li data-lang="de">
+            <strong>Passkey-Probe</strong> — fragt einen Sicherheitsschlüssel, ob
+            er eine Identität auf ein zweites Gerät tragen kann: den PRF-Wert,
+            einen largeBlob und den aus zwei Signaturen zurückgewonnenen
+            öffentlichen Schlüssel. Sie <strong>legt einen Test-Passkey an</strong>,
+            auf jedem Schlüssel, der ans Telefon gehalten wird.
+            <a href="./passkey-probe/"><code>/funkpost/passkey-probe/</code></a>
+          </li>
+          <li data-lang="en">
             <strong>recovery</strong> — a list, a security key, and a device
             that has lost everything. Whatever is typed into it is
             <strong>backed up to a public network</strong>, and the pointer to
@@ -238,48 +325,98 @@
             finds it with no address and no file.
             <a href="./recovery/"><code>/funkpost/recovery/</code></a>
           </li>
+          <li data-lang="de">
+            <strong>Recovery</strong> — eine Liste, ein Sicherheitsschlüssel und
+            ein Gerät, das alles verloren hat. Was dort eingetippt wird, wird
+            <strong>in einem öffentlichen Netz gesichert</strong>, und der Zeiger
+            auf diese Sicherung wird aus dem Sicherheitsschlüssel abgeleitet — ein
+            zweites Telefon findet sie ohne Adresse und ohne Datei.
+            <a href="./recovery/"><code>/funkpost/recovery/</code></a>
+          </li>
         </ul>
       </section>
 
       <section class="note">
-        <h2>Trying them without a radio</h2>
-        <p>
+        <h2><span data-lang="en">Trying them without a radio</span><span data-lang="de">Ohne Funkgerät ausprobieren</span></h2>
+        <p data-lang="en">
           Append <code>?mesh=bc</code> and two browser tabs play the two devices,
           using a BroadcastChannel where the LoRa link would be. It has to be two
           tabs in the <em>same</em> browser profile — that channel does not cross
           profiles.
         </p>
+        <p data-lang="de">
+          Mit <code>?mesh=bc</code> spielen zwei Browser-Tabs die beiden Geräte;
+          ein BroadcastChannel steht dort, wo sonst die LoRa-Verbindung wäre. Es
+          müssen zwei Tabs im <em>selben</em> Browser-Profil sein — dieser Kanal
+          reicht nicht über Profilgrenzen.
+        </p>
         <ul>
-          <li>
+          <li data-lang="en">
             <strong>mesh-todo:</strong> open it twice with
             <code>?mesh=bc</code>. That also switches the internet path off, so
             the two tabs are a closed room; <code>?ip=1</code> brings it back.
           </li>
-          <li>
+          <li data-lang="de">
+            <strong>mesh-todo:</strong> zweimal mit <code>?mesh=bc</code> öffnen.
+            Das schaltet auch den Internetpfad ab, die beiden Tabs sind dann ein
+            geschlossener Raum; <code>?ip=1</code> holt ihn zurück.
+          </li>
+          <li data-lang="en">
             <strong>Termine:</strong> one tab with
             <code>?mesh=bc&amp;room=test&amp;role=salon</code>, the other with
             <code>role=customer</code>.
           </li>
+          <li data-lang="de">
+            <strong>Termine:</strong> ein Tab mit
+            <code>?mesh=bc&amp;room=test&amp;role=salon</code>, der andere mit
+            <code>role=customer</code>.
+          </li>
         </ul>
-        <p>
+        <p data-lang="en">
           With a Meshtastic node over Web Bluetooth, drop the parameter and press
           <em>Connect</em> — Chrome or Edge, and an HTTPS page, because Web
           Bluetooth refuses anything less. What a session on real radios still
           has to show — two runs, what to press, what to write down — is on the
           <a href="https://github.com/NiKrause/funkpost/blob/main/docs/run-sheet.md">run sheet</a>.
         </p>
+        <p data-lang="de">
+          Mit einem Meshtastic-Knoten über Web Bluetooth entfällt der Parameter,
+          und <em>Verbinden</em> stellt die Verbindung her — in Chrome oder Edge
+          und auf einer HTTPS-Seite, denn Web Bluetooth verweigert alles andere.
+          Was eine Sitzung mit echten Funkgeräten noch zeigen muss — zwei
+          Durchläufe, was zu drücken und was zu notieren ist —, steht auf dem
+          <a href="https://github.com/NiKrause/funkpost/blob/main/docs/run-sheet.md">Laufzettel</a>.
+        </p>
       </section>
 
       <footer>
         <span>GPL-3.0</span>
-        <a href="https://github.com/NiKrause/funkpost">source</a>
-        <a href="https://github.com/NiKrause/funkpost/blob/main/ROADMAP.md">roadmap</a>
-        <a href="https://github.com/NiKrause/funkpost/blob/main/docs/run-sheet.md">run sheet</a>
+        <a href="https://github.com/NiKrause/funkpost"><span data-lang="en">source</span><span data-lang="de">Quellcode</span></a>
+        <a href="https://github.com/NiKrause/funkpost/blob/main/ROADMAP.md"><span data-lang="en">roadmap</span><span data-lang="de">Roadmap</span></a>
+        <a href="https://github.com/NiKrause/funkpost/blob/main/docs/run-sheet.md"><span data-lang="en">run sheet</span><span data-lang="de">Laufzettel</span></a>
         <a href="https://lora.le-space.de/">lora.le-space.de</a>
       </footer>
     </main>
     <script type="module">
-      import { mountBrand } from "./brand/brand.js";
+      import { mountBrand, lang } from "./brand/brand.js";
+
+      // The rest of the page carries both languages; the head says one of them.
+      const HEAD = {
+        en: {
+          title: "funkpost — demos",
+          description:
+            "Two demos, one per data plane: a todo list and an appointment book, both replicating over a LoRa mesh with no IP path.",
+        },
+        de: {
+          title: "funkpost — Demos",
+          description:
+            "Zwei Demos, eine je Datenebene: eine Todo-Liste und ein Terminbuch, beide replizieren über ein LoRa-Mesh ohne IP-Pfad.",
+        },
+      };
+      lang.subscribe((code) => {
+        document.title = HEAD[code].title;
+        document.querySelector('meta[name="description"]').setAttribute("content", HEAD[code].description);
+      });
       mountBrand();
     </script>
   </body>

@@ -7,7 +7,8 @@
    * what it is.
    */
   import { onMount } from "svelte";
-  import { creditHTML } from "@le-space/funkpost-brand";
+  import { creditHTML, lang } from "@le-space/funkpost-brand";
+  import { WORDS } from "./words.js";
   import {
     createStack,
     connectCourier,
@@ -22,6 +23,13 @@ import { wallAt } from "./domain/time.js";
   import { bookingLink, parseBookingLink } from "./domain/link.js";
 
   const build = __BUILD_INFO__;
+  // The page's words in its current language; a log line keeps the language it
+  // was written in.
+  const t = $derived(WORDS[$lang]);
+  const w = () => WORDS[lang.get()];
+  $effect(() => {
+    document.title = t.title;
+  });
   const params = new URLSearchParams(location.search);
   const mode =
     params.get("mesh") === "bc"
@@ -110,15 +118,15 @@ import { wallAt } from "./domain/time.js";
    *  10 % of an hour, EU 866 only 2.5 %, and stating the wrong one is stating a
    *  legal limit wrongly. */
   const dutyCycleText = $derived(
-    budget?.dutyCycle == null ? "" : `${(budget.dutyCycle * 100).toFixed(budget.dutyCycle < 0.05 ? 1 : 0)} % pro Stunde`,
+    budget?.dutyCycle == null ? "" : t.perHour((budget.dutyCycle * 100).toFixed(budget.dutyCycle < 0.05 ? 1 : 0)),
   );
   const airtimeBlocked = $derived(blockedForMs > 0);
 
   const untilFree = $derived.by(() => {
     if (blockedForMs <= 0) return "";
     const minutes = Math.ceil(blockedForMs / 60_000);
-    if (minutes <= 1) return "in weniger als einer Minute";
-    return `in etwa ${minutes} Minuten`;
+    if (minutes <= 1) return t.underAMinute;
+    return t.inMinutes(minutes);
   });
 
   // Which channel we TRANSMIT on. Reception decodes every channel the node
@@ -155,7 +163,7 @@ import { wallAt } from "./domain/time.js";
     txChannel = index;
     setTxChannelFn(index);
     const ch = channels.find((c) => c.index === index);
-    pushLog(`Sendekanal → ${index} »${ch?.name}« ⌗${ch?.fingerprint} — automatisch gewählt`);
+    pushLog(w().log.autoChannel(index, ch?.name, ch?.fingerprint));
   }
 
   /** One channel as the node reports it. Named, so a test can hand one over. */
@@ -166,13 +174,13 @@ import { wallAt } from "./domain/time.js";
     const entry = {
       index: channel.index,
       role: channel.role,
-      name: channel.settings?.name || "(Standard)",
+      name: channel.settings?.name || w().defaultChannel,
       fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
     };
     channelMap.set(entry.index, entry);
     channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
     if (entry.role === 1) primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
-    pushLog(`Kanal ${entry.index} »${entry.name}« ⌗${entry.fingerprint}${entry.role === 1 ? " · primär" : ""}`);
+    pushLog(w().log.channel(entry.index, entry.name, entry.fingerprint, entry.role === 1));
     // Channels arrive one at a time and the wanted one need not be first.
     // Before the connection resolves this is a no-op, so the call after it is
     // the one that lands in the common case.
@@ -202,12 +210,12 @@ import { wallAt } from "./domain/time.js";
       wakeSentinel = await navigator.wakeLock.request("screen");
       wakeSentinel.addEventListener("release", () => {
         wakeSentinel = null;
-        if (keepAwake) pushLog("Bildschirmsperre vom System wieder freigegeben");
+        if (keepAwake) pushLog(w().log.wakeReleased);
       });
-      pushLog("Bildschirm bleibt an");
+      pushLog(w().log.wakeOn);
     } catch (e) {
       keepAwake = false;
-      pushLog(`! Bildschirmsperre abgelehnt: ${e.message}`);
+      pushLog(w().log.wakeRefused(e.message));
     }
   }
 
@@ -216,7 +224,7 @@ import { wallAt } from "./domain/time.js";
     else {
       await wakeSentinel?.release();
       wakeSentinel = null;
-      pushLog("Bildschirm darf wieder schlafen");
+      pushLog(w().log.wakeOff);
     }
   }
 
@@ -226,14 +234,14 @@ import { wallAt } from "./domain/time.js";
 
   /** Grey: no radio. Amber: radio up, nobody heard. Green: somebody is there. */
   const linkState = $derived.by(() => {
-    if (phase !== "ready") return { level: "off", text: "kein Funk" };
+    if (phase !== "ready") return { level: "off", text: t.link.off };
     const ago = presence.lastHeardAgoMs;
-    if (ago == null) return { level: "waiting", text: "Funk offen, noch niemand gehört" };
-    if (ago > 120_000) return { level: "waiting", text: `zuletzt gehört vor ${Math.round(ago / 60000)} min` };
+    if (ago == null) return { level: "waiting", text: t.link.waiting };
+    if (ago > 120_000) return { level: "waiting", text: t.link.lastHeard(Math.round(ago / 60000)) };
     const n = presence.peers.length;
     return {
       level: "live",
-      text: n === 0 ? "Mesh antwortet" : `${n} ${n === 1 ? "Gerät" : "Geräte"} in Reichweite`,
+      text: n === 0 ? t.link.answers : t.link.inRange(n),
     };
   });
 
@@ -322,29 +330,27 @@ import { wallAt } from "./domain/time.js";
    * contain must still be shown, not silently omitted.
    */
   const whenOf = (booking) => {
-    const w = wallAt(booking.startMs, state?.shop?.tz ?? DEFAULT_SHOP.tz);
-    const weekday = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][
-      new Date(Date.UTC(w.year, w.month - 1, w.day)).getUTCDay()
-    ];
-    return `${weekday}, ${w.day}.${w.month}. ${String(w.hour).padStart(2, "0")}:${String(w.minute).padStart(2, "0")}`;
+    const wall = wallAt(booking.startMs, state?.shop?.tz ?? DEFAULT_SHOP.tz);
+    const weekday = t.weekdays[new Date(Date.UTC(wall.year, wall.month - 1, wall.day)).getUTCDay()];
+    return t.when(weekday, wall);
   };
 
   const dayLabel = (iso) => {
     const [y, m, d] = iso.split("-").map(Number);
     const at = new Date(Date.UTC(y, m - 1, d));
     return {
-      weekday: ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][at.getUTCDay()],
+      weekday: t.weekdays[at.getUTCDay()],
       day: d,
     };
   };
 
-  const STATUS_TEXT = {
-    [CONFIRMED]: "bestätigt",
-    [PENDING]: "wartet auf den Salon",
-    [DECLINED]: "abgelehnt",
-    [CANCELLED]: "abgesagt",
-    [SUPERSEDED]: "Zeit war vergeben",
-  };
+  const STATUS_TEXT = $derived({
+    [CONFIRMED]: t.status.confirmed,
+    [PENDING]: t.status.pending,
+    [DECLINED]: t.status.declined,
+    [CANCELLED]: t.status.cancelled,
+    [SUPERSEDED]: t.status.superseded,
+  });
 
   onMount(async () => {
     loadMine();
@@ -353,9 +359,9 @@ import { wallAt } from "./domain/time.js";
     stack = await createStack({
       room,
       pinnedToday,
-      onError: (e) => pushLog(`! Speicher: ${e?.message ?? e}`),
+      onError: (e) => pushLog(w().log.storage(e?.message ?? e)),
     });
-    if (stack.restored > 0) pushLog(`${stack.restored} Einträge aus dem Gerät geladen`);
+    if (stack.restored > 0) pushLog(w().log.restored(stack.restored));
     // A link may hand us a booking this device has never seen. Adopt the
     // capability so it shows up as ours and can be changed or cancelled —
     // that is the whole point of the token being a key rather than a lookup.
@@ -400,12 +406,12 @@ import { wallAt } from "./domain/time.js";
         mode,
         onEvent: (event) => {
           if (event.kind === "duty-cycle-exhausted")
-            pushLog("Sendezeit für diese Stunde aufgebraucht — wartet, bis wieder Budget da ist");
-          if (event.kind === "giveup") pushLog(`✗ ${event.msgId} nach ${event.rounds} Runden aufgegeben`);
-          if (event.kind === "accepted") pushLog(`⇠ Eintrag übernommen (${event.id})`);
-          if (event.kind === "rejected") pushLog(`⊘ Eintrag verworfen — Signatur passt nicht`);
-          if (event.kind === "sent" && event.tag === 0x10) pushLog(`→ Digest ${event.bytes} B`);
-          if (event.kind === "sent" && event.tag === 0x12) pushLog(`→ Buchung ${event.bytes} B`);
+            pushLog(w().log.airtimeSpent);
+          if (event.kind === "giveup") pushLog(w().log.gaveUp(event.msgId, event.rounds));
+          if (event.kind === "accepted") pushLog(w().log.accepted(event.id));
+          if (event.kind === "rejected") pushLog(w().log.rejected);
+          if (event.kind === "sent" && event.tag === 0x10) pushLog(w().log.digest(event.bytes));
+          if (event.kind === "sent" && event.tag === 0x12) pushLog(w().log.booking(event.bytes));
           if (event.kind === "error") {
             const text = event.error?.message ?? String(event.error);
             // The node reports its region a second after connecting; until then
@@ -414,7 +420,7 @@ import { wallAt } from "./domain/time.js";
             // it reads as a fault only because it was worded as one.
             pushLog(
               /region is UNSET/i.test(text)
-                ? "Knoten meldet seine Region noch nicht — warte damit (Funkrecht)"
+                ? w().log.regionUnset
                 : `! ${text}`,
             );
           }
@@ -422,9 +428,9 @@ import { wallAt } from "./domain/time.js";
         onChange: () => refresh(),
         onRegion: (name) => {
           region = name;
-          pushLog(`Knoten meldet Region ${name}`);
+          pushLog(w().log.region(name));
         },
-        onStatus: (name) => pushLog(`Knoten: ${name}`),
+        onStatus: (name) => pushLog(w().log.nodeStatus(name)),
         onChannel: handleChannel,
         onTraffic: (packet) => {
           heard = {
@@ -437,15 +443,11 @@ import { wallAt } from "./domain/time.js";
           if (info?.myNodeNum) myNode = `!${info.myNodeNum.toString(16).padStart(8, "0")}`;
         },
         onError: (message) => pushLog(`! ${message}`),
-        onReconnecting: (n) => pushLog(`Verbindung weg — Versuch ${n}…`),
+        onReconnecting: (n) => pushLog(w().log.reconnecting(n)),
         onReconnected: (how) =>
-          pushLog(
-            how === "reattached"
-              ? "Schreibkanal war kurz gestört — repariert, Verbindung stand durchgehend"
-              : "wieder verbunden",
-          ),
+          pushLog(how === "reattached" ? w().log.reattached : w().log.reconnected),
         onGaveUp: () => {
-          error = "Der Funkkontakt bricht immer wieder ab — bitte neu laden.";
+          error = w().gaveUp;
         },
       });
       linkKind = live.kind;
@@ -470,13 +472,11 @@ import { wallAt } from "./domain/time.js";
             ? await live.book.becomeSalon(fromBase64Url(saved))
             : await live.book.becomeSalon();
           localStorage.setItem(`salon:${room}`, toBase64Url(salonToken));
-          pushLog("Salon-Identität veröffentlicht");
+          pushLog(w().log.salonPublished);
         } catch (e) {
           // Another device already holds this shop. Say so plainly rather than
           // taking it over and silently voiding that device's decisions.
-          error =
-            "Dieser Salon wird bereits von einem anderen Gerät geführt. " +
-            "Bestätigen kann nur dieses eine Gerät — hier lässt sich der Tagesplan ansehen.";
+          error = w().salonTaken;
           pushLog(`! ${e.message}`);
         }
       }
@@ -488,7 +488,7 @@ import { wallAt } from "./domain/time.js";
       // is a crash rather than a flicker.
       await refresh();
       phase = "ready";
-      pushLog(`Funk offen: ${linkKind}`);
+      pushLog(w().log.radioOpen(w().linkKinds[linkKind] ?? linkKind));
     } catch (e) {
       error = e.message;
       phase = "idle";
@@ -508,7 +508,7 @@ import { wallAt } from "./domain/time.js";
       });
       rememberMine(id, token);
       slotIndex = null;
-      pushLog("Anfrage ist auf der Luft");
+      pushLog(w().log.requested);
       await refresh();
     } catch (e) {
       error = e.message;
@@ -521,7 +521,7 @@ import { wallAt } from "./domain/time.js";
     busyAction = true;
     try {
       await live.book.decide(id, status, { salonToken });
-      pushLog(status === CONFIRMED ? "bestätigt — Antwort geht raus" : "abgelehnt — Antwort geht raus");
+      pushLog(status === CONFIRMED ? w().log.confirmed : w().log.declined);
       await refresh();
     } catch (e) {
       error = e.message;
@@ -534,7 +534,7 @@ import { wallAt } from "./domain/time.js";
     busyAction = true;
     try {
       await live.book.cancel(entry.id, fromBase64Url(entry.token));
-      pushLog("Absage ist auf der Luft");
+      pushLog(w().log.cancelled);
       await refresh();
     } catch (e) {
       error = e.message;
@@ -552,7 +552,7 @@ import { wallAt } from "./domain/time.js";
       role: role === "salon" ? "salon" : "customer",
     });
     downloadFile(file.filename, file.text);
-    pushLog(`${file.filename} gespeichert`);
+    pushLog(w().log.saved(file.filename));
   }
 
   const linkFor = (entry) =>
@@ -563,9 +563,9 @@ import { wallAt } from "./domain/time.js";
 
 <main>
   <header>
-    <p class="eyebrow">funkpost · Termine</p>
+    <p class="eyebrow">{t.eyebrow}</p>
     <h1>{state?.shop?.name ?? DEFAULT_SHOP.name}</h1>
-    <p class="tag">Terminbuchung über ein LoRa-Mesh — ohne Server, ohne Internet</p>
+    <p class="tag">{t.tag}</p>
   </header>
 
   <!-- Kurz, und einmal weggeklickt bleibt es weg. Die Messaussage aus
@@ -573,13 +573,21 @@ import { wallAt } from "./domain/time.js";
        kleine signierte Einträge, nicht ganze Blöcke. -->
   {#if showNotice}
     <aside class="notice" data-testid="experimental-notice">
-      <p>
-        <strong>Experimentell.</strong> Ein Forschungs-Demonstrator, nicht
-        auditiert, nicht für den Produktivbetrieb — wer den Funkkanal hört,
-        kann Termine anlegen.
-      </p>
+      {#if $lang === "de"}
+        <p>
+          <strong>Experimentell.</strong> Ein Forschungs-Demonstrator, nicht
+          auditiert, nicht für den Produktivbetrieb — wer den Funkkanal hört,
+          kann Termine anlegen.
+        </p>
+      {:else}
+        <p>
+          <strong>Experimental.</strong> A research demonstrator, not audited,
+          not for production — anyone who can hear the radio channel can create
+          appointments.
+        </p>
+      {/if}
       <button class="dismiss" onclick={dismissNotice} data-testid="dismiss-notice">
-        Verstanden — nicht mehr zeigen
+        {t.dismiss}
       </button>
     </aside>
   {/if}
@@ -592,29 +600,42 @@ import { wallAt } from "./domain/time.js";
     </p>
     {#if airtimeBlocked}
       <p class="airtime" data-testid="airtime-blocked">
-        <strong>Sendezeit aufgebraucht.</strong>
-        Dieser Knoten hat sein gesetzliches Stundenkontingent ausgeschöpft{#if dutyCycleText}
-          {" "}({region} · {dutyCycleText}){/if} und sendet nichts mehr. Empfangen
-        geht weiter — nur Buchen, Bestätigen und Absagen pausieren. Wieder
-        möglich <strong>{untilFree}</strong>.
+        {#if $lang === "de"}
+          <strong>Sendezeit aufgebraucht.</strong>
+          Dieser Knoten hat sein gesetzliches Stundenkontingent ausgeschöpft{#if dutyCycleText}
+            {" "}({region} · {dutyCycleText}){/if} und sendet nichts mehr. Empfangen
+          geht weiter — nur Buchen, Bestätigen und Absagen pausieren. Wieder
+          möglich <strong>{untilFree}</strong>.
+        {:else}
+          <strong>Airtime spent.</strong>
+          This node has used its legal hourly allowance{#if dutyCycleText}
+            {" "}({region} · {dutyCycleText}){/if} and will not transmit. Receiving
+          continues — only booking, confirming and cancelling pause. Possible
+          again <strong>{untilFree}</strong>.
+        {/if}
       </p>
     {/if}
 
     {#if heard.undecryptable > 0 && presence.peers.length === 0}
       <p class="mismatch" data-testid="key-mismatch">
-        <strong>{heard.undecryptable} von {heard.total} Paketen sind nicht lesbar.</strong>
-        Der Knoten hört etwas, kann es aber nicht entschlüsseln — die Gegenstelle
-        sendet auf einem Kanal, dessen Schlüssel dieser Knoten nicht hat.
-        Vergleicht den Fingerabdruck ⌗ unten auf beiden Geräten.
+        {#if $lang === "de"}
+          <strong>{heard.undecryptable} von {heard.total} Paketen sind nicht lesbar.</strong>
+          Der Knoten hört etwas, kann es aber nicht entschlüsseln — die Gegenstelle
+          sendet auf einem Kanal, dessen Schlüssel dieser Knoten nicht hat.
+          Vergleicht den Fingerabdruck ⌗ unten auf beiden Geräten.
+        {:else}
+          <strong>{heard.undecryptable} of {heard.total} packets cannot be read.</strong>
+          The node hears something but cannot decrypt it — the other side
+          transmits on a channel whose key this node does not hold. Compare the
+          fingerprint ⌗ below on both devices.
+        {/if}
       </p>
     {/if}
 
     {#if channels.length > 0}
       <p class="channel" data-testid="channel">
-        <label
-          title="Gesendet wird auf diesem Kanal — auf beiden Geräten derselbe »Name« ⌗Fingerabdruck. Empfangen wird auf allen, für die der Knoten einen Schlüssel hat."
-        >
-          Sendekanal:
+        <label title={t.txChannelTitle}>
+          {t.txChannel}
           <select
             bind:value={txChannel}
             onchange={() => {
@@ -623,63 +644,68 @@ import { wallAt } from "./domain/time.js";
               txChannelChosenByHand = true;
               setTxChannelFn(txChannel);
               const ch = channels.find((c) => c.index === txChannel);
-              pushLog(`Sendekanal → ${txChannel} »${ch?.name}« ⌗${ch?.fingerprint} — grüße neu`);
+              pushLog(w().log.handChannel(txChannel, ch?.name, ch?.fingerprint));
             }}
           >
             {#each channels as ch (ch.index)}
               <option value={ch.index}>
-                {ch.index} »{ch.name}« ⌗{ch.fingerprint}{ch.role === 1 ? " · primär" : ""}
+                {ch.index} »{ch.name}« ⌗{ch.fingerprint}{ch.role === 1 ? ` · ${t.primary}` : ""}
               </option>
             {/each}
           </select>
         </label>
-        {#if myNode}<span class="dim"> · dieser Knoten {myNode}</span>{/if}
+        {#if myNode}<span class="dim"> · {t.thisNode} {myNode}</span>{/if}
       </p>
     {/if}
 
     {#if wakeLockSupported && isHandheld}
       <label class="awake dim">
         <input type="checkbox" bind:checked={keepAwake} onchange={toggleAwake} data-testid="wake-lock" />
-        Bildschirm anlassen — Bluetooth pausiert, wenn das Display schläft
+        {t.keepAwake}
       </label>
     {/if}
   {/if}
 
   {#if !role}
     <section class="card pick">
-      <h2>Wer bist du?</h2>
+      <h2>{t.whoAreYou}</h2>
       <div class="row">
-        <button class="btn" onclick={() => chooseRole("salon")}>Ich bin der Salon</button>
-        <button class="btn ghost" onclick={() => chooseRole("customer")}>Ich möchte einen Termin</button>
+        <button class="btn" onclick={() => chooseRole("salon")}>{t.iAmSalon}</button>
+        <button class="btn ghost" onclick={() => chooseRole("customer")}>{t.iWantAppointment}</button>
       </div>
-      <p class="dim">
-        Der Salon führt das Buch und entscheidet. Beide Seiten sprechen nur über Funk.
-      </p>
+      <p class="dim">{t.rolesHint}</p>
     </section>
   {:else if phase !== "ready"}
     <section class="card">
-      <h2>Funk</h2>
+      <h2>{t.radio}</h2>
       {#if phase === "connecting"}
-        <p>verbinde…</p>
+        <p>{t.connecting}</p>
       {:else}
-        <button class="btn" onclick={connect}>Knoten verbinden</button>
-        <p class="dim">
-          Öffnet die Bluetooth-Auswahl des Browsers. Mit <code>?mesh=bc</code> spielen
-          zwei Tabs die zwei Geräte, ganz ohne Hardware.
-        </p>
+        <button class="btn" onclick={connect}>{t.connect}</button>
+        {#if $lang === "de"}
+          <p class="dim">
+            Öffnet die Bluetooth-Auswahl des Browsers. Mit <code>?mesh=bc</code> spielen
+            zwei Tabs die zwei Geräte, ganz ohne Hardware.
+          </p>
+        {:else}
+          <p class="dim">
+            Opens the browser's Bluetooth chooser. With <code>?mesh=bc</code>, two tabs
+            play the two devices, with no hardware at all.
+          </p>
+        {/if}
       {/if}
       {#if error}<p class="error">{error}</p>{/if}
     </section>
   {:else if !state}
-    <section class="card"><p class="dim">Termine werden geladen…</p></section>
+    <section class="card"><p class="dim">{t.loading}</p></section>
   {:else if role === "customer"}
     <!-- ───────────── Kunde ───────────── -->
     <section class="card booking" data-testid="customer">
       <aside>
-        <p class="eyebrow">Termin buchen bei</p>
+        <p class="eyebrow">{t.bookWith}</p>
         <p class="salon">{state.shop.name}</p>
         <label class="field">
-          <span>Leistung</span>
+          <span>{t.service}</span>
           <select bind:value={serviceId} data-testid="service">
             {#each state.shop.services as service (service.id)}
               <option value={service.id}>{service.label} · {service.minutes} min</option>
@@ -687,17 +713,22 @@ import { wallAt } from "./domain/time.js";
           </select>
         </label>
         <label class="field">
-          <span>Dein Vorname</span>
+          <span>{t.firstName}</span>
           <input bind:value={handle} placeholder="Anna" data-testid="handle" />
         </label>
-        <p class="note">
-          <strong>Nur Vorname und Leistung reisen.</strong> Auf einem öffentlichen
-          Kanal hören Nachbarknoten mit — alles Weitere bleibt auf diesem Gerät.
-        </p>
+        {#if $lang === "de"}
+          <p class="note">
+            <strong>Nur Vorname und Leistung reisen.</strong> Auf einem öffentlichen
+            Kanal hören Nachbarknoten mit — alles Weitere bleibt auf diesem Gerät.
+          </p>
+        {:else}
+          <p class="note">
+            <strong>Only the first name and the service travel.</strong> On a public
+            channel neighbouring nodes listen in — everything else stays on this device.
+          </p>
+        {/if}
         <p class="dim">
-          {state.shop.mode === "auto"
-            ? "Freie Zeiten werden sofort bestätigt."
-            : "Der Salon bestätigt jede Anfrage einzeln."}
+          {state.shop.mode === "auto" ? t.autoConfirms : t.salonConfirms}
         </p>
       </aside>
 
@@ -731,7 +762,7 @@ import { wallAt } from "./domain/time.js";
               {timeOf(slot)}
             </button>
           {/each}
-          {#if slotsForDay.length === 0}<p class="dim">An diesem Tag ist zu.</p>{/if}
+          {#if slotsForDay.length === 0}<p class="dim">{t.closed}</p>{/if}
         </div>
 
         <div class="row cta">
@@ -741,11 +772,7 @@ import { wallAt } from "./domain/time.js";
             onclick={book}
             data-testid="book"
           >
-            {airtimeBlocked
-              ? "Sendezeit aufgebraucht"
-              : state.shop.mode === "auto"
-                ? "Termin buchen"
-                : "Termin anfragen"}
+            {airtimeBlocked ? t.airtimeSpent : state.shop.mode === "auto" ? t.book : t.request}
           </button>
         </div>
       </div>
@@ -753,22 +780,19 @@ import { wallAt } from "./domain/time.js";
 
     {#if arriving && myBookings.length === 0}
       <section class="card" data-testid="awaiting-link">
-        <h2>Termin wird gesucht</h2>
-        <p class="dim">
-          Der Link hat den Termin mitgebracht — er wird jetzt über Funk geholt.
-          Diese Seite kam von einem Webserver; alles Weitere läuft über das Mesh.
-        </p>
+        <h2>{t.searching}</h2>
+        <p class="dim">{t.searchingHint}</p>
       </section>
     {/if}
 
     {#if myBookings.length > 0}
       <section class="card" data-testid="my-bookings">
-        <h2>Deine Termine</h2>
+        <h2>{t.yourAppointments}</h2>
         {#each myBookings as entry (entry.id)}
           <div class="mine" data-testid="booking" data-status={entry.status}>
             <div>
               <p class="when">
-                {whenOf(entry)} Uhr · {serviceById(state.shop, entry.serviceId)?.label}
+                {whenOf(entry)} · {serviceById(state.shop, entry.serviceId)?.label}
               </p>
               <p class="dim">
                 <span class="pill {entry.status}">{STATUS_TEXT[entry.status] ?? entry.status}</span>
@@ -778,11 +802,11 @@ import { wallAt } from "./domain/time.js";
             <div class="row">
               {#if entry.status === CONFIRMED}
                 <button class="btn sm" onclick={() => saveIcs(tokenOf(entry.id))} data-testid="save-ics">
-                  Termin.ics
+                  {t.ics}
                 </button>
               {/if}
               {#if entry.status === CONFIRMED || entry.status === PENDING}
-                <button class="btn ghost sm" disabled={airtimeBlocked} onclick={() => cancel(tokenOf(entry.id))}>Absagen</button>
+                <button class="btn ghost sm" disabled={airtimeBlocked} onclick={() => cancel(tokenOf(entry.id))}>{t.cancel}</button>
               {/if}
             </div>
           </div>
@@ -796,17 +820,17 @@ import { wallAt } from "./domain/time.js";
     <!-- ───────────── Salon ───────────── -->
     <section class="card" data-testid="salon">
       <div class="row spread">
-        <h2>Tagesplan</h2>
+        <h2>{t.dayPlan}</h2>
         <div class="switch">
           <button
             aria-pressed={state.shop.mode === "auto"}
             onclick={() => live.book.setShop({ mode: "auto" })}
-            data-testid="mode-auto">Autobestätigung</button
+            data-testid="mode-auto">{t.autoConfirm}</button
           >
           <button
             aria-pressed={state.shop.mode === "ask"}
             onclick={() => live.book.setShop({ mode: "ask" })}
-            data-testid="mode-ask">Rückfrage</button
+            data-testid="mode-ask">{t.askFirst}</button
           >
         </div>
       </div>
@@ -822,19 +846,19 @@ import { wallAt } from "./domain/time.js";
 
       {#if pending.length > 0}
         <div class="popup" data-testid="pending">
-          <p class="eyebrow">Neue Anfrage über Funk</p>
+          <p class="eyebrow">{t.newRequest}</p>
           {#each pending as entry (entry.id)}
             <div class="ask">
               <p class="when">
-                <strong>{entry.handle}</strong> möchte {whenOf(entry)} Uhr ·
+                <strong>{entry.handle}</strong> {t.wouldLike} {whenOf(entry)} ·
                 {serviceById(state.shop, entry.serviceId)?.label}
               </p>
               <div class="row">
                 <button class="btn ok sm" disabled={busyAction || airtimeBlocked} onclick={() => decide(entry.id, CONFIRMED)} data-testid="confirm">
-                  Bestätigen
+                  {t.confirm}
                 </button>
                 <button class="btn ghost sm" disabled={busyAction || airtimeBlocked} onclick={() => decide(entry.id, DECLINED)} data-testid="decline">
-                  Ablehnen
+                  {t.decline}
                 </button>
               </div>
             </div>
@@ -850,7 +874,7 @@ import { wallAt } from "./domain/time.js";
               <span class="who">{entry.booking.handle}</span>
               <span class="pill {entry.booking.status}">{STATUS_TEXT[entry.booking.status]}</span>
             {:else}
-              <span class="who dim">frei</span>
+              <span class="who dim">{t.free}</span>
             {/if}
           </div>
         {/each}
@@ -861,11 +885,11 @@ import { wallAt } from "./domain/time.js";
   {#if phase === "ready"}
     <section class="radio">
       <button class="radio-head" onclick={() => (showRadio = !showRadio)}>
-        <span class="title">Funkstreifen</span>
+        <span class="title">{t.radioStrip}</span>
         <span>Frames {totals.framesTx}→ ←{totals.framesRx}</span>
-        <span>Runden {totals.retransmitRounds}</span>
-        {#if refusals.soft > 0}<span title="Frames, für die das Funkgerät seine Wiederholungen aufgebraucht hat — {refusals.last}">Aufgegeben {refusals.soft}</span>{/if}
-        <span>Sendungen {syncStats.payloadsSent}→ ←{syncStats.payloadsReceived}</span>
+        <span>{t.rounds} {totals.retransmitRounds}</span>
+        {#if refusals.soft > 0}<span title={t.givenUpTitle(refusals.last)}>{t.givenUp} {refusals.soft}</span>{/if}
+        <span>{t.payloads} {syncStats.payloadsSent}→ ←{syncStats.payloadsReceived}</span>
         <span class="chev">{showRadio ? "▾" : "▸"}</span>
       </button>
       {#if showRadio}
@@ -873,7 +897,7 @@ import { wallAt } from "./domain/time.js";
           {#each log as line (line.id)}
             <div><span class="ts">{line.ts}</span> {line.text}</div>
           {/each}
-          {#if log.length === 0}<div class="ts">still.</div>{/if}
+          {#if log.length === 0}<div class="ts">{t.quiet}</div>{/if}
         </div>
       {/if}
     </section>
@@ -882,8 +906,8 @@ import { wallAt } from "./domain/time.js";
   {#if error}<p class="error">{error}</p>{/if}
 
   <footer>
-    <a href="https://github.com/NiKrause/funkpost">Quelltext</a> ·
-    <a href="https://github.com/NiKrause/funkpost/issues/38">Entwurf #38</a> · GPL-3.0 ·
+    <a href="https://github.com/NiKrause/funkpost">{t.source}</a> ·
+    <a href="https://github.com/NiKrause/funkpost/issues/38">{t.design}</a> · GPL-3.0 ·
     <span class="build">
       {build.version} ·
       <!-- The build already knew which commit it is; now it can be opened. A
@@ -893,20 +917,44 @@ import { wallAt } from "./domain/time.js";
       {:else}{build.commit}{/if}
       · {build.builtAt}
     </span>
-    <p class="ls-credit">{@html creditHTML("de")}</p>
+    <p class="ls-credit">{@html creditHTML($lang)}</p>
   </footer>
 </main>
 
 <style>
   :global(body) {
     margin: 0;
-    background: #f4f6f9;
-    color: #141B2E;
+    background: var(--ls-bg-0);
+    color: var(--ls-text);
     font-family: var(--ls-font);
     line-height: 1.55;
   }
-  /* 64 px on top: the Le Space pill sits in the first 56. */
+  /* 64 px on top: the Le Space pill sits in the first 56.
+     The page's own colours, each drawn from the brand's tokens, so the light
+     book and the dark one are one set of rules. */
   main {
+    --card: var(--ls-bg-2);
+    --ground-2: color-mix(in srgb, var(--ls-bg-2) 55%, var(--ls-bg-0));
+    --line: var(--ls-bg-3);
+    --ink: var(--ls-text);
+    --ink-2: var(--ls-text-dim);
+    /* small labels: dimmer than running text, still AA */
+    --ink-3: color-mix(in srgb, var(--ls-text-dim) 80%, var(--ls-bg-0));
+    --accent: var(--ls-accent);
+    --accent-soft: color-mix(in srgb, var(--ls-accent) 12%, var(--ls-bg-2));
+    --accent-line: color-mix(in srgb, var(--ls-accent) 38%, var(--ls-bg-2));
+    /* text on a filled accent: the ground's own colour reads on both */
+    --on-accent: var(--ls-bg-0);
+    --ok: var(--ls-green);
+    --ok-soft: color-mix(in srgb, var(--ls-green) 14%, var(--ls-bg-2));
+    --ok-ink: color-mix(in srgb, var(--ls-green) 80%, var(--ls-text));
+    --warn: var(--ls-amber);
+    --warn-soft: color-mix(in srgb, var(--ls-amber) 14%, var(--ls-bg-2));
+    --warn-ink: color-mix(in srgb, var(--ls-amber) 70%, var(--ls-text));
+    --bad: var(--ls-red);
+    --bad-soft: color-mix(in srgb, var(--ls-red) 12%, var(--ls-bg-2));
+    --bad-ink: color-mix(in srgb, var(--ls-red) 85%, var(--ls-text));
+    --quiet: color-mix(in srgb, var(--ls-text-dim) 12%, var(--ls-bg-2));
     max-width: 880px;
     margin: 0 auto;
     padding: 64px 18px 64px;
@@ -918,30 +966,30 @@ import { wallAt } from "./domain/time.js";
   h2 { margin: 0 0 12px; font-size: 1.05rem; }
   .eyebrow {
     margin: 0; font-family: var(--ls-font-mono); font-size: 0.72rem;
-    letter-spacing: 0.13em; text-transform: uppercase; color: #8b93a5;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3);
   }
-  .tag { margin: 4px 0 0; color: #5b6478; font-size: 0.92rem; }
+  .tag { margin: 4px 0 0; color: var(--ink-2); font-size: 0.92rem; }
   /* Koralle als Kante, nicht als Fläche: es ist ein Vorbehalt zur Seite, keine
      Fehlermeldung der App über sich selbst. */
   .notice {
     margin-top: 16px; padding: 12px 14px;
-    background: #fff; border: 1px solid #e3e7ee; border-left: 3px solid #E8503F;
+    background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--bad);
     border-radius: 12px; display: flex; flex-direction: column; gap: 8px;
   }
-  .notice p { margin: 0; font-size: 0.86rem; line-height: 1.55; color: #5b6478; }
-  .notice strong { color: #14171f; }
+  .notice p { margin: 0; font-size: 0.86rem; line-height: 1.55; color: var(--ink-2); }
+  .notice strong { color: var(--ink); }
   .dismiss {
     align-self: flex-start; padding: 5px 12px;
-    border: 1px solid #e3e7ee; border-radius: 999px;
-    background: transparent; color: #5b6478; font: inherit; font-size: 0.8rem;
+    border: 1px solid var(--line); border-radius: 999px;
+    background: transparent; color: var(--ink-2); font: inherit; font-size: 0.8rem;
     cursor: pointer;
   }
-  .dismiss:hover { border-color: #E8503F; color: #14171f; }
-  .dim { color: #5b6478; font-size: 0.86rem; margin: 0; }
-  .error { color: #E8503F; font-size: 0.9rem; }
+  .dismiss:hover { border-color: var(--bad); color: var(--ink); }
+  .dim { color: var(--ink-2); font-size: 0.86rem; margin: 0; }
+  .error { color: var(--bad); font-size: 0.9rem; }
 
   .card {
-    background: #fff; border: 1px solid #e3e7ee; border-radius: 12px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     padding: 18px 20px;
     box-shadow: 0 1px 2px rgba(20, 23, 31, 0.05);
   }
@@ -952,124 +1000,126 @@ import { wallAt } from "./domain/time.js";
 
   .booking { display: grid; grid-template-columns: 250px 1fr; gap: 0; padding: 0; }
   .booking > aside {
-    padding: 20px; border-right: 1px solid #e3e7ee; background: #fafbfd;
+    padding: 20px; border-right: 1px solid var(--line); background: var(--ground-2);
     border-radius: 12px 0 0 12px;
   }
   .booking > div { padding: 20px; }
   @media (max-width: 700px) {
     .booking { grid-template-columns: 1fr; }
-    .booking > aside { border-right: 0; border-bottom: 1px solid #e3e7ee; border-radius: 12px 12px 0 0; }
+    .booking > aside { border-right: 0; border-bottom: 1px solid var(--line); border-radius: 12px 12px 0 0; }
   }
   .salon { margin: 2px 0 14px; font-size: 1.15rem; font-weight: 700; }
-  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 0.84rem; color: #5b6478; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 0.84rem; color: var(--ink-2); }
   .field select, .field input {
-    padding: 7px 9px; border: 1px solid #d5dae4; border-radius: 8px;
-    font: inherit; font-size: 0.92rem; color: #141B2E; background: #fff;
+    padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px;
+    font: inherit; font-size: 0.92rem; color: var(--ink); background: var(--card);
   }
   .note {
-    margin: 14px 0 10px; padding: 10px 11px; border: 1px solid #A9D9EF;
-    background: #E6F3FA; border-radius: 9px; font-size: 0.78rem; color: #5b6478;
+    margin: 14px 0 10px; padding: 10px 11px; border: 1px solid var(--accent-line);
+    background: var(--accent-soft); border-radius: 9px; font-size: 0.78rem; color: var(--ink-2);
   }
 
   .days { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
   .day {
-    border: 1px solid #e3e7ee; background: #fff; border-radius: 9px;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 9px;
     padding: 6px 10px; cursor: pointer; font: inherit; text-align: center; line-height: 1.2;
   }
-  .day span { display: block; font-size: 0.66rem; text-transform: uppercase; color: #8b93a5; letter-spacing: 0.06em; }
+  .day span { display: block; font-size: 0.66rem; text-transform: uppercase; color: var(--ink-3); letter-spacing: 0.06em; }
   .day b { font-size: 0.98rem; font-variant-numeric: tabular-nums; }
-  .day[aria-pressed="true"] { border-color: #0E86C4; background: #E6F3FA; }
-  .day[aria-pressed="true"] b { color: #0E86C4; }
+  .day[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .day[aria-pressed="true"] b { color: var(--accent); }
   .day:disabled { opacity: 0.35; cursor: not-allowed; }
 
   .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 7px; }
   .slot {
-    border: 1px solid #A9D9EF; background: #fff; color: #0E86C4;
+    border: 1px solid var(--accent-line); background: var(--card); color: var(--accent);
     border-radius: 8px; padding: 8px 4px; cursor: pointer;
     font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.88rem;
   }
-  .slot:hover:not(:disabled) { background: #E6F3FA; }
-  .slot[aria-pressed="true"] { background: #0E86C4; color: #fff; border-color: #0E86C4; }
+  .slot:hover:not(:disabled) { background: var(--accent-soft); }
+  .slot[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .slot:disabled {
-    border-color: #e3e7ee; color: #8b93a5; background: #eef1f6;
+    border-color: var(--line); color: var(--ink-3); background: var(--quiet);
     cursor: not-allowed; text-decoration: line-through; font-weight: 400;
   }
 
   .btn {
-    border: 1px solid #0E86C4; background: #0E86C4; color: #fff;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent);
     padding: 9px 18px; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer;
   }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn.ghost { background: transparent; color: #0E86C4; }
-  .btn.ok { background: #12855a; border-color: #12855a; }
+  .btn.ghost { background: transparent; color: var(--accent); }
+  .btn.ok { background: var(--ok); border-color: var(--ok); }
   .btn.sm { padding: 6px 12px; font-size: 0.85rem; }
 
-  .switch { display: flex; border: 1px solid #e3e7ee; border-radius: 8px; overflow: hidden; }
-  .switch button { border: 0; background: #fff; color: #5b6478; font: inherit; font-size: 0.82rem; padding: 6px 11px; cursor: pointer; }
-  .switch button[aria-pressed="true"] { background: #0E86C4; color: #fff; font-weight: 600; }
+  .switch { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .switch button { border: 0; background: var(--card); color: var(--ink-2); font: inherit; font-size: 0.82rem; padding: 6px 11px; cursor: pointer; }
+  .switch button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 
-  .mine { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid #eef1f6; }
+  .mine { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
   .when { margin: 0; font-size: 0.95rem; font-weight: 600; }
-  .link { font-family: var(--ls-font-mono); font-size: 0.68rem; color: #5b6478; word-break: break-all; margin: 0 0 8px; }
+  .link { font-family: var(--ls-font-mono); font-size: 0.68rem; color: var(--ink-2); word-break: break-all; margin: 0 0 8px; }
 
-  .pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #eef1f6; color: #5b6478; }
-  .pill.confirmed { background: #e4f4ec; color: #12855a; }
-  .pill.pending { background: #fbf0dd; color: #a86412; }
-  .pill.declined, .pill.superseded, .pill.cancelled { background: #FBE7E4; color: #E8503F; }
+  .pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--quiet); color: var(--ink-2); }
+  .pill.confirmed { background: var(--ok-soft); color: var(--ok-ink); }
+  .pill.pending { background: var(--warn-soft); color: var(--warn-ink); }
+  .pill.declined, .pill.superseded, .pill.cancelled { background: var(--bad-soft); color: var(--bad-ink); }
 
-  .popup { border: 1px solid #a86412; background: #fbf0dd; border-radius: 10px; padding: 14px 15px; margin: 12px 0; }
+  .popup { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 10px; padding: 14px 15px; margin: 12px 0; }
   .ask { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
 
   .agenda { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
   .slotrow {
     display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; align-items: center;
-    padding: 8px 11px; border: 1px dashed #e3e7ee; border-radius: 8px; background: #fafbfd;
+    padding: 8px 11px; border: 1px dashed var(--line); border-radius: 8px; background: var(--ground-2);
   }
-  .slotrow.taken { border-style: solid; background: #fff; }
-  .slotrow .t { font-family: var(--ls-font-mono); font-size: 0.8rem; color: #5b6478; font-variant-numeric: tabular-nums; }
+  .slotrow.taken { border-style: solid; background: var(--card); }
+  .slotrow .t { font-family: var(--ls-font-mono); font-size: 0.8rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
   .slotrow .who { font-size: 0.9rem; font-weight: 600; }
   .slotrow .who.dim { font-weight: 400; }
 
-  .radio { background: #0B0E15; border-radius: 12px; overflow: hidden; font-family: var(--ls-font-mono); }
+  /* The radio strip is a terminal in both themes, on purpose: the transport
+     keeps one look, whatever the book around it does. Its colours are fixed,
+     and a border keeps it apart from a dark page. */
+  .radio {
+    background: #0b0e15; border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; font-family: var(--ls-font-mono);
+  }
   .radio-head {
     width: 100%; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
     padding: 9px 14px; background: transparent; border: 0; cursor: pointer;
-    color: #A8B3C7; font: inherit; font-size: 0.72rem; text-align: left;
+    color: #a8b3c7; font: inherit; font-size: 0.72rem; text-align: left;
   }
-  .radio-head .title { color: #EDF1F8; margin-right: auto; }
-  .radio-head .chev { color: #3EDC97; }
-  .radio-log { padding: 6px 14px 12px; font-size: 0.72rem; line-height: 1.7; color: #EDF1F8; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
-  .radio-log .ts { color: #A8B3C7; }
+  .radio-head .title { color: #edf1f8; margin-right: auto; }
+  .radio-head .chev { color: #3edc97; }
+  .radio-log { padding: 6px 14px 12px; font-size: 0.72rem; line-height: 1.7; color: #edf1f8; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
+  .radio-log .ts { color: #a8b3c7; }
 
   .link-state {
     display: flex; align-items: center; gap: 8px;
-    margin: 0; font-size: 0.85rem; color: #5b6478;
+    margin: 0; font-size: 0.85rem; color: var(--ink-2);
   }
-  .led { width: 9px; height: 9px; border-radius: 50%; background: #8b93a5; flex: none; }
-  .led.waiting { background: #a86412; }
-  .led.live { background: #12855a; }
+  .led { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
+  .led.waiting { background: var(--warn); }
+  .led.live { background: var(--ok); }
   .awake { display: flex; align-items: center; gap: 8px; margin: 0; }
-  .airtime {
-    margin: 0; padding: 10px 12px; font-size: 0.84rem; line-height: 1.5;
-    border: 1px solid #a86412; background: #fbf0dd; color: #6b5426;
-    border-radius: 9px;
-  }
+  .airtime,
   .mismatch {
     margin: 0; padding: 10px 12px; font-size: 0.84rem; line-height: 1.5;
-    border: 1px solid #a86412; background: #fbf0dd; color: #6b5426;
+    border: 1px solid var(--warn); background: var(--warn-soft); color: var(--ink);
     border-radius: 9px;
   }
   .channel {
-    margin: 0; font-size: 0.82rem; color: #5b6478;
+    margin: 0; font-size: 0.82rem; color: var(--ink-2);
     font-family: var(--ls-font-mono);
   }
   .channel select {
     font: inherit; font-size: 0.8rem; padding: 3px 7px;
-    border: 1px solid #d5dae4; border-radius: 6px; background: #fff; color: #141B2E;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink);
   }
 
-  footer { color: #8b93a5; font-size: 0.8rem; }
+  footer { color: var(--ink-3); font-size: 0.8rem; }
   footer .ls-credit { display: flex; justify-content: center; margin-top: 10px; }
-  footer a { color: #0E86C4; }
+  footer a { color: var(--accent); }
   .build { font-family: var(--ls-font-mono); font-size: 0.7rem; }
 </style>
