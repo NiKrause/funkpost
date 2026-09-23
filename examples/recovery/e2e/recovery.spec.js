@@ -201,3 +201,51 @@ test.describe("the peer path", () => {
     await expect(page.getByTestId("error")).toHaveCount(0);
   });
 });
+
+/**
+ * Choosing where the backup goes — the chooser from #128.
+ *
+ * Nothing here leaves the machine: it is about what the page asks for, what it
+ * keeps, and what it refuses to do without. The services themselves are
+ * exercised by the storage probe, which has the reader's own keys.
+ */
+test("the backup goes where the reader says, and a key is asked for before it is needed", async ({
+  page,
+}) => {
+  await page.route(
+    (url) => !["localhost", "127.0.0.1"].includes(url.hostname),
+    (route) => route.abort(),
+  );
+  await page.goto("/");
+
+  // Aleph is on by default and needs no account: this page works with nothing
+  // typed in, which is the reason it is the default.
+  await expect(page.getByTestId("service-aleph")).toBeChecked();
+  await expect(page.getByTestId("service-pinata")).not.toBeChecked();
+  await expect(page.getByTestId("key-pinata")).toHaveCount(0);
+
+  await page.getByTestId("service-pinata").check();
+  await expect(page.getByTestId("key-pinata")).toBeVisible();
+  await expect(page.getByTestId("gateway-pinata")).toBeVisible();
+
+  // A service without its key is named, and backup stays out of reach — the
+  // reader finds out now rather than at the upload.
+  await expect(page.getByTestId("missing-key")).toContainText("Pinata");
+  await expect(page.getByTestId("dehydrate")).toBeDisabled();
+
+  await page.getByTestId("key-pinata").fill("not-a-real-jwt");
+  await expect(page.getByTestId("missing-key")).toHaveCount(0);
+
+  // The choice survives a reload, because a key typed on a phone should not
+  // have to be typed twice.
+  await page.reload();
+  await expect(page.getByTestId("service-pinata")).toBeChecked();
+  await expect(page.getByTestId("key-pinata")).toHaveValue("not-a-real-jwt");
+
+  // And it can be taken back.
+  await page.getByTestId("forget-keys").click();
+  await expect(page.getByTestId("service-pinata")).not.toBeChecked();
+  await expect(page.getByTestId("key-pinata")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("service-pinata")).not.toBeChecked();
+});
