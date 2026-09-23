@@ -31,9 +31,9 @@ roadmap is built to keep testing.
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
 | **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
-| **#68** | The founding off the radio | **P9, built** — one frame over the radio names a backup, and the bytes come over HTTPS: a page that has never seen a list restores it from the CID alone, with no account, and the courier carries the changes from there (e2e, 2026-09-18). +3.8 kB gzipped. Not yet on hardware, and not an archive: Aleph's keyless upload is not kept. |
+| **#68** | The founding off the radio | **P9, built** — one frame over the radio names a backup, and the bytes come over HTTPS: a page that has never seen a list restores it from the CID alone, with no account, and the courier carries the changes from there (e2e, 2026-09-18). +3.8 kB gzipped. Not yet on hardware, and not an archive: Aleph's keyless upload is not kept (#125). |
 | **#82** | Internet first, mesh as fallback | **P10, built** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. The loss is established by a failed dial rather than a flag, the switch is a question rather than a reflex, and the app can ask the air whether another app — not another radio — is out there. |
-| **#93** | A lost phone, the same passkey | **P11, gate met on hardware 2026-09-21** — a Fold 5 made a list, backed it up and was reset; an A57 with the same YubiKey had the same identity, brought the list back with the key alone, and wrote to it ([#93](https://github.com/NiKrause/funkpost/issues/93#issuecomment-5765768993)). Open: keeping the backup, since Aleph's keyless upload is not retained. |
+| **#93** | A lost phone, the same passkey | **P11, gate met on hardware 2026-09-21** — a Fold 5 made a list, backed it up and was reset; an A57 with the same YubiKey had the same identity, brought the list back with the key alone, and wrote to it ([#93](https://github.com/NiKrause/funkpost/issues/93#issuecomment-5765768993)). Its open half is now #125: Aleph's keyless upload is ingest, not persistence. |
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -354,7 +354,7 @@ played by the test so the run leaves the machine for nothing; the bundle grew by
 **3.8 kB** gzipped, against a limit of 20; and `stack.js`'s claim reads true.
 Not yet run on hardware. And not an archive: Aleph's keyless upload is ingest,
 not persistence, so a pointer is a shortcut for a peer who is listening now.
-Keeping a backup is the same open decision as in P11.
+Keeping a backup is the same open decision as in P11, and now #125.
 
 ### P10 · Internet first, the mesh when it is gone — #82
 
@@ -657,7 +657,7 @@ refusal, never the fallback.
 provider's tests (*is refused when the authenticator has no PRF, never
 substituted*); this run did not repeat it on hardware. Not settled either:
 whether the backup is *kept* — Aleph's keyless upload is ingest, not
-persistence — and the timings, which were not recorded.
+persistence, which is now #125 — and the timings, which were not recorded.
 
 ### Running alongside: #1 reliability
 
