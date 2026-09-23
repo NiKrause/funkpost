@@ -218,7 +218,11 @@ export async function bringBack({
       cid,
       ms: Date.now() - started,
       bytes: bytes.length,
-      connections: helia.libp2p.getConnections().length,
+      // Peers, not connections: one provider can answer on two transports, and
+      // "2 peers" for one node is a lie the page should not tell.
+      connections: new Set(
+        helia.libp2p.getConnections().map((c) => c.remotePeer.toString()),
+      ).size,
     });
     return bytes;
   };
