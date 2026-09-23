@@ -57,6 +57,8 @@ export const WORDS = {
     beatSwitchTitle: "A few bytes an hour: is another device with this list within reach?",
     syncSwitch: "carry the list over the radio",
     syncSwitchTitle: "Off by default — the expensive half, and it only works once both devices are on the same channel.",
+    logSwitch: "shout the log to a watcher",
+    logSwitchTitle: "Publishes each log line on a pubsub topic for a third machine watching this run. Live or nothing: a line nobody hears is gone. Off by default — a log carries channel names and node numbers.",
     txChannel: "TX channel:",
     txChannelTitle:
       "transmissions go on this channel — pick the same »name« ⌗fingerprint on both phones. Reception decodes every channel the node holds a key for.",
@@ -160,6 +162,8 @@ export const WORDS = {
       beatOff: "heartbeat off — nothing of it goes on the air",
       syncOn: "list sync on — the radio carries changes again",
       syncOff: "list sync off — the radio carries the heartbeat and nothing else",
+      logOn: "log going out on the field-log topic",
+      logOff: "log stays on this device",
       handChannel: (index, name, fingerprint) => `TX channel → ${index} »${name}« ⌗${fingerprint}`,
       nodeChannel: (index, name, fingerprint, primary) =>
         `node reports channel ${index} »${name}« ⌗${fingerprint}${primary ? " · primary" : ""}`,
@@ -270,6 +274,8 @@ export const WORDS = {
     beatSwitchTitle: "Ein paar Bytes pro Stunde: ist ein anderes Gerät mit dieser Liste in Reichweite?",
     syncSwitch: "Liste über Funk tragen",
     syncSwitchTitle: "Standardmäßig aus — die teure Hälfte, und sie wirkt erst, wenn beide Geräte auf demselben Kanal sind.",
+    logSwitch: "Log an einen Beobachter funken",
+    logSwitchTitle: "Veröffentlicht jede Logzeile auf einem Pubsub-Topic, für einen dritten Rechner, der diesen Lauf mitliest. Live oder gar nicht: Was niemand hört, ist weg. Standardmäßig aus — ein Log trägt Kanalnamen und Knotennummern.",
     txChannel: "Sendekanal:",
     txChannelTitle:
       "gesendet wird auf diesem Kanal — auf beiden Telefonen denselben »Namen« ⌗Fingerabdruck wählen. Empfangen wird auf jedem Kanal, für den der Knoten einen Schlüssel hat.",
@@ -373,6 +379,8 @@ export const WORDS = {
       beatOff: "Herzschlag aus — davon geht nichts auf den Funk",
       syncOn: "Listen-Sync an — der Funk trägt wieder Änderungen",
       syncOff: "Listen-Sync aus — der Funk trägt den Herzschlag und sonst nichts",
+      logOn: "Log geht auf das Feldlog-Topic hinaus",
+      logOff: "Log bleibt auf diesem Gerät",
       handChannel: (index, name, fingerprint) => `Sendekanal → ${index} »${name}« ⌗${fingerprint}`,
       nodeChannel: (index, name, fingerprint, primary) =>
         `Knoten meldet Kanal ${index} »${name}« ⌗${fingerprint}${primary ? " · primär" : ""}`,
