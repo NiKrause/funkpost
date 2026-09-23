@@ -134,3 +134,70 @@ test("speaks German and English, and has a light and a dark look — both kept",
   await expect(page.getByTestId("use-key")).toHaveText("Sicherheitsschlüssel verwenden");
   expect(await ground()).not.toBe(light);
 });
+
+/**
+ * The backup coming back over libp2p, with every gateway refused.
+ *
+ * Opt-in (`RECOVERY_LIVE=true`), because unlike the test above this one has to
+ * leave the machine twice: it uploads a real backup to Aleph, and then dials
+ * Aleph's own node over webrtc-direct to fetch it. The suite otherwise fails a
+ * run that strays off localhost, and that rule is worth keeping.
+ *
+ * What it proves is the claim in NiKrause/funkpost#127: a phone whose gateways
+ * are all unreachable still gets its list back.
+ */
+const live = process.env.RECOVERY_LIVE === "true";
+
+test.describe("the peer path", () => {
+  test.skip(!live, "set RECOVERY_LIVE=true — this one really uploads and really dials");
+  test.setTimeout(240_000);
+
+  test("the list comes back over libp2p when no gateway will answer", async ({ page }) => {
+    await page.goto("/?fetch=first");
+    await attachSecurityKey(page);
+    await enrolPasskey(page);
+    // The fingerprints and the log live behind the details toggle.
+    await page.getByTestId("details").click();
+
+    await page.getByTestId("use-key").click();
+    await expect(page.locator(".step").first()).toHaveAttribute("data-status", "done", {
+      timeout: 60_000,
+    });
+
+    await page.getByTestId("make-list").click();
+    await expect(page.locator(".log")).toContainText("list open:", { timeout: 60_000 });
+    await page.getByLabel("new entry").fill("über libp2p zurückgeholt");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+
+    await page.getByTestId("dehydrate").click();
+    await expect(page.locator(".log")).toContainText("pointer", { timeout: 120_000 });
+
+    // From here the gateways do not exist. The pointer lookup is a different
+    // host and stays reachable — this is about the bytes, not the name.
+    await page.route("**/ipfs/**", (route) => route.abort("connectionrefused"));
+
+    // "Forget" reloads the page 600 ms later, so waiting for the current load
+    // state returns immediately and the next click lands on a page about to be
+    // thrown away. Wait for the reload itself.
+    const reloaded = page.waitForEvent("load");
+    await page.getByTestId("forget").click();
+    await reloaded;
+    // The virtual authenticator belongs to the CDP session, not the document,
+    // so it survives the reload with its passkey — attaching a second one here
+    // would give the page two keys and an identity it never backed up with.
+    await page.getByTestId("use-key").click();
+    await expect(page.locator(".step").first()).toHaveAttribute("data-status", "done", {
+      timeout: 60_000,
+    });
+
+    await page.getByTestId("hydrate").click();
+
+    // The entry is back, and the page says which way it came.
+    await expect(page.locator("li", { hasText: "über libp2p zurückgeholt" })).toBeVisible({
+      timeout: 180_000,
+    });
+    await expect(page.locator('.path[data-state="good"]')).toContainText(/libp2p/);
+    await expect(page.locator('.path[data-state="bad"]')).toBeVisible();
+    await expect(page.getByTestId("error")).toHaveCount(0);
+  });
+});
