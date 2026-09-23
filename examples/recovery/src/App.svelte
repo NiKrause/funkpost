@@ -18,6 +18,8 @@
     createList,
     backUp,
     bringBack,
+    backendFor,
+    SERVICES,
     FETCH_PATHS,
     forgetEverything,
   } from "./stack.js";
@@ -37,6 +39,63 @@
   // Which way each object came back, and how long it took. `null` means the
   // path was not used; a string means it failed and why.
   let delivery = $state({ gateway: null, peers: null, peerCount: 0 });
+
+  /**
+   * Where the backup goes, and what it takes to put it there.
+   *
+   * Aleph needs nothing and is on by default, which is what keeps this page
+   * usable with no account at all. A key typed in for one of the others stays
+   * in this browser's localStorage and is sent to that service and nowhere
+   * else — this page has no server to send it to.
+   */
+  const SERVICE_STORE = "recovery:services";
+  const loadServices = () => {
+    try {
+      const kept = JSON.parse(localStorage.getItem(SERVICE_STORE) ?? "null");
+      if (Array.isArray(kept) && kept.length > 0) return kept;
+    } catch {
+      // Blocked storage or a private window: the default is fine.
+    }
+    return [{ id: "aleph" }];
+  };
+  let services = $state(loadServices());
+  const keepServices = () => {
+    try {
+      localStorage.setItem(SERVICE_STORE, JSON.stringify(services));
+    } catch {
+      // Nothing to do: the choice still holds for this visit.
+    }
+  };
+
+  const chosen = (id) => services.some((s) => s.id === id);
+  const detail = (id, field) => services.find((s) => s.id === id)?.[field] ?? "";
+  const toggleService = (id) => {
+    services = chosen(id) ? services.filter((s) => s.id !== id) : [...services, { id }];
+    keepServices();
+  };
+  const setDetail = (id, field, value) => {
+    services = services.map((s) => (s.id === id ? { ...s, [field]: value.trim() } : s));
+    keepServices();
+  };
+  const forgetKeys = () => {
+    services = [{ id: "aleph" }];
+    try {
+      localStorage.removeItem(SERVICE_STORE);
+    } catch {
+      // As above.
+    }
+  };
+
+  /** What is missing before a backup can be written, in the reader's words. */
+  const missing = $derived(
+    services
+      .map((s) => {
+        const known = SERVICES.find((k) => k.id === s.id);
+        if (!known?.needsKey || s.key) return null;
+        return t.services[s.id];
+      })
+      .filter(Boolean),
+  );
 
   /**
    * `?fetch=gateway|p2p|race` forces one path, for a run that wants to measure
@@ -143,6 +202,7 @@
         orbitdb: stack.orbitdb,
         address: db.address,
         signingKey: identity.signingKey,
+        services,
       });
       say(w().log.published(pointer.name, pointer.metadataCID, pointer.blocks));
     });
@@ -155,6 +215,7 @@
         orbitdb: stack.orbitdb,
         helia: stack.helia,
         signingKey: identity.signingKey,
+        services,
         path: fetchPath,
         onPath: (which, info) => {
           const ms = `${info.ms} ms`;
@@ -492,7 +553,62 @@
         The pointer asks to be kept for 30 days.
       </p>
     {/if}
-    <button data-testid="dehydrate" disabled={!db || Boolean(busy)} onclick={dehydrateNow}>
+    <!-- Where the backup goes. Aleph needs no account, which is why this page
+         works with nothing typed in; the other two are the reader's own. -->
+    <fieldset class="services">
+      <legend>{t.whereTo}</legend>
+      {#each SERVICES as service (service.id)}
+        <label class="service">
+          <input
+            type="checkbox"
+            checked={chosen(service.id)}
+            data-testid={`service-${service.id}`}
+            onchange={() => toggleService(service.id)}
+          />
+          <span>{t.services[service.id]}</span>
+          {#if !service.needsKey}<span class="dim">{t.noAccount}</span>{/if}
+        </label>
+        {#if chosen(service.id) && service.needsKey}
+          <div class="creds">
+            <input
+              class="mono"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder={t.keyPlaceholder}
+              data-testid={`key-${service.id}`}
+              value={detail(service.id, "key")}
+              oninput={(event) => setDetail(service.id, "key", event.currentTarget.value)}
+            />
+            <input
+              class="mono"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder={t.gatewayPlaceholder[service.id]}
+              data-testid={`gateway-${service.id}`}
+              value={detail(service.id, "gateway")}
+              oninput={(event) => setDetail(service.id, "gateway", event.currentTarget.value)}
+            />
+          </div>
+        {/if}
+      {/each}
+      {#if services.some((s) => s.key)}
+        <p class="dim">
+          {t.keysStay}
+          <button type="button" class="linkish" data-testid="forget-keys" onclick={forgetKeys}>
+            {t.forgetKeys}
+          </button>
+        </p>
+      {/if}
+    </fieldset>
+    {#if missing.length > 0}
+      <p class="dim" data-testid="missing-key">{t.needsKeyFor(missing.join(", "))}</p>
+    {/if}
+    <button
+      data-testid="dehydrate"
+      disabled={!db || Boolean(busy) || missing.length > 0}
+      onclick={dehydrateNow}
+    >
       {busy === "backup" ? t.backingUp : t.backUp}
     </button>
     {#if !db}<p class="dim">{t.needsList}</p>{/if}
@@ -784,6 +900,48 @@
   .step[data-status="failed"] .badge {
     color: var(--ls-red);
   }
+  .services {
+    border: 1px solid var(--line, #ddd);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 10px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .services legend {
+    padding: 0 4px;
+    font-size: 0.8rem;
+    color: var(--ink-2, #555);
+  }
+  .service {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+  }
+  .creds {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 6px 24px;
+  }
+  .creds input {
+    font-size: 0.8rem;
+    padding: 6px 8px;
+    border: 1px solid var(--line, #ddd);
+    border-radius: 6px;
+  }
+  .linkish {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
   .paths {
     display: flex;
     flex-wrap: wrap;

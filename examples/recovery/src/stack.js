@@ -42,10 +42,13 @@ import {
 } from "@le-space/orbitdb-identity-provider-webauthn-did";
 import { dehydrate, hydrate } from "@le-space/orbitdb-storage-bridge/dehydrate";
 import { fetchFromGateways } from "@le-space/orbitdb-storage-bridge/gateway-fetch";
+import { createBackendFromChoice } from "@le-space/orbitdb-storage-bridge/backends/choose";
 import {
   createPeerFetch,
   createGatewayFirstFetch,
+  providersFor,
   ALEPH_BITSWAP,
+  PINATA_BITSWAP,
 } from "@le-space/orbitdb-storage-bridge/peer-fetch";
 import { createAlephBackend, ALEPH_GATEWAYS } from "@le-space/orbitdb-storage-bridge/backends/aleph";
 
@@ -148,14 +151,67 @@ export async function createList({ orbitdb, identity }) {
   });
 }
 
+/**
+ * The services this page can put a backup on.
+ *
+ * Aleph needs nothing, which is why it is the one that is always available:
+ * its ingest takes a blob from a page with no account at all. The other two
+ * are the reader's own — their key, their account's gateway — and the page
+ * holds neither unless they are typed in.
+ */
+export const SERVICES = Object.freeze([
+  { id: "aleph", needsKey: false, needsGateway: false },
+  { id: "pinata", needsKey: true, needsGateway: true },
+  { id: "lighthouse", needsKey: true, needsGateway: true },
+]);
+
+/**
+ * Turn what the reader ticked into a backend.
+ *
+ * One service is that driver; several are a mirror that writes to all of them
+ * and reports what each one did — a backup that claims success while one
+ * service quietly failed is the one answer that is not acceptable, and the
+ * bridge's `createMirrorBackend` is built around that.
+ *
+ * @param {Array<{id: string, key?: string, gateway?: string}>} chosen
+ */
+export async function backendFor(chosen) {
+  const services = chosen.filter((s) => SERVICES.some((known) => known.id === s.id));
+  if (services.length === 0) {
+    throw new Error("Pick at least one place for the backup");
+  }
+
+  const kind = services.map((s) => s.id);
+  const gateway = Object.fromEntries(
+    services.filter((s) => s.gateway).map((s) => [s.id, s.gateway]),
+  );
+  const pinata = services.find((s) => s.id === "pinata");
+  const lighthouse = services.find((s) => s.id === "lighthouse");
+
+  return createBackendFromChoice({
+    kind: kind.length === 1 ? kind[0] : kind,
+    ...(pinata?.key ? { jwt: pinata.key } : {}),
+    ...(lighthouse?.key ? { apiKey: lighthouse.key } : {}),
+    // The reader minted the key themselves, which is what makes it safe for a
+    // page to hold — and what the driver reports as `browserSafeAuth`.
+    keyOwnership: "user",
+    // A gateway belongs to the service it came from: Pinata's answers 401 for
+    // content it does not hold, Lighthouse's 402. With several services the
+    // bridge refuses a single string, which is why this is a map.
+    ...(Object.keys(gateway).length > 0
+      ? { gateway: kind.length === 1 ? Object.values(gateway)[0] : gateway }
+      : {}),
+  });
+}
+
 /** Back the list up and publish the pointer the key's own secret names. */
-export async function backUp({ orbitdb, address, signingKey }) {
+export async function backUp({ orbitdb, address, signingKey, services = [{ id: "aleph" }] }) {
   return dehydrate({
     orbitdb,
     address,
     seed: signingKey,
     label: LABEL,
-    backend: createAlephBackend(),
+    backend: await backendFor(services),
   });
 }
 
@@ -185,6 +241,8 @@ export const FETCH_PATHS = ["first", "gateway", "p2p", "race"];
  * @param {object} params.orbitdb
  * @param {object} params.helia - the same node, for the peer path
  * @param {Uint8Array} params.signingKey
+ * @param {Array<{id: string, gateway?: string}>} [params.services] - where the
+ *   backup was put; the peers dialled follow from it and from nothing else
  * @param {"first"|"gateway"|"p2p"|"race"} [params.path]
  * @param {(path: "gateway"|"peers", info: object) => void} [params.onPath] -
  *   which way each object arrived, and how long it took, so the page can say so
@@ -193,10 +251,19 @@ export async function bringBack({
   orbitdb,
   helia,
   signingKey,
+  services = [{ id: "aleph" }],
   path = "first",
   onPath = () => {},
 }) {
-  const gateways = ALEPH_GATEWAYS.filter(isStillServing);
+  const chose = (id) => services.some((s) => s.id === id);
+  const ownGateway = services.find((s) => s.gateway)?.gateway;
+
+  // The reader's own account gateway first, where they gave one — since the
+  // public path gateways were retired that is the one they can rely on.
+  const gateways = [
+    ...(ownGateway ? [`${ownGateway.replace(/\/+$/, "")}/ipfs`] : []),
+    ...(chose("aleph") ? ALEPH_GATEWAYS.filter(isStillServing) : []),
+  ];
 
   const viaGateway = async (cid, options = {}) => {
     const started = Date.now();
@@ -205,12 +272,31 @@ export async function bringBack({
     return bytes;
   };
 
-  // Aleph's own node, by its address: it announces over the DHT rather than
-  // IPNI, so the one router a page can ask (cid.contact, which sends CORS)
-  // does not know its CIDs. The constant is the way in. Its webrtc certhash
-  // changes when that node restarts, and then this path fails and the gateway
-  // carries the restore — which is the arrangement working, not breaking.
-  const peers = createPeerFetch({ helia, providers: ALEPH_BITSWAP });
+  /**
+   * Who to dial, decided by where the backup was put and by nothing else.
+   *
+   * Aleph and Pinata publish their bitswap endpoints, so those are constants —
+   * Aleph's over the DHT, which is why only `delegated-ipfs.dev` knows its
+   * CIDs, and Pinata's in DNS. Lighthouse publishes no name, so its node has
+   * to be looked up per CID; for a backup written minutes ago the provider
+   * that answers is the service it was written to.
+   *
+   * Aleph's webrtc certhash changes when that node restarts. Then this path
+   * fails and the gateway carries the restore, which is the arrangement
+   * working rather than breaking.
+   */
+  const providers = async (cid) => {
+    const addrs = [];
+    if (chose("aleph")) addrs.push(...ALEPH_BITSWAP);
+    if (chose("pinata")) addrs.push(PINATA_BITSWAP);
+    if (chose("lighthouse")) {
+      const found = await providersFor(cid).catch(() => []);
+      addrs.push(...found.flatMap((provider) => provider.addrs));
+    }
+    return addrs;
+  };
+
+  const peers = createPeerFetch({ helia, providers });
   const viaPeers = async (cid, options = {}) => {
     const started = Date.now();
     const bytes = await peers(cid, options);
