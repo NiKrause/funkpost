@@ -269,9 +269,9 @@
           <li>
             <strong>Schritt 5:</strong> <code>GET delegated-ipfs.dev/routing/v1/ipns/k51…</code>, und
             der Eintrag wird gegen den Namen geprüft. Dann <code>GET ipfs.aleph.cloud/ipfs/…</code>
-            für das JSON und die CAR-Datei — <code>dweb.link</code>, dann <code>ipfs.io</code>, falls
-            Aleph nicht antwortet — und jeder Block wird gegen seinen Hash geprüft, bevor die Liste
-            öffnet.
+            für das JSON und die CAR-Datei, und jeder Block wird gegen seinen Hash geprüft, bevor
+            die Liste öffnet. Einen zweiten Weg gibt es derzeit nicht: die öffentlichen
+            IPFS-Gateways, die früher hier standen, wurden am 21. September 2026 abgeschaltet.
           </li>
         </ul>
         <p class="dim">
@@ -328,8 +328,9 @@
           <li>
             <strong>Step 5:</strong> <code>GET delegated-ipfs.dev/routing/v1/ipns/k51…</code>, and the
             record is checked against the name. Then <code>GET ipfs.aleph.cloud/ipfs/…</code> for the
-            JSON and the CAR — <code>dweb.link</code>, then <code>ipfs.io</code>, if Aleph does not
-            answer — and every block is checked against its hash before the list opens.
+            JSON and the CAR, and every block is checked against its hash before the list opens.
+            There is no second way in at the moment: the public IPFS gateways that used to
+            stand here were retired on 21 September 2026.
           </li>
         </ul>
         <p class="dim">
