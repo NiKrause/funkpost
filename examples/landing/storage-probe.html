@@ -178,16 +178,16 @@
               <small>Was die Demo heute benutzt. Ist auch das blockiert, liegt es am Netz, und nichts weiter unten bedeutet etwas.</small></span>
           </button>
           <button id="pinata" type="button">
-            <span data-lang="en">2 · Pinata: upload endpoint and gateway
-              <small>An upload with an invalid key, and a read from the gateway.</small></span>
-            <span data-lang="de">2 · Pinata: Upload-Endpunkt und Gateway
-              <small>Ein Upload mit ungültigem Schlüssel und ein Lesen vom Gateway.</small></span>
+            <span data-lang="en">2 · Pinata: does it answer a page? (invalid key)
+              <small>Measures CORS, not your key: it goes out with a deliberately invalid one. Your own key is step 5.</small></span>
+            <span data-lang="de">2 · Pinata: antwortet es einer Seite? (ungültiger Schlüssel)
+              <small>Misst CORS, nicht deinen Schlüssel: Der Aufruf geht mit einem absichtlich ungültigen hinaus. Dein eigener Schlüssel ist Schritt 5.</small></span>
           </button>
           <button id="lighthouse" type="button">
-            <span data-lang="en">3 · Lighthouse: upload node and gateway
-              <small>The same two, against Lighthouse.</small></span>
-            <span data-lang="de">3 · Lighthouse: Upload-Knoten und Gateway
-              <small>Dieselben zwei, gegen Lighthouse.</small></span>
+            <span data-lang="en">3 · Lighthouse: does it answer a page? (invalid key)
+              <small>The same two, against Lighthouse. Your own key is step 6.</small></span>
+            <span data-lang="de">3 · Lighthouse: antwortet es einer Seite? (ungültiger Schlüssel)
+              <small>Dieselben zwei, gegen Lighthouse. Dein eigener Schlüssel ist Schritt 6.</small></span>
           </button>
           <button id="providers" type="button">
             <span data-lang="en">4 · Who holds this CID, and can a browser dial them?
@@ -323,6 +323,11 @@
         en: {
           origin: "origin", secure: "secure context", browser: "browser", yes: "yes", no: "no",
           answered: (status, ms) => `answered HTTP ${status} in ${ms} ms — CORS is fine for this origin`,
+          invalidKey: "measured with a deliberately invalid key — this says nothing about your own",
+          keyIsForStep: (step) => `a key is in the field above; step ${step} is what uses it`,
+          ready: (step) => `ready: key and confirmation are there — press step ${step}`,
+          waitingKey: "waiting for a key in the field above",
+          waitingConsent: "waiting for the box above to be ticked",
           blocked: (error, ms) => `blocked by the browser after ${ms} ms — ${error}`,
           control: "1 · Aleph gateway", controlOk: "the method works: an answer came back",
           pinataUpload: "2 · Pinata upload endpoint", pinataGateway: "2 · Pinata gateway",
@@ -342,6 +347,11 @@
         de: {
           origin: "Herkunft", secure: "sicherer Kontext", browser: "Browser", yes: "ja", no: "nein",
           answered: (status, ms) => `hat mit HTTP ${status} in ${ms} ms geantwortet — CORS passt für diese Herkunft`,
+          invalidKey: "mit absichtlich ungültigem Schlüssel gemessen — sagt nichts über deinen eigenen",
+          keyIsForStep: (step) => `ein Schlüssel liegt im Feld oben; benutzt wird er in Schritt ${step}`,
+          ready: (step) => `bereit: Schlüssel und Bestätigung liegen vor — Schritt ${step} drücken`,
+          waitingKey: "wartet auf einen Schlüssel im Feld oben",
+          waitingConsent: "wartet darauf, dass das Kästchen oben gesetzt wird",
           blocked: (error, ms) => `vom Browser blockiert nach ${ms} ms — ${error}`,
           control: "1 · Aleph-Gateway", controlOk: "die Methode misst richtig: eine Antwort kam zurück",
           pinataUpload: "2 · Pinata Upload-Endpunkt", pinataGateway: "2 · Pinata Gateway",
@@ -428,6 +438,12 @@
         report(w().control, result, result.ok ? [["→", w().controlOk]] : []);
       });
 
+      /** What a CORS step adds, so nobody reads it as a verdict on their own key. */
+      const keyNote = (field, step) => [
+        ["—", w().invalidKey],
+        ...($(field).value.trim() ? [["→", w().keyIsForStep(step)]] : []),
+      ];
+
       guarded($("pinata"), async () => {
         const form = probeBody();
         form.append("network", "public");
@@ -435,6 +451,7 @@
         report(
           w().pinataUpload,
           await measure(PINATA_UPLOAD, { method: "POST", headers: { Authorization: `Bearer ${INVALID_KEY}` }, body: form }),
+          keyNote("pinata-key", 5),
         );
         if (cid()) report(w().pinataGateway, await measure(`${PINATA_GATEWAY}/ipfs/${cid()}`));
       });
@@ -443,6 +460,7 @@
         report(
           w().lighthouseUpload,
           await measure(LIGHTHOUSE_UPLOAD, { method: "POST", headers: { Authorization: `Bearer ${INVALID_KEY}` }, body: probeBody() }),
+          keyNote("lighthouse-key", 6),
         );
         if (cid()) report(w().lighthouseGateway, await measure(`${LIGHTHOUSE_GATEWAY}/ipfs/${cid()}`));
       });
@@ -493,10 +511,40 @@
         $(id).value = read(STORAGE[name]);
         $(id).addEventListener("input", () => write(STORAGE[name], $(id).value.trim()));
       }
+      /**
+       * The real upload steps say what they are waiting for before they are
+       * pressed. Somebody who has pasted a key should not have to click to find
+       * out that a box is unticked — that is how step 2 gets mistaken for step 5.
+       */
+      function refreshReadiness() {
+        for (const [field, button, step] of [
+          ["pinata-key", "upload-pinata", 5],
+          ["lighthouse-key", "upload-lighthouse", 6],
+        ]) {
+          const hasKey = Boolean($(field).value.trim());
+          const consented = $("understood").checked;
+          const note = !hasKey ? w().waitingKey : !consented ? w().waitingConsent : w().ready(step);
+          $(button).disabled = !hasKey || !consented;
+          $(button).title = note;
+          let line = $(`${button}-note`);
+          if (!line) {
+            line = document.createElement("p");
+            line.id = `${button}-note`;
+            line.className = "lede";
+            $(button).after(line);
+          }
+          line.textContent = note;
+        }
+      }
+      for (const id of ["pinata-key", "lighthouse-key"]) $(id).addEventListener("input", refreshReadiness);
+      $("understood").addEventListener("change", refreshReadiness);
+      lang.subscribe(() => refreshReadiness());
+
       $("forget").addEventListener("click", () => {
         for (const name of Object.keys(STORAGE)) write(STORAGE[name], "");
         $("pinata-key").value = "";
         $("lighthouse-key").value = "";
+        refreshReadiness();
         log("good", w().forgot);
       });
 
