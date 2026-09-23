@@ -6,10 +6,12 @@
  * back, with the same identity, allowed to write?* — so everything here is
  * arranged to answer it and to be visibly incapable of cheating:
  *
- *   · **no network path between the phones.** libp2p listens nowhere and dials
- *     nobody; there is no relay, no pubsub, no sync. Whatever crosses between
- *     the two devices crosses as a backup and a pointer, over HTTPS, or it
- *     does not cross at all.
+ *   · **no network path between the phones.** libp2p listens nowhere, there is
+ *     no relay, no pubsub, no discovery and no sync. The one thing it dials is
+ *     the provider that holds the backup — a single address, named in the
+ *     code — so a block can come back when the gateway will not serve it.
+ *     Nothing about that lets the two devices find each other: what crosses
+ *     between them still crosses as a backup and a pointer, or not at all.
  *   · **nothing stored that matters.** The identity is derived from the
  *     security key every time. The database lives in an in-memory blockstore,
  *     so "forget everything" is a reload away from being true.
@@ -19,8 +21,11 @@
  */
 import { createHeliaLight } from "helia";
 import { withLibp2pLight } from "@helia/libp2p";
+import { withBitswap } from "@helia/bitswap";
 import * as dagCbor from "@ipld/dag-cbor";
 import { webSockets } from "@libp2p/websockets";
+import { webRTCDirect } from "@libp2p/webrtc";
+import { identify } from "@libp2p/identify";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
 import { MemoryBlockstore } from "blockstore-core";
@@ -36,6 +41,12 @@ import {
   OrbitDBWebAuthnIdentityProviderFunction,
 } from "@le-space/orbitdb-identity-provider-webauthn-did";
 import { dehydrate, hydrate } from "@le-space/orbitdb-storage-bridge/dehydrate";
+import { fetchFromGateways } from "@le-space/orbitdb-storage-bridge/gateway-fetch";
+import {
+  createPeerFetch,
+  createGatewayFirstFetch,
+  ALEPH_BITSWAP,
+} from "@le-space/orbitdb-storage-bridge/peer-fetch";
 import { createAlephBackend, ALEPH_GATEWAYS } from "@le-space/orbitdb-storage-bridge/backends/aleph";
 
 /** One label for this demo's pointer, so one key can name other things too. */
@@ -74,22 +85,38 @@ export async function createStack({ credential }) {
   // neither: it returns a node that was never started — the first block
   // OrbitDB stored then failed with "Not started" — and it lays the options
   // over its default stack, with a DHT, delegated routing and public gateways.
-  const helia = withLibp2pLight(
-    createHeliaLight({
-      blockstore: new MemoryBlockstore(),
-      datastore: new MemoryDatastore(),
-      codecs: [dagCbor],
-    }),
-    {
-      // Listening nowhere and dialling nobody is the point, not a limitation:
-      // nothing can quietly sync behind the demo's back.
-      addresses: { listen: [] },
-      transports: [webSockets()],
-      connectionEncrypters: [noise()],
-      streamMuxers: [yamux()],
-    },
-  );
-  await helia.start();
+  // Composed rather than createHelia(), as mesh-todo does it: createHelia
+  // returns a node that was never started, and lays the options over a default
+  // stack with a DHT, delegated routing and public gateways.
+  //
+  // Bitswap is here for one job — fetching the backup from the peer that holds
+  // it when the gateway will not (#127). It cannot sync the database: that is
+  // opened with `sync: false`, and there is nobody to sync with anyway.
+  const helia = await withBitswap(
+    withLibp2pLight(
+      createHeliaLight({
+        blockstore: new MemoryBlockstore(),
+        datastore: new MemoryDatastore(),
+        codecs: [dagCbor],
+      }),
+      {
+        // Listening nowhere is still the point: nothing can reach this page,
+        // and it announces nothing.
+        addresses: { listen: [] },
+        // webRTCDirect because that is what Aleph's node answers on — it has
+        // no wss address at all. webSockets stays for providers that do.
+        transports: [webSockets(), webRTCDirect()],
+        connectionEncrypters: [noise()],
+        streamMuxers: [yamux()],
+        // Bitswap needs identify, and `withLibp2pLight` does not bring it.
+        // Without it the dial succeeds, the peer is never recognised as
+        // speaking bitswap, no want is sent, and the fetch times out with
+        // "Failed to load block" — measured: 60 s of nothing, against 1.6 s
+        // for 400 kB once identify is there.
+        services: { identify: identify() },
+      },
+    ),
+  ).start();
 
   useIdentityProvider(OrbitDBWebAuthnIdentityProviderFunction);
   // `ipfs`, so identity documents are blocks: a restored database is full of
@@ -136,23 +163,81 @@ export async function backUp({ orbitdb, address, signingKey }) {
 const RETIRED = ["dweb.link", "ipfs.io", "w3s.link", "storacha.link"];
 const isStillServing = (gateway) => !RETIRED.some((host) => gateway.includes(host));
 
-/** Find the pointer with the key alone, and open what it points at. */
-export async function bringBack({ orbitdb, signingKey }) {
+/**
+ * The two ways the backup can come back, and how they are chosen.
+ *
+ * `"first"` — the default — asks the gateway with a short timeout and falls
+ * through to the peers when it does not answer. The order is measured, not a
+ * preference: a warm gateway answered in 0.1 s from this page, against about a
+ * second over libp2p. The timeout is short for the other measurement from the
+ * same day, when a gateway took 29 s for a block a peer served in under one.
+ *
+ * `"gateway"` and `"p2p"` force one path, so a run can measure it alone, and
+ * `"race"` starts both and takes whichever arrives — at the cost of doing the
+ * work twice, which is why it is not the default on a phone.
+ */
+export const FETCH_PATHS = ["first", "gateway", "p2p", "race"];
+
+/**
+ * Find the pointer with the key alone, and open what it points at.
+ *
+ * @param {object} params
+ * @param {object} params.orbitdb
+ * @param {object} params.helia - the same node, for the peer path
+ * @param {Uint8Array} params.signingKey
+ * @param {"first"|"gateway"|"p2p"|"race"} [params.path]
+ * @param {(path: "gateway"|"peers", info: object) => void} [params.onPath] -
+ *   which way each object arrived, and how long it took, so the page can say so
+ */
+export async function bringBack({
+  orbitdb,
+  helia,
+  signingKey,
+  path = "first",
+  onPath = () => {},
+}) {
+  const gateways = ALEPH_GATEWAYS.filter(isStillServing);
+
+  const viaGateway = async (cid, options = {}) => {
+    const started = Date.now();
+    const bytes = await fetchFromGateways(cid, { ...options, gateways });
+    onPath("gateway", { cid, ms: Date.now() - started, bytes: bytes.length });
+    return bytes;
+  };
+
+  // Aleph's own node, by its address: it announces over the DHT rather than
+  // IPNI, so the one router a page can ask (cid.contact, which sends CORS)
+  // does not know its CIDs. The constant is the way in. Its webrtc certhash
+  // changes when that node restarts, and then this path fails and the gateway
+  // carries the restore — which is the arrangement working, not breaking.
+  const peers = createPeerFetch({ helia, providers: ALEPH_BITSWAP });
+  const viaPeers = async (cid, options = {}) => {
+    const started = Date.now();
+    const bytes = await peers(cid, options);
+    onPath("peers", {
+      cid,
+      ms: Date.now() - started,
+      bytes: bytes.length,
+      connections: helia.libp2p.getConnections().length,
+    });
+    return bytes;
+  };
+
+  const fetchBytes =
+    path === "gateway"
+      ? viaGateway
+      : path === "p2p"
+        ? viaPeers
+        : path === "race"
+          ? (cid, options) => Promise.any([viaGateway(cid, options), viaPeers(cid, options)])
+          : createGatewayFirstFetch({ viaGateway, viaPeers, gatewayTimeout: 3000 });
+
   return hydrate({
     orbitdb,
     seed: signingKey,
     label: LABEL,
     open: { sync: false },
-    // Aleph's own gateway, and only that: the backup went there, and only
-    // Aleph has it the moment it lands.
-    //
-    // The filter is temporary and self-cancelling. `ALEPH_GATEWAYS` in the
-    // published bridge (0.11.0) still ends with dweb.link and ipfs.io, which
-    // Protocol Labs retired on 2026-09-21 — asking them costs a timeout each
-    // and can never succeed. The bridge's main has dropped them already
-    // (NiKrause/orbitdb-storage-bridge#113), so once that ships this filter
-    // matches nothing and can go.
-    restore: { gateways: ALEPH_GATEWAYS.filter(isStillServing) },
+    restore: { fetchBytes },
   });
 }
 

@@ -18,6 +18,7 @@
     createList,
     backUp,
     bringBack,
+    FETCH_PATHS,
     forgetEverything,
   } from "./stack.js";
 
@@ -33,6 +34,19 @@
   let error = $state("");
   let touches = $state("");
   let log = $state([]);
+  // Which way each object came back, and how long it took. `null` means the
+  // path was not used; a string means it failed and why.
+  let delivery = $state({ gateway: null, peers: null, peerCount: 0 });
+
+  /**
+   * `?fetch=gateway|p2p|race` forces one path, for a run that wants to measure
+   * it alone. Anything else, including nothing, is the default: gateway first,
+   * peers behind it.
+   */
+  const fetchPath = (() => {
+    const asked = new URLSearchParams(location.search).get("fetch");
+    return FETCH_PATHS.includes(asked) ? asked : "first";
+  })();
   let details = $state(false); // the technical layer, behind one button
   let done = $state({}); // step name → true once it has worked
   let failedStep = $state("");
@@ -136,9 +150,27 @@
   const hydrateNow = () =>
     step("restore", async () => {
       say(w().log.askingPointer);
+      delivery = { gateway: null, peers: null, peerCount: 0 };
       const found = await bringBack({
         orbitdb: stack.orbitdb,
+        helia: stack.helia,
         signingKey: identity.signingKey,
+        path: fetchPath,
+        onPath: (which, info) => {
+          const ms = `${info.ms} ms`;
+          if (which === "gateway") {
+            delivery = { ...delivery, gateway: ms };
+            say(w().log.viaGateway(ms, info.bytes));
+          } else {
+            delivery = {
+              ...delivery,
+              peers: ms,
+              peerCount: info.connections ?? delivery.peerCount,
+              gateway: delivery.gateway ?? (info.after?.error || w().log.gatewaySilent),
+            };
+            say(w().log.viaPeers(ms, info.bytes, info.connections ?? 0));
+          }
+        },
       });
       db = found.db;
       pointer = { name: found.name, metadataCID: found.metadataCID, blocks: found.blocks };
@@ -524,6 +556,19 @@
       {busy === "restore" ? t.restoring : t.getBack}
     </button>
     {#if !stack}<p class="dim">{t.needsStep1SameKey}</p>{/if}
+    {#if delivery.gateway || delivery.peers}
+      <!-- Which way the bytes came, once they have come. Two lines rather than
+           one verdict: "the gateway was silent and the peers carried it" is a
+           different thing to know than "it worked". -->
+      <p class="paths">
+        <span class="path" data-state={delivery.gateway === null ? "idle" : /^\d+ ms$/.test(delivery.gateway) ? "good" : "bad"}>
+          {t.pathGateway} — {delivery.gateway ?? t.pathUnused}
+        </span>
+        <span class="path" data-state={delivery.peers ? "good" : "idle"}>
+          {t.pathPeers} — {delivery.peers ? `${delivery.peers} · ${t.peersConnected(delivery.peerCount)}` : t.pathUnused}
+        </span>
+      </p>
+    {/if}
     {#if done.restore}
       <p class="ok">{t.back}</p>
       {#if pointer}
@@ -739,6 +784,33 @@
   .step[data-status="failed"] .badge {
     color: var(--ls-red);
   }
+  .paths {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+  }
+  .path {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--line, #ddd);
+    border-radius: 999px;
+  }
+  .path::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.85;
+  }
+  .path[data-state="good"] { color: var(--good, #12694b); }
+  .path[data-state="bad"] { color: var(--bad, #a52020); }
+  .path[data-state="idle"] { color: var(--ink-3, #777); }
+
   .who {
     display: flex;
     flex-wrap: wrap;
