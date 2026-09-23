@@ -132,6 +132,10 @@ export async function backUp({ orbitdb, address, signingKey }) {
   });
 }
 
+/** Gateways retired on 2026-09-21: they answer 429 with a Sunset header. */
+const RETIRED = ["dweb.link", "ipfs.io", "w3s.link", "storacha.link"];
+const isStillServing = (gateway) => !RETIRED.some((host) => gateway.includes(host));
+
 /** Find the pointer with the key alone, and open what it points at. */
 export async function bringBack({ orbitdb, signingKey }) {
   return hydrate({
@@ -139,10 +143,16 @@ export async function bringBack({ orbitdb, signingKey }) {
     seed: signingKey,
     label: LABEL,
     open: { sync: false },
-    // Aleph's own gateway first: the backup went there, and only Aleph has it
-    // the moment it lands. The bridge's default list starts with Storacha's
-    // two, from before Aleph replaced it, and would ask them for nothing.
-    restore: { gateways: ALEPH_GATEWAYS },
+    // Aleph's own gateway, and only that: the backup went there, and only
+    // Aleph has it the moment it lands.
+    //
+    // The filter is temporary and self-cancelling. `ALEPH_GATEWAYS` in the
+    // published bridge (0.11.0) still ends with dweb.link and ipfs.io, which
+    // Protocol Labs retired on 2026-09-21 — asking them costs a timeout each
+    // and can never succeed. The bridge's main has dropped them already
+    // (NiKrause/orbitdb-storage-bridge#113), so once that ships this filter
+    // matches nothing and can go.
+    restore: { gateways: ALEPH_GATEWAYS.filter(isStillServing) },
   });
 }
 
