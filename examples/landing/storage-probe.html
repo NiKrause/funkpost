@@ -324,6 +324,7 @@
           origin: "origin", secure: "secure context", browser: "browser", yes: "yes", no: "no",
           answered: (status, ms) => `answered HTTP ${status} in ${ms} ms — CORS is fine for this origin`,
           invalidKey: "measured with a deliberately invalid key — this says nothing about your own",
+          refused: (status, ms) => `answered HTTP ${status} in ${ms} ms — CORS is fine, the service refused: ${statusMeaning(status)}`,
           keyIsForStep: (step) => `a key is in the field above; step ${step} is what uses it`,
           ready: (step) => `ready: key and confirmation are there — press step ${step}`,
           waitingKey: "waiting for a key in the field above",
@@ -348,6 +349,7 @@
           origin: "Herkunft", secure: "sicherer Kontext", browser: "Browser", yes: "ja", no: "nein",
           answered: (status, ms) => `hat mit HTTP ${status} in ${ms} ms geantwortet — CORS passt für diese Herkunft`,
           invalidKey: "mit absichtlich ungültigem Schlüssel gemessen — sagt nichts über deinen eigenen",
+          refused: (status, ms) => `hat mit HTTP ${status} in ${ms} ms geantwortet — CORS passt, der Dienst lehnt ab: ${statusMeaning(status)}`,
           keyIsForStep: (step) => `ein Schlüssel liegt im Feld oben; benutzt wird er in Schritt ${step}`,
           ready: (step) => `bereit: Schlüssel und Bestätigung liegen vor — Schritt ${step} drücken`,
           waitingKey: "wartet auf einen Schlüssel im Feld oben",
@@ -369,6 +371,18 @@
           cidMissing: "erst eine CID eintragen",
         },
       };
+      /** The refusals worth naming, because each sends somebody somewhere different. */
+      const STATUS_MEANING = {
+        401: { en: "the key was not accepted", de: "der Schlüssel wurde nicht angenommen" },
+        402: { en: "the account has not paid for this", de: "das Konto hat dafür nicht bezahlt" },
+        403: { en: "the plan does not include it", de: "der Tarif schließt das nicht ein" },
+        404: { en: "nothing is stored under that id", de: "unter dieser Kennung liegt nichts" },
+        429: { en: "too many requests for now", de: "derzeit zu viele Anfragen" },
+      };
+      const statusMeaning = (status) =>
+        STATUS_MEANING[status]?.[lang.get()] ??
+        STATUS_MEANING[status]?.en ??
+        (lang.get() === "de" ? "abgelehnt" : "refused");
       const w = () => WORDS[lang.get()] ?? WORDS.en;
       const $ = (id) => document.getElementById(id);
 
@@ -410,12 +424,27 @@
         }
       }
 
-      const report = (title, result, extra = []) =>
+      const report = (title, result, extra = []) => {
+        // Three outcomes, not two: blocked by the browser, refused by the
+        // service, or through. A 402 painted green is how "upload worked" gets
+        // read into a gateway that will not serve the bytes.
+        const refused = result.ok && result.status >= 400;
         log(
-          result.ok ? "good" : "bad",
+          !result.ok ? "bad" : refused ? "warn" : "good",
           title,
-          [[result.ok ? "CORS" : "—", result.ok ? w().answered(result.status, result.ms) : w().blocked(result.error, result.ms)], ...extra],
+          [
+            [
+              result.ok ? "CORS" : "—",
+              !result.ok
+                ? w().blocked(result.error, result.ms)
+                : refused
+                  ? w().refused(result.status, result.ms)
+                  : w().answered(result.status, result.ms),
+            ],
+            ...extra,
+          ],
         );
+      };
 
       const probeBody = () => {
         const form = new FormData();
