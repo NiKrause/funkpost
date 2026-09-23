@@ -28,6 +28,7 @@ import { gossipsub } from "@libp2p/gossipsub";
 import { bootstrap } from "@libp2p/bootstrap";
 import { pubsubPeerDiscovery } from "@libp2p/pubsub-peer-discovery";
 import { circuitRelayTransport } from "@libp2p/circuit-relay-v2";
+import { webRTC } from "@libp2p/webrtc";
 import { appendFileSync } from "node:fs";
 
 const FIELD_LOG_TOPIC = "funkpost/field-log/1";
@@ -54,8 +55,27 @@ if (relays.length === 0) {
 }
 
 const node = await createLibp2p({
-  addresses: { listen: [] },
-  transports: [webSockets(), circuitRelayTransport()],
+  // Being connected to the relay is not being in the mesh. A circuit relay
+  // brokers connections; it does not forward the payloads of a topic it has
+  // not subscribed to — measured: two of these, both connected to the same
+  // relay, published to 0 recipients for as long as they only had the relay.
+  // Phones reach each other by finding one another over the relay and then
+  // dialling direct over WebRTC, and gossip flows on that direct connection.
+  // So this listens the way a phone does: a circuit address to be found at,
+  // and WebRTC to be dialled on. Without both, this hears nothing, quietly.
+  addresses: { listen: ["/p2p-circuit", "/webrtc"] },
+  transports: [
+    webSockets(),
+    webRTC({
+      rtcConfiguration: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:global.stun.twilio.com:3478" },
+        ],
+      },
+    }),
+    circuitRelayTransport(),
+  ],
   connectionEncrypters: [noise()],
   streamMuxers: [yamux()],
   connectionGater: { denyDialMultiaddr: () => false },
@@ -92,10 +112,26 @@ node.addEventListener("peer:connect", (event) => {
   console.error(`· connected to ${event.detail.toString().slice(0, 16)}…`);
 });
 
+// Connected is not subscribed, and the difference is the whole failure mode:
+// a relay connection prints reassuringly and carries nothing. Say which one
+// this is, and say it again when it changes, so a silent run is legible.
+let onTopic = 0;
+setInterval(() => {
+  const now = node.services.pubsub.getSubscribers(FIELD_LOG_TOPIC).length;
+  if (now === onTopic) return;
+  console.error(
+    now === 0
+      ? "· nobody on the topic — a relay connection alone carries nothing; a phone has to be reachable and shouting"
+      : `· in the mesh with ${now} peer${now === 1 ? "" : "s"} on ${FIELD_LOG_TOPIC}`,
+  );
+  onTopic = now;
+}, 2000).unref?.();
+
 console.error(`listening on ${FIELD_LOG_TOPIC} as ${node.peerId.toString().slice(0, 16)}…`);
 console.error(`relay: ${relays.join(", ")}`);
 if (out) console.error(`writing to ${out}`);
 console.error("(phones must have 'shout the log' switched on — nothing is stored, so start this first)");
+console.error("waiting to be found — this takes a few seconds after the relay reservation");
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {

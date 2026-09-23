@@ -310,6 +310,29 @@
   };
 
   /**
+   * Join the field-log topic, so that shouting on it reaches anyone.
+   *
+   * Gossipsub forms a mesh for a topic only between peers that have *both*
+   * subscribed; a publisher that never subscribes falls back to fanout, and
+   * fanout delivered nothing here — measured with a watcher directly
+   * connected over WebRTC and subscribed, not one line arrived.
+   *
+   * It has to happen when the node starts rather than at the first line,
+   * because a mesh takes a few seconds to form and the first lines are the
+   * interesting ones: a run that fails at startup says so at startup.
+   * Subscribing costs nothing — no handler reads the topic here.
+   */
+  function joinLogTopic() {
+    const pubsub = stack?.libp2p?.services?.pubsub;
+    if (!logOn || !pubsub) return;
+    try {
+      if (!pubsub.getTopics().includes(FIELD_LOG_TOPIC)) pubsub.subscribe(FIELD_LOG_TOPIC);
+    } catch {
+      // A diagnostic must not break the app it is watching.
+    }
+  }
+
+  /**
    * Put a line on the field-log topic, for a third machine watching this run.
    *
    * Live or nothing, by choice: this is pubsub, so a line published while
@@ -321,8 +344,11 @@
    * without the region and the channel, "nothing arrives" says nothing.
    */
   function shoutLog(text) {
-    if (!logOn || !stack?.libp2p?.services?.pubsub) return;
+    const pubsub = stack?.libp2p?.services?.pubsub;
+    if (!logOn || !pubsub) return;
     try {
+      // Belt and braces: the switch can go on after the node started.
+      joinLogTopic();
       const line = JSON.stringify({
         v: 1,
         at: new Date().toISOString(),
@@ -333,7 +359,7 @@
         beat: beatOn,
         sync: syncOn,
       });
-      stack.libp2p.services.pubsub.publish(FIELD_LOG_TOPIC, new TextEncoder().encode(line));
+      pubsub.publish(FIELD_LOG_TOPIC, new TextEncoder().encode(line));
     } catch {
       // A log that cannot be shouted must not break the app it is logging.
     }
@@ -535,6 +561,7 @@
       }
     }
     stack = await createDatabaseStack({ internet: wantsInternet });
+    joinLogTopic();
     if (wantsInternet) {
       pushLog(w().log.internetUp(relaySource));
       selfId = stack.libp2p.peerId.toString();
@@ -1097,6 +1124,7 @@
             data-testid="log-switch"
             onchange={(event) => {
               logOn = event.currentTarget.checked;
+              if (logOn) joinLogTopic();
               rememberRadio();
               pushLog(logOn ? w().log.logOn : w().log.logOff);
             }}
