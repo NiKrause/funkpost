@@ -56,7 +56,7 @@ test("a list made before the node: the node, connected later, carries it", async
   // `autoconnect=0` leaves the fake node unpaired until somebody presses the
   // button, as a real one is.
   const a = await context.newPage();
-  await a.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO&autoconnect=0${FAST}`);
+  await a.goto(`/?mesh=bc&sync=1&room=${roomId}&preset=SHORT_TURBO&autoconnect=0${FAST}`);
   await expect(a.getByTestId("led-label")).toHaveText("no LoRa node connected", { timeout: 30_000 });
   await expect(a.getByTestId("led")).toHaveAttribute("data-state", "blinking");
 

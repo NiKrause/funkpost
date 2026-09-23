@@ -35,7 +35,7 @@ async function runTheScript(context, extra) {
   await expect(b.getByText("Milch kaufen")).toBeVisible({ timeout: 60_000 });
 
   // Direction B → A: the toggle comes back, once B sends it.
-  await b.getByRole("checkbox").check();
+  await b.locator("li").getByRole("checkbox").check();
   await b.getByTestId("send-changes").click();
   await expect(a.locator("span.done")).toHaveText("Milch kaufen", { timeout: 60_000 });
 
@@ -74,7 +74,7 @@ test("gate 2 in miniature: a wiped peer re-joins and bootstraps the history", as
   await a.getByRole("button", { name: "Invite again" }).click();
   await b.getByRole("button", { name: "Join this list" }).click();
   await expect(b.getByText("Milch kaufen")).toBeVisible({ timeout: 60_000 });
-  await expect(b.getByRole("checkbox")).toBeChecked({ timeout: 15_000 });
+  await expect(b.locator("li").getByRole("checkbox")).toBeChecked({ timeout: 15_000 });
 });
 
 test("the real-radio import path survives the browser (util shim guard)", async ({ page }) => {
@@ -92,7 +92,7 @@ test("the wake-lock checkbox exists on a phone and not on a desktop", async ({
 }) => {
   // Desktop (the default project): no checkbox — a desktop screen does not
   // take the radio down with it.
-  await page.goto(`/?mesh=bc&room=${room()}`);
+  await page.goto(`/?mesh=bc&sync=1&room=${room()}`);
   await expect(page.getByText("BroadcastChannel (fake mesh)", { exact: true })).toBeVisible({
     timeout: 30_000,
   });
@@ -101,7 +101,7 @@ test("the wake-lock checkbox exists on a phone and not on a desktop", async ({
   // A phone (emulated): the checkbox appears.
   const phone = await browser.newContext({ ...devices["Pixel 7"] });
   const phonePage = await phone.newPage();
-  await phonePage.goto(`/?mesh=bc&room=${room()}`);
+  await phonePage.goto(`/?mesh=bc&sync=1&room=${room()}`);
   await expect(phonePage.getByText(/keep the screen awake/)).toBeVisible({ timeout: 30_000 });
   await phone.close();
 });
@@ -345,7 +345,7 @@ test("the founding arrives by pointer: one frame over the air, the bytes over HT
 
 test("speaks German too, and has a light and a dark look — both kept", async ({ context }) => {
   const page = await context.newPage();
-  await page.goto(`/?mesh=bc&room=${room()}&preset=SHORT_TURBO`);
+  await page.goto(`/?mesh=bc&sync=1&room=${room()}&preset=SHORT_TURBO`);
   await expect(page.getByText("BroadcastChannel (fake mesh)", { exact: true })).toBeVisible({ timeout: 30_000 });
   // The test browser asks for English, and for the light look.
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
@@ -374,7 +374,7 @@ test("speaks German too, and has a light and a dark look — both kept", async (
   await expect.poll(ground).not.toBe(light);
 
   // Both kept: the address no longer says, storage does.
-  await page.goto(`/?mesh=bc&room=${room()}&preset=SHORT_TURBO`);
+  await page.goto(`/?mesh=bc&sync=1&room=${room()}&preset=SHORT_TURBO`);
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.getByText("BroadcastChannel (Mesh-Attrappe)", { exact: true })).toBeVisible({ timeout: 30_000 });

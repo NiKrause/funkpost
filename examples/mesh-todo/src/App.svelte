@@ -101,6 +101,43 @@
   // The heartbeat: does another device keeping this list answer on the air?
   let heartbeat = null;
   let heartbeatStarting = false;
+
+  /**
+   * What the radio is allowed to carry, as two separate decisions.
+   *
+   * They share one channel and one airtime budget, and when nothing arrives it
+   * is hard to tell which of them is at fault. Splitting them makes the field
+   * test that matters possible: heartbeat alone, a few bytes an hour, nothing
+   * else on the air.
+   *
+   * The heartbeat is on by default because it is the cheap one. The list sync
+   * is off by default: it is the expensive one, it only makes sense once two
+   * devices agree on a channel, and starting it by accident is how an airtime
+   * budget disappears. `?sync=1` / `?beat=0` override, which is what the e2e
+   * suite uses.
+   */
+  const RADIO_STORE = "mesh-todo:radio";
+  const askedFor = (name, fallback) => {
+    const asked = new URLSearchParams(location.search).get(name);
+    if (asked === "1") return true;
+    if (asked === "0") return false;
+    try {
+      const kept = JSON.parse(localStorage.getItem(RADIO_STORE) ?? "null");
+      if (kept && typeof kept[name] === "boolean") return kept[name];
+    } catch {
+      // Blocked storage: the defaults below are fine.
+    }
+    return fallback;
+  };
+  let beatOn = $state(askedFor("beat", true));
+  let syncOn = $state(askedFor("sync", false));
+  const rememberRadio = () => {
+    try {
+      localStorage.setItem(RADIO_STORE, JSON.stringify({ beat: beatOn, sync: syncOn }));
+    } catch {
+      // As above.
+    }
+  };
   let beat = $state(null);
   let wiring = null; // an attach in progress, so a second caller can wait for it
   const nodeReady = $derived(phase === "ready");
@@ -320,7 +357,7 @@
    */
   function wireList() {
     if (!db || !courier) return Promise.resolve();
-    if (!sync && !wiring) {
+    if (!sync && !wiring && syncOn) {
       wiring = attachCourier({ db, courier, start: carriedBy === "mesh" })
         .then((attached) => {
           sync = attached;
@@ -335,7 +372,7 @@
   }
 
   async function maybeStartHeartbeat() {
-    if (heartbeat || heartbeatStarting || !courier || !db) return;
+    if (heartbeat || heartbeatStarting || !courier || !db || !beatOn) return;
     heartbeatStarting = true;
     try {
       heartbeat = await startHeartbeat({
@@ -350,6 +387,38 @@
     } finally {
       heartbeatStarting = false;
     }
+  }
+
+  /** Flip the heartbeat without reloading: start it, or stop it and forget what it heard. */
+  function setBeat(on) {
+    beatOn = on;
+    rememberRadio();
+    if (on) {
+      maybeStartHeartbeat();
+    } else if (heartbeat) {
+      heartbeat.stop();
+      heartbeat = null;
+      beat = null;
+    }
+    pushLog(on ? w().log.beatOn : w().log.beatOff);
+  }
+
+  /**
+   * Flip the list sync. Switching it off stops it and drops it, so nothing of
+   * the list goes on the air until it is asked for again — the point of the
+   * switch is that the radio then carries the heartbeat and nothing else.
+   */
+  async function setSync(on) {
+    syncOn = on;
+    rememberRadio();
+    if (on) {
+      await wireList();
+    } else if (sync) {
+      await sync.stop?.().catch?.(() => {});
+      sync = null;
+      company = { peers: [], lastHeardAgoMs: null };
+    }
+    pushLog(on ? w().log.syncOn : w().log.syncOff);
   }
 
   /** Another channel is another audience: what answered on the old one says nothing. */
@@ -963,6 +1032,30 @@
             · {t.thisNode} {myNode}{/if}
         </p>
       {/if}
+      <!-- What the radio may carry, as two decisions rather than one. The
+           heartbeat is a few bytes an hour; the list sync is everything else.
+           Splitting them is what makes "nothing arrives — which half?" a
+           question a field test can answer. -->
+      <p class="radio-switches">
+        <label title={t.beatSwitchTitle}>
+          <input
+            type="checkbox"
+            checked={beatOn}
+            data-testid="beat-switch"
+            onchange={(event) => setBeat(event.currentTarget.checked)}
+          />
+          {t.beatSwitch}
+        </label>
+        <label title={t.syncSwitchTitle}>
+          <input
+            type="checkbox"
+            checked={syncOn}
+            data-testid="sync-switch"
+            onchange={(event) => setSync(event.currentTarget.checked)}
+          />
+          {t.syncSwitch}
+        </label>
+      </p>
       {#if channels.length > 0}
         <p class="dim mono">
           <label title={t.txChannelTitle}>
@@ -1324,6 +1417,19 @@
 </main>
 
 <style>
+  .radio-switches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 8px 0;
+    font-size: 0.9rem;
+  }
+  .radio-switches label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   :global(body) {
     margin: 0;
     background: var(--ls-bg-0);

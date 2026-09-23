@@ -170,7 +170,7 @@ test("a list needs no node: made on one page, opened from its link on another", 
   // No `mesh=bc`: these pages would pair a real node over Bluetooth, and
   // nobody here does.
   const a = await context.newPage();
-  await a.goto("/?ip=1");
+  await a.goto("/?ip=1&sync=1");
   await expect(a.getByTestId("relays")).toHaveText("relays 1 of 1 connected", { timeout: 30_000 });
   await expect(a.getByTestId("led")).toHaveAttribute("data-state", "blinking");
   await expect(a.getByTestId("led-label")).toHaveText("no LoRa node connected");
@@ -212,7 +212,7 @@ test("a list made without a node: when the internet goes, pair one then and carr
 
   // The fake node, left unpaired (`autoconnect=0`) as a real one would be.
   const a = await context.newPage();
-  await a.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO&ip=1&autoconnect=0`);
+  await a.goto(`/?mesh=bc&sync=1&room=${roomId}&preset=SHORT_TURBO&ip=1&autoconnect=0`);
   await expect(a.getByTestId("relays")).toHaveText("relays 1 of 1 connected", { timeout: 30_000 });
   await a.getByRole("button", { name: "Create a list" }).click();
   await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
