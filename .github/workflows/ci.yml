@@ -25,6 +25,7 @@ jobs:
       - run: npm ci --foreground-scripts
       - run: npm test
       - run: npm test -w @le-space/mesh-calendar-example
+      - run: npm test -w @le-space/recovery-example
       - run: npm run build -w @le-space/mesh-todo-example
       # Every app the Pages workflow deploys builds here first, so a broken
       # import fails the PR rather than the deploy after the merge.
