@@ -65,7 +65,7 @@ jobs:
       # Assemble the site rather than nesting one demo inside another's build
       # output: each demo owns its directory, and the index owns the root.
       - run: |
-          mkdir -p site/mesh-todo site/mesh-calendar site/termine site/passkey-probe site/storage-probe site/recovery site/brand
+          mkdir -p site/mesh-todo site/mesh-calendar site/termine site/passkey-probe site/recovery site/brand
           cp examples/landing/index.html site/index.html
           # The Le Space pill and credit line for the plain pages here, which
           # have no bundler: brand.js as written, and uqr's one-file ESM build
@@ -75,7 +75,6 @@ jobs:
           # Not linked from the menu: it is a diagnostic for #93, reached by
           # its address, and it creates a test passkey on whatever key taps it.
           cp examples/landing/passkey-probe.html site/passkey-probe/index.html
-          cp examples/landing/storage-probe.html site/storage-probe/index.html
           cp -R examples/mesh-todo/dist/. site/mesh-todo/
           cp -R examples/mesh-calendar/dist/. site/mesh-calendar/
           # Also not linked from the menu: it asks a security key for an
