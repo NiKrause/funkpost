@@ -13,6 +13,7 @@
   import { onMount } from "svelte";
   import { creditHTML, lang } from "@le-space/funkpost-brand";
   import { WORDS } from "./words.js";
+  import { FIELD_LOG_TOPIC } from "./pubsub-topics.js";
   import {
     createDatabaseStack,
     joinOverInternet,
@@ -131,9 +132,12 @@
   };
   let beatOn = $state(askedFor("beat", true));
   let syncOn = $state(askedFor("sync", false));
+  let logOn = $state(askedFor("log", false));
+  /** Stands in for the node number until the node says what it is. */
+  const logDeviceId = Math.random().toString(36).slice(2, 8);
   const rememberRadio = () => {
     try {
-      localStorage.setItem(RADIO_STORE, JSON.stringify({ beat: beatOn, sync: syncOn }));
+      localStorage.setItem(RADIO_STORE, JSON.stringify({ beat: beatOn, sync: syncOn, log: logOn }));
     } catch {
       // As above.
     }
@@ -302,7 +306,38 @@
   const pushLog = (text) => {
     log.unshift({ id: logSeq++, ts: stamp(), text });
     if (log.length > 120) log.pop();
+    shoutLog(text);
   };
+
+  /**
+   * Put a line on the field-log topic, for a third machine watching this run.
+   *
+   * Live or nothing, by choice: this is pubsub, so a line published while
+   * nobody listens is gone. That is the right trade for a diagnostic — what
+   * matters is that the run being watched is the run that is happening — and
+   * it means no database, no upload and nothing left behind.
+   *
+   * Every line carries the context that makes it readable on the other side:
+   * without the region and the channel, "nothing arrives" says nothing.
+   */
+  function shoutLog(text) {
+    if (!logOn || !stack?.libp2p?.services?.pubsub) return;
+    try {
+      const line = JSON.stringify({
+        v: 1,
+        at: new Date().toISOString(),
+        dev: myNodeNum ?? logDeviceId,
+        text,
+        region,
+        channel: txChannel,
+        beat: beatOn,
+        sync: syncOn,
+      });
+      stack.libp2p.services.pubsub.publish(FIELD_LOG_TOPIC, new TextEncoder().encode(line));
+    } catch {
+      // A log that cannot be shouted must not break the app it is logging.
+    }
+  }
 
   // Turn anything — Error, a rejection object, the Meshtastic queue's
   // {id, error} shape — into a readable line. A bare `${obj}` prints the
@@ -1054,6 +1089,19 @@
             onchange={(event) => setSync(event.currentTarget.checked)}
           />
           {t.syncSwitch}
+        </label>
+        <label title={t.logSwitchTitle}>
+          <input
+            type="checkbox"
+            checked={logOn}
+            data-testid="log-switch"
+            onchange={(event) => {
+              logOn = event.currentTarget.checked;
+              rememberRadio();
+              pushLog(logOn ? w().log.logOn : w().log.logOff);
+            }}
+          />
+          {t.logSwitch}
         </label>
       </p>
       {#if channels.length > 0}
