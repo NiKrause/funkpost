@@ -53,6 +53,10 @@ export const WORDS = {
     channelTitle: "same channel name + key fingerprint on both phones = the nodes can decrypt each other",
     primaryChannel: "primary channel",
     key: "key",
+    beatSwitch: "heartbeat on the air",
+    beatSwitchTitle: "A few bytes an hour: is another device with this list within reach?",
+    syncSwitch: "carry the list over the radio",
+    syncSwitchTitle: "Off by default — the expensive half, and it only works once both devices are on the same channel.",
     txChannel: "TX channel:",
     txChannelTitle:
       "transmissions go on this channel — pick the same »name« ⌗fingerprint on both phones. Reception decodes every channel the node holds a key for.",
@@ -152,6 +156,10 @@ export const WORDS = {
     },
     log: {
       autoChannel: (index, name, fingerprint) => `TX channel → ${index} »${name}« ⌗${fingerprint} — chosen automatically`,
+      beatOn: "heartbeat on — a few bytes an hour",
+      beatOff: "heartbeat off — nothing of it goes on the air",
+      syncOn: "list sync on — the radio carries changes again",
+      syncOff: "list sync off — the radio carries the heartbeat and nothing else",
       handChannel: (index, name, fingerprint) => `TX channel → ${index} »${name}« ⌗${fingerprint}`,
       nodeChannel: (index, name, fingerprint, primary) =>
         `node reports channel ${index} »${name}« ⌗${fingerprint}${primary ? " · primary" : ""}`,
@@ -258,6 +266,10 @@ export const WORDS = {
       "gleicher Kanalname und Schlüssel-Fingerabdruck auf beiden Telefonen = die Knoten können einander entschlüsseln",
     primaryChannel: "Primärkanal",
     key: "Schlüssel",
+    beatSwitch: "Herzschlag auf dem Funk",
+    beatSwitchTitle: "Ein paar Bytes pro Stunde: ist ein anderes Gerät mit dieser Liste in Reichweite?",
+    syncSwitch: "Liste über Funk tragen",
+    syncSwitchTitle: "Standardmäßig aus — die teure Hälfte, und sie wirkt erst, wenn beide Geräte auf demselben Kanal sind.",
     txChannel: "Sendekanal:",
     txChannelTitle:
       "gesendet wird auf diesem Kanal — auf beiden Telefonen denselben »Namen« ⌗Fingerabdruck wählen. Empfangen wird auf jedem Kanal, für den der Knoten einen Schlüssel hat.",
@@ -357,6 +369,10 @@ export const WORDS = {
     },
     log: {
       autoChannel: (index, name, fingerprint) => `Sendekanal → ${index} »${name}« ⌗${fingerprint} — automatisch gewählt`,
+      beatOn: "Herzschlag an — ein paar Bytes pro Stunde",
+      beatOff: "Herzschlag aus — davon geht nichts auf den Funk",
+      syncOn: "Listen-Sync an — der Funk trägt wieder Änderungen",
+      syncOff: "Listen-Sync aus — der Funk trägt den Herzschlag und sonst nichts",
       handChannel: (index, name, fingerprint) => `Sendekanal → ${index} »${name}« ⌗${fingerprint}`,
       nodeChannel: (index, name, fingerprint, primary) =>
         `Knoten meldet Kanal ${index} »${name}« ⌗${fingerprint}${primary ? " · primär" : ""}`,
