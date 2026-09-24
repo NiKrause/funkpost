@@ -234,6 +234,51 @@ describe("heartbeat schedule", () => {
     assert.equal(air.echoesFrom("a").length, 2);
   });
 
+  test("it counts what went out and what came back", async () => {
+    const clock = fakeClock();
+    const air = fakeAir();
+    const a = createHeartbeat({ courier: air.courier("a"), tag: TAG, id: ID_A, timers: clock });
+    const raw = air.courier("b");
+    a.start();
+    await Promise.resolve(); // the courier resolves the send on a microtask
+
+    // "Nothing arrives" is two questions, and a round counter answers neither.
+    assert.deepEqual(a.state().sent, { beats: 1, echoes: 0 }, "the round's first beat went out");
+    assert.deepEqual(a.state().received, { beats: 0, echoes: 0 }, "and nothing came back yet");
+
+    raw.send(encodeHeartbeat({ type: "beat", tag: TAG, from: ID_B }));
+    await Promise.resolve();
+    assert.deepEqual(a.state().received, { beats: 1, echoes: 0 }, "it heard the other device");
+    assert.deepEqual(a.state().sent, { beats: 1, echoes: 1 }, "and answered it");
+
+    raw.send(encodeHeartbeat({ type: "echo", tag: TAG, from: ID_B }));
+    await Promise.resolve();
+    assert.deepEqual(a.state().received, { beats: 1, echoes: 1 });
+    assert.deepEqual(a.state().sent, { beats: 1, echoes: 1 }, "an echo is never answered");
+
+    // Its own frames handed back by the link count for nothing, as everywhere.
+    raw.send(encodeHeartbeat({ type: "beat", tag: TAG, from: ID_A }));
+    await Promise.resolve();
+    assert.deepEqual(a.state().received, { beats: 1, echoes: 1 }, "its own beat is not traffic");
+  });
+
+  test("a send the node refuses is not counted as one that went out", async () => {
+    const clock = fakeClock();
+    const air = fakeAir();
+    // The node refuses to transmit — an UNSET region, say.
+    const a = createHeartbeat({
+      courier: air.courier("a", { fail: () => true }),
+      tag: TAG,
+      id: ID_A,
+      timers: clock,
+    });
+    a.start();
+    await Promise.resolve();
+
+    assert.deepEqual(a.state().sent, { beats: 0, echoes: 0 }, "a refused send is not a beat sent");
+    assert.ok(a.state().lastError, "and it is reported");
+  });
+
   test("its own frames and other lists are not an answer", () => {
     const clock = fakeClock();
     const air = fakeAir();

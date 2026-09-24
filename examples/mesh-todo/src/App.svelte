@@ -1006,6 +1006,18 @@
     <span data-testid="led-label">{led.text}</span>
   </p>
 
+  <!-- The tally, because "nothing arrives" is two questions and the LED
+       answers neither: did anything go out, and did anything come back. A
+       node that refuses to transmit shows sent stuck at zero; a node that
+       transmits into an empty room shows sent climbing and received at zero.
+       Those are different faults with the same verdict. -->
+  {#if beat}
+    <p class="dim mono tally" data-testid="beat-tally" title={t.tallyTitle}>
+      {t.tallySent(beat.sent.beats, beat.sent.echoes)} ·
+      {t.tallyReceived(beat.received.beats, beat.received.echoes)}
+    </p>
+  {/if}
+
   <!-- Dismissible, and it stays dismissed: somebody using this as a bench
        instrument reads it once and then wants the screen back. -->
   {#if showNotice}
