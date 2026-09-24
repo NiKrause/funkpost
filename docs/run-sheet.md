@@ -168,6 +168,17 @@ kept trying over the internet it did not have, and never transmitted (see the
 [field notes](field-notes.md)). [#158](https://github.com/NiKrause/funkpost/pull/158)
 is the fix; this run is how we find out whether that was the only obstacle.
 
+**Still unrun as of 2026-09-24.** That evening's session went offline on both
+phones and moved data over LoRa — see the [field notes](field-notes.md) — but
+both already held the list, so no device bootstrapped one. What it did establish
+is the ground this run stands on: the radio carries a full log between two
+offline phones, at about nine minutes for 5.7 KB, and the app now builds its
+mesh path when the button is pressed ([#167](https://github.com/NiKrause/funkpost/pull/167)).
+Two defects found there will shape this run: a delta that joins nothing is
+re-sent forever (bridge #127), and a presence answer can arrive nine minutes
+late (bridge #128). Expect the cold join to be slow, and give it half an hour
+before calling it failed.
+
 **Page:** <https://nikrause.github.io/funkpost/mesh-todo/?log=1>, so the run
 can be read afterwards — the log is kept while offline and sent when the
 network returns.

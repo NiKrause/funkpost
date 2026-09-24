@@ -163,6 +163,7 @@ export const WORDS = {
       joinNeedsNode: "joining over the mesh needs a node — connect one first",
       meshNeedsSyncOn:
         "the radio cannot carry the list until »carry the list over the radio« is on",
+      meshPathFailed: "the radio has no path to the list — the log says why",
     },
     log: {
       autoChannel: (index, name, fingerprint) => `TX channel → ${index} »${name}« ⌗${fingerprint} — chosen automatically`,
@@ -393,6 +394,7 @@ export const WORDS = {
       joinNeedsNode: "Beitreten über das Mesh braucht einen Knoten — zuerst einen verbinden",
       meshNeedsSyncOn:
         "der Funk kann die Liste erst tragen, wenn »Liste über Funk tragen« an ist",
+      meshPathFailed: "der Funk hat keinen Pfad zur Liste — warum, steht im Protokoll",
     },
     log: {
       autoChannel: (index, name, fingerprint) => `Sendekanal → ${index} »${name}« ⌗${fingerprint} — automatisch gewählt`,
