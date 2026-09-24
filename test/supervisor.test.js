@@ -544,3 +544,64 @@ describe("meshtastic error names", () => {
     assert.equal(typeof describeMeshtasticError(circular), "string");
   });
 });
+
+describe("a configuration that never arrives", () => {
+  // The one state nothing else caught: connected, no disconnect, no error —
+  // and a courier that refuses every transmission because the region is still
+  // UNSET. Silence is the symptom, so a clock has to break it.
+  test("says so after the deadline, and names what did not come", async () => {
+    const seen = [];
+    const factory = deviceFactory();
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      configureTimeoutMs: 40,
+      ...FAST,
+      on: { configureTimeout: (info) => seen.push(info) },
+    });
+
+    await until(() => seen.length === 1);
+
+    assert.equal(seen[0].afterMs, 40);
+    assert.deepEqual(seen[0].missing, ["region", "myNodeInfo"]);
+    await managed.close();
+  });
+
+  test("stays quiet once the node says who it is", async () => {
+    const seen = [];
+    const factory = deviceFactory();
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      configureTimeoutMs: 40,
+      ...FAST,
+      on: { configureTimeout: (info) => seen.push(info) },
+    });
+
+    // One answer means the stream is running. Half a configuration is not a
+    // stall — the rest of it is the node's business, not a deadline's.
+    factory.made[0].events.onMyNodeInfo.emit({ myNodeNum: 42 });
+    await settle(80);
+
+    assert.deepEqual(seen, []);
+    await managed.close();
+  });
+
+  // The guard inside the callback is what makes this true, not the
+  // clearTimeout beside it: removing the cleanup leaves a timer that fires
+  // into a closed supervisor and is ignored. Both are kept — one for
+  // correctness, one for not leaving a timer running.
+  test("closing before the deadline produces no event", async () => {
+    const seen = [];
+    const factory = deviceFactory();
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      configureTimeoutMs: 40,
+      ...FAST,
+      on: { configureTimeout: (info) => seen.push(info) },
+    });
+
+    await managed.close();
+    await settle(80);
+
+    assert.deepEqual(seen, []);
+  });
+});
