@@ -161,6 +161,8 @@ export const WORDS = {
       gaveUp:
         "the radio link keeps dropping — this phone's Bluetooth is too unstable; reload to retry, or use desktop Chrome",
       joinNeedsNode: "joining over the mesh needs a node — connect one first",
+      meshNeedsSyncOn:
+        "the radio cannot carry the list until »carry the list over the radio« is on",
     },
     log: {
       autoChannel: (index, name, fingerprint) => `TX channel → ${index} »${name}« ⌗${fingerprint} — chosen automatically`,
@@ -220,6 +222,8 @@ export const WORDS = {
       carriedInternet: "carried by the internet — the courier is quiet",
       carriedMesh: "carried by the mesh — OrbitDB's own sync is stopped",
       switchFailed: (message) => `! switch failed: ${message}`,
+      meshNeedsSyncOn: "! the radio cannot carry the list — switch »carry the list over the radio« on",
+      meshNeedsNode: "! the radio cannot carry the list — no node is connected",
       askingAir: "asking the air: is another mesh-todo keeping this list?",
       appsAnswered: (n, ids) => `${n} ${plural(n, "app", "apps")} answered: ${ids}`,
       nobodyAnswered: "nobody answered — radios may be in range, but no app is keeping this list",
@@ -387,6 +391,8 @@ export const WORDS = {
       gaveUp:
         "die Funkverbindung reißt immer wieder ab — das Bluetooth dieses Telefons ist zu instabil; neu laden oder Chrome auf dem Desktop verwenden",
       joinNeedsNode: "Beitreten über das Mesh braucht einen Knoten — zuerst einen verbinden",
+      meshNeedsSyncOn:
+        "der Funk kann die Liste erst tragen, wenn »Liste über Funk tragen« an ist",
     },
     log: {
       autoChannel: (index, name, fingerprint) => `Sendekanal → ${index} »${name}« ⌗${fingerprint} — automatisch gewählt`,
@@ -446,6 +452,8 @@ export const WORDS = {
       carriedInternet: "vom Internet getragen — der Kurier ist still",
       carriedMesh: "vom Mesh getragen — OrbitDBs eigener Sync ist gestoppt",
       switchFailed: (message) => `! Wechsel fehlgeschlagen: ${message}`,
+      meshNeedsSyncOn: "! der Funk kann die Liste nicht tragen — »Liste über Funk tragen« einschalten",
+      meshNeedsNode: "! der Funk kann die Liste nicht tragen — kein Knoten verbunden",
       askingAir: "frage die Luft: führt eine andere mesh-todo diese Liste?",
       appsAnswered: (n, ids) => `${n} ${plural(n, "App hat", "Apps haben")} geantwortet: ${ids}`,
       nobodyAnswered: "niemand hat geantwortet — Funkgeräte mögen in Reichweite sein, aber keine App führt diese Liste",

@@ -967,7 +967,15 @@
    */
   async function carryOver(path) {
     if (!db || switching || path === carriedBy) return;
-    if (path === "mesh" && !sync) return; // no node yet — connectAndCarry pairs one first
+    if (path === "mesh" && !sync) {
+      // A button that does nothing and says nothing is worse than one that is
+      // disabled: in the field it read as a broken app. The sync only exists
+      // once the list switch is on *and* a node is paired, so say which of the
+      // two is missing rather than returning into silence.
+      pushLog(courier ? w().log.meshNeedsSyncOn : w().log.meshNeedsNode);
+      error = courier ? w().errors.meshNeedsSyncOn : w().errors.joinNeedsNode;
+      return;
+    }
     switching = true;
     try {
       if (path === "internet") {
@@ -1557,6 +1565,11 @@
           {#if carriedBy === "internet"}· {t.peersOverIp(ipPeers.length)}{/if}
           {#if !internetReachable}· <strong>{t.internetGone}</strong>{/if}
         </p>
+        <!-- Hidden while the offer above is showing: both call carryOver("mesh")
+             and stood next to each other reading as two different things, which
+             was reported from the field as "is this doubled?". The offer is the
+             one to use when it is there; this is the standing way back. -->
+        {#if !offerTheMesh}
         <button
           class="ghost"
           data-testid="carry-over"
@@ -1570,6 +1583,7 @@
         >
           {#if switching}{t.switching}{:else if carriedBy === "mesh"}{t.carryInternet}{:else if nodeReady}{t.carryMesh}{:else}{t.connectCarry}{/if}
         </button>
+        {/if}
       {/if}
       {#if nodeReady}
         <button class="ghost" disabled={airtimeBlocked} onclick={() => sendInvite(courier, db.address)}>
