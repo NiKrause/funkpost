@@ -295,6 +295,13 @@
   };
   let showNeighbours = $state(false);
   let nowTick = $state(Date.now());
+  /**
+   * When the radio last carried list traffic, so the LED can say "something is
+   * flowing right now" — which is a different thing from "somebody answered an
+   * hour ago", and the difference is what a field test wants to see.
+   */
+  let lastCarried = $state(0);
+  const CARRYING_MS = 4000;
   const neighbourMap = new Map();
   let log = $state([]);
   let logSeq = 0; // monotonic, unique — the {#each} key
@@ -427,8 +434,14 @@
   const describeError = describeMeshtasticError;
 
   const onCourierEvent = (event) => {
-    if (event.kind === "payload-rx") pushLog(w().log.payloadRx(event.bytes, event.msgId));
-    if (event.kind === "delivered") pushLog(w().log.delivered(event.msgId, event.rounds));
+    if (event.kind === "payload-rx") {
+      lastCarried = Date.now();
+      pushLog(w().log.payloadRx(event.bytes, event.msgId));
+    }
+    if (event.kind === "delivered") {
+      lastCarried = Date.now();
+      pushLog(w().log.delivered(event.msgId, event.rounds));
+    }
     if (event.kind === "giveup") pushLog(w().log.giveup(event.msgId, event.rounds, event.reason));
     if (event.kind === "error") pushLog(`! ${describeError(event.error)}`);
   };
@@ -566,31 +579,61 @@
 
   // The LED: steady only with a node connected and another device keeping this
   // list answering its heartbeat. Everything short of that blinks, and says why.
+  /**
+   * The lamp, in four states rather than two.
+   *
+   * `steady` keeps its old meaning — somebody with this list answered — because
+   * the e2e suite reads it and because it is the one thing worth a solid light.
+   * `stage` carries what that could not say: the difference between "this
+   * device is not ready" and "this device is calling and nobody is there",
+   * which is exactly the distinction a whole morning of field testing lacked.
+   *
+   *   waiting   no node, no list, or the heartbeat cannot go out
+   *   calling   ready and beating, nobody has answered
+   *   answered  another device with this list is there
+   *   carrying  and the radio moved list traffic in the last few seconds
+   */
   const led = $derived.by(() => {
     const words = t.led;
-    if (linkLost) return { steady: false, text: words.lost };
-    if (reconnecting) return { steady: false, text: words.reconnecting };
+    if (linkLost) return { steady: false, stage: "waiting", text: words.lost };
+    if (reconnecting) return { steady: false, stage: "waiting", text: words.reconnecting };
     if (!nodeReady) {
-      return { steady: false, text: phase === "connecting" ? words.connecting : words.none };
+      return {
+        steady: false,
+        stage: "waiting",
+        text: phase === "connecting" ? words.connecting : words.none,
+      };
     }
-    if (!db) return { steady: false, text: words.noList };
-    if (!beat) return { steady: false, text: words.starting };
-    if (beat.lastError) return { steady: false, text: words.cannot(beat.lastError) };
+    if (!db) return { steady: false, stage: "waiting", text: words.noList };
+    if (!beat) return { steady: false, stage: "waiting", text: words.starting };
+    if (beat.lastError) {
+      return { steady: false, stage: "waiting", text: words.cannot(beat.lastError) };
+    }
+    const carrying = lastCarried > 0 && nowTick - lastCarried < CARRYING_MS;
     const checking = beat.beat > 0 ? words.checking(beat.beat, beat.beatsPerRound) : "";
     if (beat.verdict === "answered") {
       const others = Math.max(1, beat.peers.length);
       return {
         steady: true,
+        stage: carrying ? "carrying" : "answered",
         text: words.answered(others, agoText(beat.lastHeardAgoMs)) + checking,
       };
     }
+    // Calling rather than waiting: the node is up and the beats are going out,
+    // which is a state worth telling apart from having no node at all — even
+    // while the verdict is still `alone`.
     if (beat.verdict === "alone") {
       return {
         steady: false,
+        stage: carrying ? "carrying" : "calling",
         text: words.alone + (checking || words.nextAt(clockText(beat.nextRoundAt))),
       };
     }
-    return { steady: false, text: words.looking(beat.beat, beat.beatsPerRound) };
+    return {
+      steady: false,
+      stage: carrying ? "carrying" : "calling",
+      text: words.looking(beat.beat, beat.beatsPerRound),
+    };
   });
 
   onMount(async () => {
@@ -1100,7 +1143,7 @@
     data-state={led.steady ? "steady" : "blinking"}
     title={t.led.title}
   >
-    <span class="led" class:steady={led.steady} aria-hidden="true"></span>
+    <span class="led" class:steady={led.steady} data-stage={led.stage} aria-hidden="true"></span>
     <span data-testid="led-label">{led.text}</span>
   </p>
 
@@ -1676,14 +1719,38 @@
     box-shadow: 0 0 6px color-mix(in srgb, var(--ls-amber) 55%, transparent);
     animation: led-blink 1.2s infinite;
   }
+  /* Calling: the node is up and beats are going out, nobody has answered. It
+     still blinks — nothing has been achieved yet — but amber is reserved for
+     "this device is not ready", which is a different problem with a different
+     remedy. */
+  .led[data-stage="calling"] {
+    background: var(--ls-mark-cyan);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--ls-mark-cyan) 55%, transparent);
+  }
   .led.steady {
     background: var(--ls-green);
     box-shadow: 0 0 8px color-mix(in srgb, var(--ls-green) 60%, transparent);
     animation: none;
   }
+  /* Carrying: the radio moved list traffic in the last few seconds. A pulse
+     rather than a blink — it is not waiting for anything, it is working. */
+  .led[data-stage="carrying"] {
+    background: var(--ls-green);
+    animation: led-pulse 0.9s ease-in-out infinite;
+  }
   @keyframes led-blink {
     0%, 49% { opacity: 1; }
     50%, 100% { opacity: 0.15; }
+  }
+  @keyframes led-pulse {
+    0%, 100% {
+      opacity: 1;
+      box-shadow: 0 0 6px color-mix(in srgb, var(--ls-green) 50%, transparent);
+    }
+    50% {
+      opacity: 1;
+      box-shadow: 0 0 14px color-mix(in srgb, var(--ls-green) 90%, transparent);
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     .led {
@@ -1693,9 +1760,19 @@
       box-shadow: none;
       animation: none;
     }
-    .led.steady {
+    /* Colour still distinguishes the four states where motion cannot. */
+    .led[data-stage="calling"] {
+      background: transparent;
+      border-color: var(--ls-mark-cyan);
+    }
+    .led.steady,
+    .led[data-stage="carrying"] {
       background: var(--ls-green);
       border: none;
+      animation: none;
+    }
+    .led[data-stage="carrying"] {
+      box-shadow: 0 0 10px color-mix(in srgb, var(--ls-green) 80%, transparent);
     }
   }
   /* Coral rail rather than a filled box: it must read as a caveat on the page,
