@@ -46,6 +46,30 @@ import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
 import { createOrbitDB, IPFSAccessController } from "@orbitdb/core";
 import { createCourierSync, databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
+
+/**
+ * What every sync on this radio is given.
+ *
+ * `announceOnLocalUpdate: false` — the radio waits to be asked. Announcing on
+ * every write is right when the courier is cheap; here each announce draws a
+ * want and a block reply, so five todos become five round trips where one
+ * delta would carry all five.
+ *
+ * `sendTimeoutMs` — the library's default is five minutes, documented as a
+ * bound "far outside any honest delivery". On LoRa it is not: measured on two
+ * phones over `LONG_FAST`, one list's blocks (4384 B) took **seven minutes**
+ * to arrive and be acknowledged. The bound fired three times inside that,
+ * and each firing started the same payload again while the first copy was
+ * still going out — on a radio with six minutes of airtime an hour, the
+ * duplicate competes for exactly the budget the original needs to finish.
+ *
+ * Twenty minutes is three times the longest honest delivery measured here.
+ * It is still a way out of a courier that has stopped answering; it is no
+ * longer a way into sending everything twice. See
+ * orbitdb-storage-bridge#126 — this belongs in the library's default, and
+ * this is the consumer-side stopgap until it is.
+ */
+const SYNC_OPTIONS = { announceOnLocalUpdate: false, sendTimeoutMs: 20 * 60_000 };
 // The two light entries. Through the main entry this would cost 88 kB more, for
 // a Storacha client the demo never calls (bridge #95); these two and the Aleph
 // driver are 18.6 kB gzipped together, and they are imported rather than split
@@ -306,10 +330,7 @@ export async function createList({ orbitdb, courier = null }) {
     AccessController: IPFSAccessController({ write: ["*"] }),
   });
   if (!courier) return { db, sync: null };
-  // The radio waits to be asked. Announcing on every write is right when the
-  // courier is cheap; here each announce draws a want and a block reply, so
-  // five todos become five round trips where one delta would carry all five.
-  const sync = await createCourierSync({ db, courier, announceOnLocalUpdate: false });
+  const sync = await createCourierSync({ db, courier, ...SYNC_OPTIONS });
   await sync.start();
   await sendInvite(courier, db.address);
   return { db, sync };
@@ -324,7 +345,7 @@ export async function createList({ orbitdb, courier = null }) {
 export async function joinOverInternet({ orbitdb, courier = null, address }) {
   const db = await orbitdb.open(address, { type: "keyvalue", sync: true });
   const sync = courier
-    ? await createCourierSync({ db, courier, announceOnLocalUpdate: false })
+    ? await createCourierSync({ db, courier, ...SYNC_OPTIONS })
     : null;
   return { db, sync };
 }
@@ -337,7 +358,7 @@ export async function joinOverInternet({ orbitdb, courier = null, address }) {
  * internet path it waits, stopped, for the switch.
  */
 export async function attachCourier({ db, courier, start }) {
-  const sync = await createCourierSync({ db, courier, announceOnLocalUpdate: false });
+  const sync = await createCourierSync({ db, courier, ...SYNC_OPTIONS });
   if (start) await sync.start();
   await sendInvite(courier, db.address);
   return sync;
@@ -368,7 +389,7 @@ export async function startHeartbeat({ courier, address, minuteMs, onChange, onE
 export async function joinList({ orbitdb, courier, address }) {
   // Same on this side: a joiner's own writes wait for the button too. Going
   // quiet does not go deaf — an announce from the peer is still answered.
-  const sync = await createCourierSync({ orbitdb, address, courier, announceOnLocalUpdate: false });
+  const sync = await createCourierSync({ orbitdb, address, courier, ...SYNC_OPTIONS });
   await sync.start();
   return { sync };
 }
@@ -408,11 +429,7 @@ export async function restoreFromPointer({ orbitdb, courier, pointer }) {
     open: { sync: false },
   });
 
-  const sync = await createCourierSync({
-    db: restored.database,
-    courier,
-    announceOnLocalUpdate: false,
-  });
+  const sync = await createCourierSync({ db: restored.database, courier, ...SYNC_OPTIONS });
   await sync.start();
   return { db: restored.database, sync, entries: restored.entries, blocks: restored.blocks };
 }
