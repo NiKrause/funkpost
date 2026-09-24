@@ -15,6 +15,7 @@
   import { WORDS } from "./words.js";
   import { FIELD_LOG_TOPIC } from "./pubsub-topics.js";
   import { measureGattOverlap } from "@le-space/funkpost/links/gatt-probe";
+  import { serialiseGattOperations } from "@le-space/funkpost/links/gatt-queue";
   import {
     createDatabaseStack,
     joinOverInternet,
@@ -105,6 +106,8 @@
   let heartbeatStarting = false;
   /** Set only under ?gatt=1; restores the browser's own methods on teardown. */
   let stopGattProbe = null;
+  /** Set only under ?gattq=1; restores the browser's own methods on teardown. */
+  let stopGattQueue = null;
 
   /**
    * What the radio is allowed to carry, as two separate decisions.
@@ -566,6 +569,17 @@
     // connection and is not caused by the reconnect machinery; this is how the
     // thing that *does* cause it becomes visible. Off otherwise, because it
     // patches a browser prototype and every line it writes goes on the air.
+    // ?gattq=1: one Bluetooth operation at a time. Every one of the 139
+    // overlaps measured in the field was blocked by a readValue, because the
+    // connection sequence does not await its reads (issue #153). Applied
+    // before the probe, so that with both flags the probe still reports the
+    // overlapping *calls* while the failures underneath them disappear —
+    // which is the measurement that says whether this works.
+    if (params.get("gattq") === "1") {
+      stopGattQueue = serialiseGattOperations();
+      pushLog(w().log.gattQueueOn);
+    }
+
     if (params.get("gatt") === "1") {
       stopGattProbe = measureGattOverlap((line) => pushLog(line));
       pushLog(w().log.gattProbeOn);
@@ -672,6 +686,7 @@
       document.removeEventListener("visibilitychange", reacquireOnReturn);
       // Patched browser methods must not outlive the page that patched them.
       stopGattProbe?.();
+      stopGattQueue?.();
     };
   });
 
