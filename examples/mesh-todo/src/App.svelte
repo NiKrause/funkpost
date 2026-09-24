@@ -14,6 +14,7 @@
   import { creditHTML, lang } from "@le-space/funkpost-brand";
   import { WORDS } from "./words.js";
   import { FIELD_LOG_TOPIC } from "./pubsub-topics.js";
+  import { createFieldLogBuffer } from "./field-log-buffer.js";
   import { measureGattOverlap } from "@le-space/funkpost/links/gatt-probe";
   import { serialiseGattOperations } from "@le-space/funkpost/links/gatt-queue";
   import {
@@ -141,6 +142,8 @@
   let logOn = $state(askedFor("log", false));
   /** Stands in for the node number until the node says what it is. */
   const logDeviceId = Math.random().toString(36).slice(2, 8);
+  /** Lines nobody heard, kept for the next listener. */
+  const backlog = createFieldLogBuffer();
   const rememberRadio = () => {
     try {
       localStorage.setItem(RADIO_STORE, JSON.stringify({ beat: beatOn, sync: syncOn, log: logOn }));
@@ -355,7 +358,7 @@
     try {
       // Belt and braces: the switch can go on after the node started.
       joinLogTopic();
-      const line = JSON.stringify({
+      const line = {
         v: 1,
         at: new Date().toISOString(),
         dev: myNode || logDeviceId,
@@ -364,14 +367,54 @@
         channel: txChannel,
         beat: beatOn,
         sync: syncOn,
-      });
-      pubsub.publish(FIELD_LOG_TOPIC, new TextEncoder().encode(line));
+      };
+      void sendOrKeep(pubsub, line);
     } catch (error) {
       // A log that cannot be shouted must not break the app it is logging —
       // but a catch that says nothing hides a programming error as though it
       // were a network one, and this one hid `myNodeNum is not defined`
       // through two days of field testing. It cannot report through pushLog,
       // which is what throws, so it goes where a developer will find it.
+      console.warn("the field log could not go out:", error);
+    }
+  }
+
+  /**
+   * Put a line on the topic, or keep it until somebody is there to hear it.
+   *
+   * The run worth watching is the one with the internet off — the list
+   * travelling over LoRa alone — and that is exactly when a pubsub line
+   * reaches nobody. So silence is not a loss any more: the line is kept, and
+   * goes out in front of the next one that does get through, marked `late` and
+   * carrying the time it was written rather than the time it was sent.
+   */
+  async function sendOrKeep(pubsub, line) {
+    const say = async (payload) => {
+      const result = await pubsub.publish(
+        FIELD_LOG_TOPIC,
+        new TextEncoder().encode(JSON.stringify(payload)),
+      );
+      return result?.recipients?.length ?? 0;
+    };
+    try {
+      // Cheap and synchronous: if nobody has subscribed, publishing cannot
+      // reach anyone, and the backlog stays in the order it was written.
+      if (pubsub.getSubscribers(FIELD_LOG_TOPIC).length === 0) {
+        backlog.keep(line);
+        return;
+      }
+      for (const kept of backlog.take()) {
+        if ((await say({ ...kept, late: true })) === 0) {
+          // The listener went away mid-replay. Put this one back and stop;
+          // the rest of the run will carry it over again.
+          backlog.keep(kept);
+          backlog.keep(line);
+          return;
+        }
+      }
+      if ((await say(line)) === 0) backlog.keep(line);
+    } catch (error) {
+      backlog.keep(line);
       console.warn("the field log could not go out:", error);
     }
   }
@@ -1290,6 +1333,10 @@
         onchange={(event) => {
           logOn = event.currentTarget.checked;
           if (logOn) joinLogTopic();
+          // Somebody who turns the log off means it: the backlog carries
+          // channel names and node numbers, and must not sit there waiting
+          // for the next time it is switched on.
+          else backlog.clear();
           rememberRadio();
           pushLog(logOn ? w().log.logOn : w().log.logOff);
         }}
