@@ -589,7 +589,6 @@
         // and it throws again: a storm that renders the page useless, and it
         // was observed doing exactly that. A reader wants to know who is
         // reachable and how, which is what this now says.
-        const seen = new Set();
         conns = stack.libp2p
           .getConnections()
           .filter((connection) => connection.status === "open")
@@ -600,12 +599,16 @@
             };
             return { ...row, kind: connKind(row) };
           })
-          .filter((row) => {
-            const key = row.peer + row.kind;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
+          // Two sockets on the same way to the same peer are one row — they
+          // read identically — but the count is kept rather than dropped: two
+          // WebRTC connections to one peer is worth seeing, and a reader who
+          // does not care sees nothing extra, because one is not shown.
+          .reduce((rows, row) => {
+            const same = rows.find((r) => r.peer === row.peer && r.kind === row.kind);
+            if (same) same.n += 1;
+            else rows.push({ ...row, n: 1 });
+            return rows;
+          }, []);
       };
       look();
       setInterval(look, 2000);
@@ -1106,7 +1109,10 @@
       {#if conns.length > 0}
         <ul class="conns">
           {#each conns as c (c.peer + c.kind)}
-            <li><span class="mono">…{c.peer.slice(-8)}</span> · {kindOf(c)}</li>
+            <li>
+              <span class="mono">…{c.peer.slice(-8)}</span> · {kindOf(c)}{#if c.n > 1}
+                <span class="dim" title={t.connTimesTitle}>×{c.n}</span>{/if}
+            </li>
           {/each}
         </ul>
       {/if}

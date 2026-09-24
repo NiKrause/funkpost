@@ -43,6 +43,7 @@ export const WORDS = {
     otherPages: (n) => `${n} other ${plural(n, "page", "pages")}`,
     connKinds: { relay: "relay", direct: "direct (WebRTC)", relayed: "through a relay", other: "other" },
     thisNode: "this node",
+    connTimesTitle: "More than one connection of this kind to the same peer.",
     tallySent: (beats, echoes) => `sent ${beats} beat${beats === 1 ? "" : "s"}, ${echoes} echo${echoes === 1 ? "" : "es"}`,
     tallyReceived: (beats, echoes) =>
       `heard ${beats} beat${beats === 1 ? "" : "s"}, ${echoes} echo${echoes === 1 ? "" : "es"}`,
@@ -264,6 +265,7 @@ export const WORDS = {
     otherPages: (n) => `${n} ${plural(n, "andere Seite", "andere Seiten")}`,
     connKinds: { relay: "Relay", direct: "direkt (WebRTC)", relayed: "über ein Relay", other: "andere" },
     thisNode: "dieser Knoten",
+    connTimesTitle: "Mehr als eine Verbindung dieser Art zu demselben Peer.",
     tallySent: (beats, echoes) =>
       `${beats} ${beats === 1 ? "Schlag" : "Schläge"} gesendet, ${echoes} ${echoes === 1 ? "Echo" : "Echos"}`,
     tallyReceived: (beats, echoes) =>
