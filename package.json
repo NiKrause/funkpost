@@ -24,7 +24,8 @@
     "./links/meshtastic-supervisor": "./lib/links/meshtastic-supervisor.js",
     "./founding-pointer": "./lib/founding-pointer.js",
     "./heartbeat": "./lib/heartbeat.js",
-    "./links/gatt-probe": "./lib/links/gatt-probe.js"
+    "./links/gatt-probe": "./lib/links/gatt-probe.js",
+    "./links/gatt-queue": "./lib/links/gatt-queue.js"
   },
   "scripts": {
     "test": "node --test --test-force-exit test/*.test.js",
