@@ -84,6 +84,60 @@ lose the same afternoon.
 - Web Bluetooth support and spec:
   [WebBluetoothCG/web-bluetooth](https://github.com/WebBluetoothCG/web-bluetooth).
 
+## A list over the radio, with nobody's internet on
+
+**24 September 2026, evening.** Not Run C — that one is the cold join, and both
+phones already held the list, so it remains unrun. This was its neighbour and a
+prerequisite for it: **both devices offline**, a change made on one, and the
+data crossing on LoRa alone. It crossed, and what crossed was not the change but
+the whole log.
+
+```
+20:10:53  both  internet gone
+20:12:54  B     carried by the mesh — OrbitDB's own sync stopped
+20:13:22  B     → announced — 1 local change offered
+20:13:27  A     → announce back
+20:13:30  B     → blocks 5738 B
+20:22:17  A     ← blocks 5738 B
+20:22:41  B     ✓ delivered after 2 rounds
+```
+
+**Eight minutes forty-seven seconds for 5738 bytes, and that is the band, not a
+fault.** 5738 B is about 29 packets on `LONG_FAST`, roughly 60 s of air; at the
+legal 10 % duty cycle the floor is 8–11 minutes. The measurement landed on it.
+Nobody watching a phone for two minutes will believe the transfer is working,
+and the app has to say so — the number is not a tuning target, it is the
+carrier. The only lever left is the payload, which is what #164 measured: 5 %
+of an OrbitDB entry is the todo, the other 95 % is bookkeeping.
+
+What the run bought beyond the crossing itself:
+
+- **The 20-minute send timeout (#163) held.** Zero `neither delivered nor
+  failed` lines, zero give-ups, **one** block send where three afternoons
+  earlier the same payload went three times in parallel and competed with
+  itself for airtime.
+- **The mesh button advised the wrong control.** It answered "switch »carry the
+  list over the radio« on" four times while that switch was on; toggling it off
+  and on built the path in the same second. The wiring is attempted when the
+  list arrives and when the node connects, and neither had happened since both
+  were last present. Fixed in #167: the button builds the path, because asking
+  for it is what pressing it means.
+- **"Nobody answered" was false on both phones at once**, while both kept the
+  list. The window was six seconds; one hop measured 1–8 s. Also #167.
+- **A 32-byte presence answer waited 8 m 51 s** behind a 5.7 KB delta in the
+  same FIFO outbox — bridge issue #128. No window on the consumer side can
+  repair a nine-minute answer.
+- **And the delta joined nothing, three times.** The same 5738 bytes crossed at
+  20:13:30, 20:22:28 and 20:30:56; `synced` never fired, no `want` was ever
+  posted, and each arrival's announce drew the next copy. Complete, joined
+  nothing, repeat — nine minutes of airtime per round, with no way for the
+  exchange to go quiet. Bridge issue #127, and the open half is *why* a
+  complete delta joined nothing.
+
+The offline log buffer (#156) is what makes this entry possible: none of it was
+observable while it happened, and all of it was waiting when the phones came
+back.
+
 ## Two days that looked like radio, and were Bluetooth
 
 **24 September 2026.** Two Android phones, two nodes, `EU_868`. The heartbeat
