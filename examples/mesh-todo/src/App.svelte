@@ -669,8 +669,17 @@
         onEvent: onCourierEvent,
         onTelemetry: (value) => (airUtil = value),
         onRegion: (name) => {
+          const wasUnusable = region === "" || region === "UNSET";
           region = name;
           pushLog(w().log.region(name));
+          // The node reports its region a second or two after the link comes
+          // up, and the heartbeat's first round starts before that. Measured
+          // in the field: "♥ Schlag 1 von 5" followed immediately by "node
+          // region is UNSET/unknown — refusing to transmit", and then an hour
+          // of silence until the next round. The courier is right to refuse —
+          // it does not know the local airtime law yet — so the round is the
+          // thing to redo, once the answer has arrived.
+          if (wasUnusable && name && name !== "UNSET") restartHeartbeat();
         },
         onChannel: handleChannel,
         onMyNodeInfo: (info) => {
