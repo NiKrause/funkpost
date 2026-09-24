@@ -57,8 +57,8 @@ export const WORDS = {
     beatSwitchTitle: "A few bytes an hour: is another device with this list within reach?",
     syncSwitch: "carry the list over the radio",
     syncSwitchTitle: "Off by default — the expensive half, and it only works once both devices are on the same channel.",
-    logSwitch: "shout the log to a watcher",
-    logSwitchTitle: "Publishes each log line on a pubsub topic for a third machine watching this run. Live or nothing: a line nobody hears is gone. Off by default — a log carries channel names and node numbers.",
+    logSwitch: "send the log to a watcher",
+    logSwitchTitle: "Publishes each log line on a pubsub topic over the internet connection, for a third machine watching this run — not over the radio, so it costs no airtime and does nothing without internet. Live or nothing: a line nobody hears is gone. Off by default — a log carries channel names and node numbers.",
     txChannel: "TX channel:",
     txChannelTitle:
       "transmissions go on this channel — pick the same »name« ⌗fingerprint on both phones. Reception decodes every channel the node holds a key for.",
@@ -274,8 +274,8 @@ export const WORDS = {
     beatSwitchTitle: "Ein paar Bytes pro Stunde: ist ein anderes Gerät mit dieser Liste in Reichweite?",
     syncSwitch: "Liste über Funk tragen",
     syncSwitchTitle: "Standardmäßig aus — die teure Hälfte, und sie wirkt erst, wenn beide Geräte auf demselben Kanal sind.",
-    logSwitch: "Log an einen Beobachter funken",
-    logSwitchTitle: "Veröffentlicht jede Logzeile auf einem Pubsub-Topic, für einen dritten Rechner, der diesen Lauf mitliest. Live oder gar nicht: Was niemand hört, ist weg. Standardmäßig aus — ein Log trägt Kanalnamen und Knotennummern.",
+    logSwitch: "Log an einen Beobachter senden",
+    logSwitchTitle: "Veröffentlicht jede Logzeile über die Internetverbindung auf einem Pubsub-Topic, für einen dritten Rechner, der diesen Lauf mitliest — nicht über den Funk, kostet also keine Sendezeit und tut ohne Internet nichts. Live oder gar nicht: Was niemand hört, ist weg. Standardmäßig aus — ein Log trägt Kanalnamen und Knotennummern.",
     txChannel: "Sendekanal:",
     txChannelTitle:
       "gesendet wird auf diesem Kanal — auf beiden Telefonen denselben »Namen« ⌗Fingerabdruck wählen. Empfangen wird auf jedem Kanal, für den der Knoten einen Schlüssel hat.",
