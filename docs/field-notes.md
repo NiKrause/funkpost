@@ -84,6 +84,65 @@ lose the same afternoon.
 - Web Bluetooth support and spec:
   [WebBluetoothCG/web-bluetooth](https://github.com/WebBluetoothCG/web-bluetooth).
 
+## Two days that looked like radio, and were Bluetooth
+
+**24 September 2026.** Two Android phones, two nodes, `EU_868`. The heartbeat
+had not crossed once in two days of trying, and every explanation offered
+itself in turn: gossipsub, the relay, the deployment, the browser. All four
+were wrong.
+
+**The field log had never sent a line.** `shoutLog` built its payload with a
+variable that does not exist, every call threw a `ReferenceError` before
+reaching `publish`, and `catch {}` swallowed it. Two days of "the topic is not
+audible" were a typo behind a silent catch. A catch that must not break its
+caller can still `console.warn` — silence is not a requirement of being
+defensive.
+
+**The service worker blanked the page after every deploy.** The shell was
+cached stale-while-revalidate, and the shell *names its bundle by content
+hash*: after a deploy the cached shell asked for a file the new build had
+already deleted, the request 404'd, and nothing rendered. Navigations are keyed
+to `"./"`, so no cache-buster in the query could get past it. That is why a
+phone showed a build from two deploys back while `curl` fetched the current one
+perfectly. The shell now goes to the network first; assets keep the old
+strategy, which is right for them precisely because a hashed name is immutable.
+
+**The storm was the cause, not the consequence.** `GATT operation already in
+progress` made up **502 of 925 log lines**. Three separate fixes to the
+reconnect machinery moved that number by nothing, because they all work on the
+reaction. Wrapping the Web Bluetooth methods showed 139 overlaps in one short
+run, and in **every single one** the blocking operation was a `readValue`: the
+connection sequence reads the node's configuration without awaiting each read,
+nine deep before it collapses. Android Chrome allows one GATT operation at a
+time; the transport reports a failed operation as a *disconnection*; everything
+above spends itself repairing a link that never broke.
+
+Serialising the operations ended it:
+
+| | storm lines/min | overlaps | drops |
+|---|---:|---:|---:|
+| before | 101–114 | 133 | continuous |
+| after | **0** | 3 | **0** |
+
+Eleven log lines in two minutes where there had been hundreds. The heartbeat
+crossed within the hour, both ways, with the echo.
+
+**Then the join failed five times, and it was not the radio.** With one phone's
+internet off, it tried to join **over the internet**, failed with `Failed to
+load block`, and never transmitted once in four minutes — while the other
+device's traffic reached it perfectly and was acknowledged after one round
+each time. `carriedBy` describes what carries an *open* list, and joining is
+the one moment when there is none; the switch to the mesh path returns early
+without a `db`, so it could not correct itself either. Fixed by asking what can
+actually fetch.
+
+**Two lessons that are not about Bluetooth.** Measure inside the layer that
+fails before touching the layer that reacts — two hypotheses (parked devices,
+the supervisor itself) died on the data, and the data was one deploy away the
+whole time. And a diagnostic that only works online cannot watch the run that
+matters: the field log now keeps what nobody heard and sends it when somebody
+does, which is how the join failure above was recovered at all.
+
 ## The first booking, and the two hours before it
 
 **6 September 2026.** A booking crossed a real mesh: a customer's booking
