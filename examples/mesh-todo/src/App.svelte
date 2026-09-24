@@ -107,7 +107,7 @@
   let heartbeatStarting = false;
   /** Set only under ?gatt=1; restores the browser's own methods on teardown. */
   let stopGattProbe = null;
-  /** Set only under ?gattq=1; restores the browser's own methods on teardown. */
+  /** On unless ?gattq=0; restores the browser's own methods on teardown. */
   let stopGattQueue = null;
 
   /**
@@ -655,13 +655,23 @@
     // connection and is not caused by the reconnect machinery; this is how the
     // thing that *does* cause it becomes visible. Off otherwise, because it
     // patches a browser prototype and every line it writes goes on the air.
-    // ?gattq=1: one Bluetooth operation at a time. Every one of the 139
-    // overlaps measured in the field was blocked by a readValue, because the
-    // connection sequence does not await its reads (issue #153). Applied
-    // before the probe, so that with both flags the probe still reports the
-    // overlapping *calls* while the failures underneath them disappear —
-    // which is the measurement that says whether this works.
-    if (params.get("gattq") === "1") {
+    // One Bluetooth operation at a time, unless asked not to. Every one of the
+    // 139 overlaps measured in the field was blocked by a readValue, because
+    // the connection sequence does not await its reads (issue #153).
+    //
+    // On by default, because the alternative is what the field showed with it
+    // off: 121 GATT failures a minute and a link that drops continuously. It
+    // spent one afternoon behind a flag and the flag was the problem — a run
+    // started without it reproduced the storm exactly, which is evidence for
+    // the fix and against the flag.
+    //
+    // `?gattq=0` turns it off: patching a browser prototype should have a way
+    // out that does not need a new deploy, and a browser that does not need
+    // this should be able to say so.
+    //
+    // Applied before the probe, so that with `?gatt=1` the probe still reports
+    // the overlapping *calls* while the failures underneath them disappear.
+    if (params.get("gattq") !== "0") {
       stopGattQueue = serialiseGattOperations();
       pushLog(w().log.gattQueueOn);
     }
