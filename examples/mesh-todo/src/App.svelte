@@ -352,7 +352,7 @@
       const line = JSON.stringify({
         v: 1,
         at: new Date().toISOString(),
-        dev: myNodeNum ?? logDeviceId,
+        dev: myNode || logDeviceId,
         text,
         region,
         channel: txChannel,
@@ -360,8 +360,13 @@
         sync: syncOn,
       });
       pubsub.publish(FIELD_LOG_TOPIC, new TextEncoder().encode(line));
-    } catch {
-      // A log that cannot be shouted must not break the app it is logging.
+    } catch (error) {
+      // A log that cannot be shouted must not break the app it is logging —
+      // but a catch that says nothing hides a programming error as though it
+      // were a network one, and this one hid `myNodeNum is not defined`
+      // through two days of field testing. It cannot report through pushLog,
+      // which is what throws, so it goes where a developer will find it.
+      console.warn("the field log could not go out:", error);
     }
   }
 
