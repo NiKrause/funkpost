@@ -156,17 +156,17 @@
   let selfId = $state("");
   let relayIds = $state([]);
   let conns = $state([]);
+  /** How a connection reaches the other side — the name, not the wording. */
+  const connKind = (c) =>
+    relayIds.includes(c.peer)
+      ? "relay"
+      : c.addr.includes("/webrtc")
+        ? "direct"
+        : c.addr.includes("/p2p-circuit")
+          ? "relayed"
+          : "other";
   /** How a connection reaches the other side, in the words a reader wants. */
-  const kindOf = (c) =>
-    t.connKinds[
-      relayIds.includes(c.peer)
-        ? "relay"
-        : c.addr.includes("/webrtc")
-          ? "direct"
-          : c.addr.includes("/p2p-circuit")
-            ? "relayed"
-            : "other"
-    ];
+  const kindOf = (c) => t.connKinds[c.kind ?? connKind(c)];
   const otherPeers = $derived([...new Set(conns.filter((c) => !relayIds.includes(c.peer)).map((c) => c.peer))]);
   const relaysConnected = $derived(relayIds.filter((id) => conns.some((c) => c.peer === id)).length);
   let switching = $state(false);
@@ -571,13 +571,34 @@
       });
       const look = () => {
         ipPeers = internetPeers(stack.libp2p);
+        // One row per way to a peer, not per socket. libp2p readily holds two
+        // open connections to the same peer on the same address — a circuit
+        // and the WebRTC it was upgraded to, or simply two dials that raced —
+        // and the list is keyed by peer+address. A duplicate key makes Svelte
+        // throw `each_key_duplicate`, window.onerror logs it, logging renders,
+        // and it throws again: a storm that renders the page useless, and it
+        // was observed doing exactly that. A reader wants to know who is
+        // reachable and how, which is what this now says.
         conns = stack.libp2p
           .getConnections()
           .filter((connection) => connection.status === "open")
-          .map((connection) => ({
-            peer: connection.remotePeer.toString(),
-            addr: connection.remoteAddr.toString(),
-          }));
+          .map((connection) => {
+            const row = {
+              peer: connection.remotePeer.toString(),
+              addr: connection.remoteAddr.toString(),
+            };
+            return { ...row, kind: connKind(row) };
+          })
+          // Two sockets on the same way to the same peer are one row — they
+          // read identically — but the count is kept rather than dropped: two
+          // WebRTC connections to one peer is worth seeing, and a reader who
+          // does not care sees nothing extra, because one is not shown.
+          .reduce((rows, row) => {
+            const same = rows.find((r) => r.peer === row.peer && r.kind === row.kind);
+            if (same) same.n += 1;
+            else rows.push({ ...row, n: 1 });
+            return rows;
+          }, []);
       };
       look();
       setInterval(look, 2000);
@@ -1077,8 +1098,11 @@
       </p>
       {#if conns.length > 0}
         <ul class="conns">
-          {#each conns as c (c.peer + c.addr)}
-            <li><span class="mono">…{c.peer.slice(-8)}</span> · {kindOf(c)}</li>
+          {#each conns as c (c.peer + c.kind)}
+            <li>
+              <span class="mono">…{c.peer.slice(-8)}</span> · {kindOf(c)}{#if c.n > 1}
+                <span class="dim" title={t.connTimesTitle}>×{c.n}</span>{/if}
+            </li>
           {/each}
         </ul>
       {/if}
