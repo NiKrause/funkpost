@@ -2,13 +2,14 @@
 
 # Run sheet: what the next bench has to show
 
-Status: **two runs open.** Both pass in the browser over a fake mesh; what is
+Status: **three runs open.** All pass in the browser over a fake mesh; what is
 left needs two Meshtastic nodes on a bench, not another commit.
 
 | run | the question | gate |
 |---|---|---|
 | [**A** · internet first, the mesh when it goes](#run-a-internet-first-the-mesh-when-it-goes) | does the fallback hold on real radios? | [ROADMAP](../ROADMAP.md) P10 · [#82](https://github.com/NiKrause/funkpost/issues/82) |
 | [**B** · a decision crosses the mesh](#run-b-a-decision-crosses-the-mesh) | does a salon's yes reach the customer? | [ROADMAP](../ROADMAP.md) P7 · [#38](https://github.com/NiKrause/funkpost/issues/38) A7 |
+| [**C** · a whole list over LoRa, cold](#run-c-a-whole-list-over-lora-cold) | can a list be joined with no internet at all? | [#153](https://github.com/NiKrause/funkpost/issues/153) · [#158](https://github.com/NiKrause/funkpost/pull/158) |
 
 Each run says what to press, what to write down, and **when it counts**. The
 pass line is the ROADMAP's gate, not a new one. Results go into the
@@ -155,14 +156,58 @@ Apple Calendar, Google Calendar and Thunderbird
 - *AirUtilTX* on both nodes, before and after;
 - the calendar app, and whether the import worked.
 
-## Watch during both runs
+## Run C: a whole list over LoRa, cold
+
+Runs A and B both start online: by the time the radio matters, each phone
+already holds the list, and only changes have to cross. This one asks the
+harder question — **can a device get a list it has never seen, with no
+internet at any point?** That is the whole bootstrap over LoRa, not a delta.
+
+It was attempted on 2026-09-24 and could not be finished: the joining phone
+kept trying over the internet it did not have, and never transmitted (see the
+[field notes](field-notes.md)). [#158](https://github.com/NiKrause/funkpost/pull/158)
+is the fix; this run is how we find out whether that was the only obstacle.
+
+**Page:** <https://nikrause.github.io/funkpost/mesh-todo/?log=1>, so the run
+can be read afterwards — the log is kept while offline and sent when the
+network returns.
+
+**Do not reload after step 4.** The stores are in memory on purpose (*"Reset
+is a reload"*), so reloading destroys the list the run is about. Cutting the
+internet is safe; reloading is not.
+
+| # | where | do | expect |
+|---|---|---|---|
+| 1 | both | open the page (internet still on — the app has to load once) | `internet path up` |
+| 2 | both | *Connect node*, pick the TX channel | `region EU_868`, the same `»name« ⌗fingerprint` on both |
+| 3 | both | switch on *carry the list over the radio* | `list sync on — the radio carries changes again` |
+| 4 | both | cut Wi-Fi **and** mobile data. Not flight mode, and **no reload** | `internet gone` |
+| 5 | A | *Create a list* | an address, and `invite sent over the mesh` |
+| 6 | B | *Join this list* | the LED turns cyan, and the join goes **on the air** — B must transmit. A join that fails with `Failed to load block` means it still took the internet path |
+| 7 | B | — | `0 entries`, and the list address matches A's |
+| 8 | A | add an entry, *Send 1 change* | it appears on B; note how long the whole list took to cross |
+| 9 | B | tick it off, *Send 1 change* | A shows it ticked |
+
+**It counts** when step 6 completes with no internet on either device — a list
+that has never existed on B arrives over the radio alone. Steps 8 and 9 then
+show it is a real list and not a snapshot.
+
+**Write down:** the time from step 6 to step 7 (the bootstrap), the size of
+the list, and every line starting with `!`. With `?log=1` on both phones, a
+watcher picks all of it up afterwards:
+
+```bash
+RELAY_ADDRS=/dns4/…/p2p/12D3… node scripts/watch-field-log.mjs --out run-c.ndjson
+```
+
+## Watch during every run
 
 - **Bluetooth drops** (#1). `mesh-todo` says `link dropped — reconnecting
   automatically…`; `mesh-calendar` logs `Verbindung weg — Versuch …` in its
   radio strip. Count them, and note whether each came back without a reload.
   The reconnect supervisor moved into the library (#37) and has not run on
   hardware since — these runs are its re-run.
-- **Airtime against the estimate** (#73), in run A — the booking page shows
+- **Airtime against the estimate** (#73), in runs A and C — the booking page shows
   no estimate. Compare the rise in `node airtime` (1 % = 36 s) with
   `est. airtime` in the sync pane. If the node spent about three times what
   the page estimates, that is #73's suspicion that `want_ack` on broadcasts
@@ -179,7 +224,7 @@ line of the [ROADMAP](../ROADMAP.md), in the [README](../README.md#status)'s
 status, and on [lora.le-space.de](https://lora.le-space.de/).
 
 ```text
-Run A / B — date, time, place
+Run A / B / C — date, time, place
 Devices    A: model · Android · Chrome        B: model · Android · Chrome
 Nodes      A: model · firmware                B: model · firmware
 Air        region · preset · »channel« ⌗fingerprint · role · TX power · distance
