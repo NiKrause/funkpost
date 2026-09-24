@@ -24,6 +24,9 @@ test("the LED blinks until another device with this list answers, and again once
   // A node, but nothing to listen for yet.
   await expect(led).toHaveAttribute("data-state", "blinking");
   await expect(a.getByTestId("led-label")).toHaveText(/no list to listen for yet/);
+  // Amber: this device is not ready. A different problem from "nobody is
+  // there", and it must not look the same.
+  await expect(a.locator(".led")).toHaveAttribute("data-stage", "waiting");
 
   // A list and nobody else: five beats, then the verdict — still blinking.
   await a.getByRole("button", { name: "Create a list" }).click();
@@ -41,12 +44,17 @@ test("the LED blinks until another device with this list answers, and again once
   for (const page of [a, b]) {
     await expect(page.getByTestId("led")).toHaveAttribute("data-state", "steady", { timeout: 30_000 });
     await expect(page.getByTestId("led-label")).toHaveText(/another device with this list answered/);
+    // Answered, or carrying if the radio happens to be moving traffic right
+    // now — both are the green, reached-somebody end of the scale.
+    await expect(page.locator(".led")).toHaveAttribute("data-stage", /answered|carrying/);
   }
 
   // B goes. A's next round finds nobody, and the LED blinks again.
   await b.close();
   await expect(led).toHaveAttribute("data-state", "blinking", { timeout: 90_000 });
   await expect(a.getByTestId("led-label")).toHaveText(/no other device with this list answered/);
+  // Back to calling, not to waiting: the node is still there.
+  await expect(a.locator(".led")).toHaveAttribute("data-stage", "calling");
 
   await a.close();
 });
