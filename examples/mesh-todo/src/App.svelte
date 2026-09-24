@@ -14,6 +14,7 @@
   import { creditHTML, lang } from "@le-space/funkpost-brand";
   import { WORDS } from "./words.js";
   import { FIELD_LOG_TOPIC } from "./pubsub-topics.js";
+  import { measureGattOverlap } from "@le-space/funkpost/links/gatt-probe";
   import {
     createDatabaseStack,
     joinOverInternet,
@@ -102,6 +103,8 @@
   // The heartbeat: does another device keeping this list answer on the air?
   let heartbeat = null;
   let heartbeatStarting = false;
+  /** Set only under ?gatt=1; restores the browser's own methods on teardown. */
+  let stopGattProbe = null;
 
   /**
    * What the radio is allowed to carry, as two separate decisions.
@@ -558,6 +561,16 @@
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOnline);
 
+    // ?gatt=1: say which Bluetooth operations overlap. Issue #153 established
+    // that the storm of "GATT operation already in progress" starts with the
+    // connection and is not caused by the reconnect machinery; this is how the
+    // thing that *does* cause it becomes visible. Off otherwise, because it
+    // patches a browser prototype and every line it writes goes on the air.
+    if (params.get("gatt") === "1") {
+      stopGattProbe = measureGattOverlap((line) => pushLog(line));
+      pushLog(w().log.gattProbeOn);
+    }
+
     if (params.get("probe") === "meshtastic-core") {
       try {
         probeResult = await probeMeshtasticCore();
@@ -657,6 +670,8 @@
       clearInterval(ticker);
       heartbeat?.stop();
       document.removeEventListener("visibilitychange", reacquireOnReturn);
+      // Patched browser methods must not outlive the page that patched them.
+      stopGattProbe?.();
     };
   });
 
