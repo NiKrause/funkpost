@@ -71,6 +71,18 @@
   // ?minute=300 makes a round of five beats last a second and a half, and the
   // hour between two rounds eighteen seconds.
   const minuteMs = Math.max(100, Number(params.get("minute")) || 60_000);
+  /**
+   * How long silence is allowed to mean nothing yet, when asking who is there.
+   *
+   * Was six seconds, which is shorter than one hop: a 33-byte hello measured
+   * 1–8 s each way over LoRa (run C, 2026-09-24), so a round trip can be
+   * sixteen — and worse, the answer queues behind whatever is already on its
+   * way, which that run made nine minutes. Both phones were told nobody was
+   * keeping the list while both were keeping it, which is the one answer this
+   * question must never get wrong. A fake mesh answers instantly, so the e2e
+   * suite shortens this rather than waiting out a radio it does not have.
+   */
+  const answerWindowMs = Math.max(500, Number(params.get("answer")) || 45_000);
   // A list's link: the page's own address names the list, so a link or the
   // page's QR code opens it on another device. Nothing else is read from the
   // hash.
@@ -1008,12 +1020,28 @@
   async function carryOver(path) {
     if (!db || switching || path === carriedBy) return;
     if (path === "mesh" && !sync) {
-      // A button that does nothing and says nothing is worse than one that is
-      // disabled: in the field it read as a broken app. The sync only exists
-      // once the list switch is on *and* a node is paired, so say which of the
-      // two is missing rather than returning into silence.
-      pushLog(courier ? w().log.meshNeedsSyncOn : w().log.meshNeedsNode);
-      error = courier ? w().errors.meshNeedsSyncOn : w().errors.joinNeedsNode;
+      // Build the path first, because asking for it is what this button means.
+      //
+      // Measured on two phones, both offline (run C, 2026-09-24): this button
+      // answered »switch »carry the list over the radio« on« four times while
+      // that switch was already on, and turning it off and on again built the
+      // path in the same second. Nothing was missing — the wiring had simply
+      // never been attempted since the list and the node last both arrived,
+      // and the advice sent the user to the one control that was already
+      // correct. Whichever order they came in, this is the moment to try.
+      await wireList();
+    }
+    if (path === "mesh" && !sync) {
+      // Still nothing, so name what is genuinely absent. An attach that was
+      // tried and failed has already said why in the log; repeating a guess
+      // over it is how the misleading advice above happened.
+      const complaint = !courier
+        ? [w().log.meshNeedsNode, w().errors.joinNeedsNode]
+        : !syncOn
+          ? [w().log.meshNeedsSyncOn, w().errors.meshNeedsSyncOn]
+          : [null, w().errors.meshPathFailed];
+      if (complaint[0]) pushLog(complaint[0]);
+      error = complaint[1];
       return;
     }
     switching = true;
@@ -1067,9 +1095,16 @@
     pushLog(w().log.askingAir);
     try {
       await sync.hello();
-      // An answer has to travel, and this carrier is slow on purpose.
-      await new Promise((resolve) => setTimeout(resolve, 6000));
-      company = sync.presence();
+      // An answer has to travel, and this carrier is slow on purpose — so wait
+      // for it rather than for a stopwatch. Polling presence ends the wait the
+      // moment somebody answers, which keeps a fast carrier fast; the deadline
+      // only decides how long silence is allowed to mean nothing yet.
+      const until = Date.now() + answerWindowMs;
+      while (sync && Date.now() < until) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        company = sync?.presence() ?? company;
+        if (company.peers.length > 0) break;
+      }
       pushLog(
         company.peers.length > 0
           ? w().log.appsAnswered(company.peers.length, company.peers.map((peer) => peer.id).join(", "))

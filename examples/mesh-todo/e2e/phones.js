@@ -11,7 +11,10 @@ export const room = () => `e2e-${Date.now()}-${Math.random().toString(36).slice(
 
 export async function openPhone(context, roomId, extra = "") {
   const page = await context.newPage();
-  await page.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO${extra}`);
+  // `answer` for the same reason as `preset`: a BroadcastChannel answers in
+  // milliseconds, and the radio-sized window the app ships would make every
+  // unanswered question cost the suite three quarters of a minute.
+  await page.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO&answer=3000${extra}`);
   await expect(page.getByText("BroadcastChannel (fake mesh)", { exact: true })).toBeVisible({ timeout: 30_000 });
   return page;
 }
