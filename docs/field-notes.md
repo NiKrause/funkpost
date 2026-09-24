@@ -133,12 +133,16 @@ What the run bought beyond the crossing itself:
   apart, with nobody touching either phone. Complete, joined nothing, repeat.
   The fourth round was overtaken by new writes, so whether it would have ended
   on its own is not known.
-- **The delta is the log, not the change.** Two todos added at 20:38:26 are
-  worth about 456 bytes; what went on the air was 6080 bytes one way and 6194
-  the other — ten minutes of airtime each. `createDelta` stops its walk only at
-  the peer's announced heads, so once those are not stop-points on our own
-  ancestry it walks to the root and ships the whole database. Both of these are
-  bridge issue #127; the open half is *why* a complete delta joined nothing.
+- **The delta is the log, not the change — always.** Two todos added at
+  20:38:26 are worth about 456 bytes; what went on the air was 6080 bytes one
+  way and 6194 the other, ten minutes of airtime each. Reproduced at a desk the
+  same evening, and the cause is not the divergence it looked like: `createDelta`
+  walks `next` **and `refs`**, and stops only at the hashes in `theirHeads`. An
+  OrbitDB entry's `refs` are skip-list back-references that point *past* the
+  parent, so they route around the stop set and the walk reaches the root — for
+  a peer missing one entry, 12 blocks and 8742 B where stopping the refs too
+  gives 2 blocks and 1533 B. The delta has never been incremental. Bridge issue
+  #127; the open half is *why* a complete delta joined nothing.
 
 **Half a kilobyte a minute.** Measured twice on the same evening, and the number
 to plan with:
