@@ -8,9 +8,12 @@
  * same mesh and writes everything down — both devices, one timeline, in the
  * order it arrived here.
  *
- * Live or nothing, deliberately: a line published while this is not running is
- * gone. That is the right trade for a diagnostic, and it is why this prints
- * the moment it is subscribed rather than making you wonder.
+ * Not live or nothing any more: a phone keeps the lines nobody heard and sends
+ * them in front of the next one that gets through, marked `late` and carrying
+ * the time it was written. That is what makes an offline run — the list
+ * travelling over LoRa alone — readable here afterwards. A line published
+ * while no phone has the switch on is still gone, which is why this prints the
+ * moment it is subscribed rather than making you wonder.
  *
  *   node scripts/watch-field-log.mjs                    # relays from relays.js
  *   node scripts/watch-field-log.mjs --out run-3.ndjson
@@ -104,7 +107,11 @@ node.services.pubsub.addEventListener("message", (event) => {
     line = { heard, raw };
   }
   const device = line.dev ?? "?";
-  process.stdout.write(`${line.at ?? heard}  [${device}]  ${line.text ?? raw}\n`);
+  // A replayed line carries the time it was written, not the time it arrived —
+  // say so, or a run that was offline for ten minutes reads as ten minutes of
+  // traffic that never happened.
+  const when = line.late ? `${line.at} (nachgereicht)` : (line.at ?? heard);
+  process.stdout.write(`${when}  [${device}]  ${line.text ?? raw}\n`);
   if (out) appendFileSync(out, JSON.stringify(line) + "\n");
 });
 
