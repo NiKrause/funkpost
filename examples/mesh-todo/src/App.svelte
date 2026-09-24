@@ -1097,7 +1097,9 @@
       <!-- What the radio may carry, as two decisions rather than one. The
            heartbeat is a few bytes an hour; the list sync is everything else.
            Splitting them is what makes "nothing arrives — which half?" a
-           question a field test can answer. -->
+           question a field test can answer. The log switch is not here: it
+           says nothing about the radio, and it is needed most when there is
+           no radio to describe. -->
       <p class="radio-switches">
         <label title={t.beatSwitchTitle}>
           <input
@@ -1116,20 +1118,6 @@
             onchange={(event) => setSync(event.currentTarget.checked)}
           />
           {t.syncSwitch}
-        </label>
-        <label title={t.logSwitchTitle}>
-          <input
-            type="checkbox"
-            checked={logOn}
-            data-testid="log-switch"
-            onchange={(event) => {
-              logOn = event.currentTarget.checked;
-              if (logOn) joinLogTopic();
-              rememberRadio();
-              pushLog(logOn ? w().log.logOn : w().log.logOff);
-            }}
-          />
-          {t.logSwitch}
         </label>
       </p>
       {#if channels.length > 0}
@@ -1214,6 +1202,20 @@
         {t.keepAwake}
       </label>
     {/if}
+    <label class="dim awake" title={t.logSwitchTitle}>
+      <input
+        type="checkbox"
+        checked={logOn}
+        data-testid="log-switch"
+        onchange={(event) => {
+          logOn = event.currentTarget.checked;
+          if (logOn) joinLogTopic();
+          rememberRadio();
+          pushLog(logOn ? w().log.logOn : w().log.logOff);
+        }}
+      />
+      {t.logSwitch}
+    </label>
     {#if budget?.misconfigured}
       <p class="warn">
         {#if $lang === "de"}
