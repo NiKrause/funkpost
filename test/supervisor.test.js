@@ -329,6 +329,33 @@ describe("meshtastic supervisor", () => {
     managed.close();
   });
 
+  test("a repair that did not hold is not repeated at once", async () => {
+    const factory = deviceFactory();
+    const reattached = [];
+    const dropped = [];
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      isLinkAlive: () => true, // the GATT says it is up, and keeps saying so
+      on: { reattached: (n) => reattached.push(n), reconnecting: (n) => dropped.push(n) },
+      ...FAST,
+      reattachGapMs: 10_000,
+    });
+
+    // Measured on Android Chrome: reattach → configuring → connected →
+    // disconnected within milliseconds, then again, dozens of times a second,
+    // every cycle logging "GATT operation already in progress".
+    factory.made[0].drop();
+    await until(() => factory.made.length === 2);
+    assert.equal(reattached.length, 1, "the first break is repaired");
+
+    factory.made[1].drop();
+    await settle(40);
+
+    assert.equal(reattached.length, 1, "the second is not repaired on top of it");
+    assert.deepEqual(dropped, [1], "it goes the honest way instead, which backs off");
+    managed.close();
+  });
+
   test("a link that holds gets its repair budget back", async () => {
     const factory = deviceFactory();
     const reattached = [];
@@ -339,6 +366,9 @@ describe("meshtastic supervisor", () => {
       maxReattaches: 2,
       on: { reattached: (n) => reattached.push(n), reconnecting: (n) => dropped.push(n) },
       ...FAST,
+      // The gap between repairs is a separate property with its own test; here
+      // the budget is what matters, so repairs are allowed back to back.
+      reattachGapMs: 0,
     });
 
     // Android Chrome reports a failed GATT write as a disconnection and does it
