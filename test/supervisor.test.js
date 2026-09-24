@@ -329,6 +329,42 @@ describe("meshtastic supervisor", () => {
     managed.close();
   });
 
+  test("a link that holds gets its repair budget back", async () => {
+    const factory = deviceFactory();
+    const reattached = [];
+    const dropped = [];
+    const managed = await connectMeshtasticDevice({
+      createDevice: factory.create,
+      isLinkAlive: () => true,
+      maxReattaches: 2,
+      on: { reattached: (n) => reattached.push(n), reconnecting: (n) => dropped.push(n) },
+      ...FAST,
+    });
+
+    // Android Chrome reports a failed GATT write as a disconnection and does it
+    // readily, so the repair budget is spent in minutes on a link that never
+    // actually went away.
+    factory.made[0].drop();
+    await until(() => factory.made.length === 2);
+    factory.made[1].drop();
+    await until(() => factory.made.length === 3);
+    assert.equal(reattached.length, 2, "both repairs happened");
+
+    // The link then holds. A budget spent on the last problem must not be
+    // charged against the next one, or every later write error is reported as
+    // a dropped link on a connection that is still up — which is what a phone
+    // in the field showed: it complained and kept working.
+    await settle(60); // > stableMs
+
+    factory.made[2].drop();
+    await until(() => factory.made.length === 4);
+    await settle(20);
+
+    assert.deepEqual(dropped, [], "a live link is never reported as dropped");
+    assert.equal(reattached.length, 3, "the third break was repaired too");
+    managed.close();
+  });
+
   test("a live link is re-attached, not torn down", async () => {
     const factory = deviceFactory();
     const reattached = [];
