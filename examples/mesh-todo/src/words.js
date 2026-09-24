@@ -43,6 +43,11 @@ export const WORDS = {
     otherPages: (n) => `${n} other ${plural(n, "page", "pages")}`,
     connKinds: { relay: "relay", direct: "direct (WebRTC)", relayed: "through a relay", other: "other" },
     thisNode: "this node",
+    tallySent: (beats, echoes) => `sent ${beats} beat${beats === 1 ? "" : "s"}, ${echoes} echo${echoes === 1 ? "" : "es"}`,
+    tallyReceived: (beats, echoes) =>
+      `heard ${beats} beat${beats === 1 ? "" : "s"}, ${echoes} echo${echoes === 1 ? "" : "es"}`,
+    tallyTitle:
+      "Since this page opened. Sent stuck at zero means the node refuses to transmit; sent climbing with nothing heard means nobody answered.",
     node: "1 · Node",
     startingStack: "starting the local database stack…",
     connecting: "connecting…",
@@ -259,6 +264,12 @@ export const WORDS = {
     otherPages: (n) => `${n} ${plural(n, "andere Seite", "andere Seiten")}`,
     connKinds: { relay: "Relay", direct: "direkt (WebRTC)", relayed: "über ein Relay", other: "andere" },
     thisNode: "dieser Knoten",
+    tallySent: (beats, echoes) =>
+      `${beats} ${beats === 1 ? "Schlag" : "Schläge"} gesendet, ${echoes} ${echoes === 1 ? "Echo" : "Echos"}`,
+    tallyReceived: (beats, echoes) =>
+      `${beats} ${beats === 1 ? "Schlag" : "Schläge"} gehört, ${echoes} ${echoes === 1 ? "Echo" : "Echos"}`,
+    tallyTitle:
+      "Seit dem Öffnen dieser Seite. Bleibt »gesendet« bei null, sendet der Knoten nicht; steigt »gesendet«, ohne dass etwas gehört wird, antwortet niemand.",
     node: "1 · Knoten",
     startingStack: "der lokale Datenbank-Stack startet…",
     connecting: "verbinde…",
