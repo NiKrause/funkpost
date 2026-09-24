@@ -124,6 +124,46 @@
    * budget disappears. `?sync=1` / `?beat=0` override, which is what the e2e
    * suite uses.
    */
+  const FOLD_STORE = "mesh-todo:folds";
+  /**
+   * Which sections are folded away.
+   *
+   * Open by default, all of them. Somebody opening this page for the first
+   * time should not meet five closed drawers and have to guess which one
+   * holds the thing they came for — the page explains itself by being read,
+   * and that is its first job. Somebody using it as a bench instrument folds
+   * what they do not need **once**, and it stays folded: the state lives in
+   * localStorage, like the radio switches, because it is a preference rather
+   * than data.
+   *
+   * The list is not foldable at all. It is the page's subject; a fold that can
+   * hide it would only ever be pressed by accident.
+   */
+  let folds = $state(
+    (() => {
+      const open = { internet: true, node: true, sync: true, neighbours: true };
+      try {
+        const kept = JSON.parse(localStorage.getItem(FOLD_STORE) ?? "null");
+        return kept && typeof kept === "object" ? { ...open, ...kept } : open;
+      } catch {
+        return open; // blocked storage: everything open is the safe answer
+      }
+    })(),
+  );
+  // Kept by an effect rather than by `ontoggle`: the toggle event fires before
+  // `bind:open` has written back, so a handler there stores the value the
+  // section had *before* the click — verified, it wrote `true` for a section
+  // that had just been folded away.
+  $effect(() => {
+    const snapshot = JSON.stringify(folds);
+    try {
+      localStorage.setItem(FOLD_STORE, snapshot);
+    } catch {
+      // As with the radio switches: a preference that cannot be kept is not
+      // worth an error on somebody's screen.
+    }
+  });
+
   const RADIO_STORE = "mesh-todo:radio";
   const askedFor = (name, fallback) => {
     const asked = new URLSearchParams(location.search).get(name);
@@ -1172,15 +1212,6 @@
 <main>
   <h1>mesh-todo</h1>
   <p class="tag">{t.tagline(wantsInternet)}</p>
-  <p
-    class="led-line"
-    data-testid="led"
-    data-state={led.steady ? "steady" : "blinking"}
-    title={t.led.title}
-  >
-    <span class="led" class:steady={led.steady} data-stage={led.stage} aria-hidden="true"></span>
-    <span data-testid="led-label">{led.text}</span>
-  </p>
 
   <!-- The tally, because "nothing arrives" is two questions and the LED
        answers neither: did anything go out, and did anything come back. A
@@ -1235,8 +1266,8 @@
   {/if}
 
   {#if wantsInternet}
-    <section data-testid="internet">
-      <h2>{t.internet} <span class="dim">{t.normalPath}</span></h2>
+    <details class="fold" data-testid="internet" bind:open={folds.internet}>
+      <summary><h2>{t.internet} <span class="dim">{t.normalPath}</span></h2></summary>
       {#if $lang === "de"}
         <p class="dim">
           Diese Seite ist vom Öffnen an ein Peer-to-Peer-Knoten. Sie findet die auf Aleph
@@ -1272,11 +1303,25 @@
         </ul>
       {/if}
       {#if selfId}<p class="dim mono">{t.thisNode} …{selfId.slice(-8)}</p>{/if}
-    </section>
+    </details>
   {/if}
 
-  <section>
-    <h2>{t.node}</h2>
+  <details class="fold" data-testid="node-section" bind:open={folds.node}>
+    <summary>
+      <h2>{t.node}</h2>
+      <!-- The lamp lives with what it reports on, and in the header so that
+           folding the section away does not hide it — a status light nobody
+           can see is not a status light. Shown here and only here. -->
+      <span
+        class="led-line"
+        data-testid="led"
+        data-state={led.steady ? "steady" : "blinking"}
+        title={t.led.title}
+      >
+        <span class="led" class:steady={led.steady} data-stage={led.stage} aria-hidden="true"></span>
+        <span data-testid="led-label">{led.text}</span>
+      </span>
+    </summary>
     {#if phase === "boot"}
       <p>{t.startingStack}</p>
     {:else if phase === "connecting"}
@@ -1446,7 +1491,7 @@
     {#if probeResult}
       <p class="dim" data-probe={probeResult}>meshtastic-core probe: {probeResult}</p>
     {/if}
-  </section>
+  </details>
 
   <section>
     <h2>{t.list}</h2>
@@ -1635,8 +1680,8 @@
     {/if}
   </section>
 
-  <section>
-    <h2>{t.syncPane} <span class="dim">{t.benchInstrument}</span></h2>
+  <details class="fold" data-testid="sync-section" bind:open={folds.sync}>
+    <summary><h2>{t.syncPane} <span class="dim">{t.benchInstrument}</span></h2></summary>
     <p class="dim">
       {t.frames} {totals.framesTx} → · ← {totals.framesRx} · {t.retransmitRounds}
       {totals.retransmitRounds} · {t.estAirtime} {(totals.airtimeSpentMs / 1000).toFixed(1)} s{#if refusals.soft > 0} · {t.radioGaveUp(refusals.soft, refusals.last)}{/if}
@@ -1647,13 +1692,13 @@
       {/each}
       {#if log.length === 0}<div class="dim">{t.quiet}</div>{/if}
     </div>
-  </section>
+  </details>
 
   {#if mode.kind !== "bc" && neighbours.length > 0}
-    <section>
-      <h2>
-        {t.neighbours} <span class="dim">{t.heardByNode(neighbours.length)}</span>
-      </h2>
+    <details class="fold" data-testid="neighbours-section" bind:open={folds.neighbours}>
+      <summary>
+        <h2>{t.neighbours} <span class="dim">{t.heardByNode(neighbours.length)}</span></h2>
+      </summary>
       {#if $lang === "de"}
         <p class="dim">
           wer sonst auf diesem Kanal funkt — auf einem öffentlichen Kanal ist das das
@@ -1687,7 +1732,7 @@
           {/each}
         </div>
       {/if}
-    </section>
+    </details>
   {/if}
 
   <footer>
@@ -1743,6 +1788,62 @@
   /* The LED: amber and blinking until another device with this list answers,
      then steady green. With reduced motion the blink becomes a hollow ring, so
      the two states still differ in form and not only in colour. */
+  /* A folded section must look like one thing that can be pressed, and an
+     open one must not look like a button at all. The marker is the only
+     difference the eye needs. */
+  .fold {
+    border-top: 1px solid var(--ls-card-border);
+    padding: 0;
+  }
+  .fold > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    cursor: pointer;
+    padding: 4px 0;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker {
+    display: none;
+  }
+  .fold > summary::before {
+    content: "▸";
+    color: var(--ls-text-faint);
+    transition: transform 0.15s ease;
+    /* The triangle is the affordance; it must not move the heading when it
+       turns, so it gets its own box. */
+    display: inline-block;
+    width: 1em;
+    flex: none;
+  }
+  .fold[open] > summary::before {
+    transform: rotate(90deg);
+  }
+  .fold > summary > h2 {
+    margin: 0;
+    flex: none;
+  }
+  /* The lamp sits in the header and keeps its own line only when there is
+     room; on a phone it wraps under the heading rather than squeezing it. */
+  .fold > summary > .led-line {
+    margin: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  @media (max-width: 30rem) {
+    .fold > summary {
+      flex-wrap: wrap;
+    }
+    .fold > summary > .led-line {
+      flex-basis: 100%;
+      padding-left: 1em;
+    }
+  }
+  .fold > summary:focus-visible {
+    outline: 2px solid var(--ls-accent);
+    outline-offset: 2px;
+  }
+
   .led-line {
     display: flex;
     align-items: center;

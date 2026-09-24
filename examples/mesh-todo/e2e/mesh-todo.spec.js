@@ -379,3 +379,36 @@ test("speaks German too, and has a light and a dark look — both kept", async (
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.getByText("BroadcastChannel (Mesh-Attrappe)", { exact: true })).toBeVisible({ timeout: 30_000 });
 });
+
+test("sections fold away, the lamp does not, and the page remembers", async ({ page }) => {
+  const roomId = room();
+  await page.goto(`/?mesh=bc&room=${roomId}`);
+  const node = page.getByTestId("node-section");
+  const lamp = page.getByTestId("led");
+
+  // Open by default: somebody's first visit must not be five closed drawers.
+  await expect(node).toHaveAttribute("open", "");
+  await expect(lamp).toBeVisible();
+
+  await node.locator("summary").click();
+  await expect(node).not.toHaveAttribute("open", "");
+  // The whole point: a status light that folding hides is not a status light.
+  await expect(lamp).toBeVisible();
+  await expect(page.getByTestId("led-label")).not.toHaveText("");
+  // And exactly once — showing it in both places would be worse than either.
+  await expect(page.getByTestId("led")).toHaveCount(1);
+
+  // A preference, so it survives a reload — unlike the list, which is memory.
+  // Wait for the write rather than racing it: the effect that stores this runs
+  // on a microtask, and a reload fired in the same tick beats it. A user
+  // cannot click and reload that fast; a test can, and did.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("mesh-todo:folds")))
+    .toContain('"node":false');
+  await page.reload();
+  await expect(page.getByTestId("node-section")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("led")).toBeVisible();
+
+  // The list itself has no fold: it is what the page is for.
+  await expect(page.locator('details.fold:has(> summary:text-is("2 · Liste"))')).toHaveCount(0);
+});
