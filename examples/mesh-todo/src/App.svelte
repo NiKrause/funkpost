@@ -156,17 +156,17 @@
   let selfId = $state("");
   let relayIds = $state([]);
   let conns = $state([]);
+  /** How a connection reaches the other side — the name, not the wording. */
+  const connKind = (c) =>
+    relayIds.includes(c.peer)
+      ? "relay"
+      : c.addr.includes("/webrtc")
+        ? "direct"
+        : c.addr.includes("/p2p-circuit")
+          ? "relayed"
+          : "other";
   /** How a connection reaches the other side, in the words a reader wants. */
-  const kindOf = (c) =>
-    t.connKinds[
-      relayIds.includes(c.peer)
-        ? "relay"
-        : c.addr.includes("/webrtc")
-          ? "direct"
-          : c.addr.includes("/p2p-circuit")
-            ? "relayed"
-            : "other"
-    ];
+  const kindOf = (c) => t.connKinds[c.kind ?? connKind(c)];
   const otherPeers = $derived([...new Set(conns.filter((c) => !relayIds.includes(c.peer)).map((c) => c.peer))]);
   const relaysConnected = $derived(relayIds.filter((id) => conns.some((c) => c.peer === id)).length);
   let switching = $state(false);
@@ -581,13 +581,31 @@
       });
       const look = () => {
         ipPeers = internetPeers(stack.libp2p);
+        // One row per way to a peer, not per socket. libp2p readily holds two
+        // open connections to the same peer on the same address — a circuit
+        // and the WebRTC it was upgraded to, or simply two dials that raced —
+        // and the list is keyed by peer+address. A duplicate key makes Svelte
+        // throw `each_key_duplicate`, window.onerror logs it, logging renders,
+        // and it throws again: a storm that renders the page useless, and it
+        // was observed doing exactly that. A reader wants to know who is
+        // reachable and how, which is what this now says.
+        const seen = new Set();
         conns = stack.libp2p
           .getConnections()
           .filter((connection) => connection.status === "open")
-          .map((connection) => ({
-            peer: connection.remotePeer.toString(),
-            addr: connection.remoteAddr.toString(),
-          }));
+          .map((connection) => {
+            const row = {
+              peer: connection.remotePeer.toString(),
+              addr: connection.remoteAddr.toString(),
+            };
+            return { ...row, kind: connKind(row) };
+          })
+          .filter((row) => {
+            const key = row.peer + row.kind;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
       };
       look();
       setInterval(look, 2000);
@@ -1087,7 +1105,7 @@
       </p>
       {#if conns.length > 0}
         <ul class="conns">
-          {#each conns as c (c.peer + c.addr)}
+          {#each conns as c (c.peer + c.kind)}
             <li><span class="mono">…{c.peer.slice(-8)}</span> · {kindOf(c)}</li>
           {/each}
         </ul>
