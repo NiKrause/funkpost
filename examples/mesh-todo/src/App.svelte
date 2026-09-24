@@ -888,8 +888,20 @@
     }
     joining = true;
     pushLog(w().log.joiningOnAir);
+    // `carriedBy` describes what carries an *open* list, and joining is the one
+    // moment when there is none — so it cannot decide where the blocks come
+    // from. Measured in the field: a phone with the internet switched off kept
+    // `carriedBy === "internet"`, because switching to the mesh needs an open
+    // list (`carryOver` returns early without `db`), so it tried to join over
+    // the internet five times, failed with "Failed to load block" each time,
+    // and never once asked the radio — which was working, and carrying the
+    // other device's traffic the whole while.
+    //
+    // What decides is what can actually fetch: a courier and no reachable
+    // internet means the radio, whatever the old path was.
+    const overMesh = courier && !internetReachable;
     try {
-      if (carriedBy === "internet") {
+      if (carriedBy === "internet" && !overMesh) {
         const joined = await joinOverInternet({
           orbitdb: stack.orbitdb,
           courier,
@@ -903,6 +915,11 @@
         const joined = await joinList({ orbitdb: stack.orbitdb, courier, address: invite });
         sync = joined.sync;
         wireSyncLog(sync);
+        // The radio is carrying this one now. Saying so keeps the rest of the
+        // page honest — the peer count, the LED and any later carryOver all
+        // read `carriedBy`, and a join that took the mesh while the state said
+        // "internet" is how this bug hid in the first place.
+        carriedBy = "mesh";
         pushLog(w().log.joiningDelta);
       }
     } catch (e) {
