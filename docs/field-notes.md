@@ -140,6 +140,21 @@ What the run bought beyond the crossing itself:
   ancestry it walks to the root and ships the whole database. Both of these are
   bridge issue #127; the open half is *why* a complete delta joined nothing.
 
+**Half a kilobyte a minute.** Measured twice on the same evening, and the number
+to plan with:
+
+| bytes | on the air | goodput |
+| --- | --- | --- |
+| 5738 B | 8 m 47 s | 653 B/min |
+| 6194 B | 12 m 13 s | 507 B/min |
+
+**How to read these logs at all:** an outgoing line is stamped when the message
+*starts going out*, not when it was decided. The outbox is FIFO and the carrier
+is slow, so the two can be twelve minutes apart — at 20:38:43 one
+`handleAnnounce` decided both a `blocks` and a `want`, and the `want` reached the
+air at 20:50:56. Read an outgoing timestamp as a decision time and every
+conclusion about who answered whom comes out wrong.
+
 The offline log buffer (#156) is what makes this entry possible: none of it was
 observable while it happened, and all of it was waiting when the phones came
 back.
