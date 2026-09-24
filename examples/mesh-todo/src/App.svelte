@@ -345,7 +345,10 @@
    */
   function shoutLog(text) {
     const pubsub = stack?.libp2p?.services?.pubsub;
-    if (!logOn || !pubsub) return;
+    if (!logOn || !pubsub) {
+      document.title = `SKIPPED logOn=${logOn} pubsub=${!!pubsub}`;
+      return;
+    }
     try {
       // Belt and braces: the switch can go on after the node started.
       joinLogTopic();
@@ -359,7 +362,14 @@
         beat: beatOn,
         sync: syncOn,
       });
-      pubsub.publish(FIELD_LOG_TOPIC, new TextEncoder().encode(line));
+      pubsub
+        .publish(FIELD_LOG_TOPIC, new TextEncoder().encode(line))
+        .then((r) => {
+          document.title = `SENT ${r?.recipients?.length ?? "?"} | subs=${pubsub.getSubscribers(FIELD_LOG_TOPIC).length} | t=${pubsub.getTopics().length}`;
+        })
+        .catch((e) => {
+          document.title = `REJECTED ${e?.message ?? e}`;
+        });
     } catch {
       // A log that cannot be shouted must not break the app it is logging.
     }

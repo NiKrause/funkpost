@@ -4,7 +4,7 @@
  *
  * A field test happens where the phones are and the laptop is not. Neither
  * phone can hand over a file from a field, so mesh-todo shouts each log line
- * on a pubsub topic when its "shout the log" switch is on, and this joins the
+ * on a pubsub topic when its "send the log" switch is on, and this joins the
  * same mesh and writes everything down — both devices, one timeline, in the
  * order it arrived here.
  *
@@ -130,7 +130,7 @@ setInterval(() => {
 console.error(`listening on ${FIELD_LOG_TOPIC} as ${node.peerId.toString().slice(0, 16)}…`);
 console.error(`relay: ${relays.join(", ")}`);
 if (out) console.error(`writing to ${out}`);
-console.error("(phones must have 'shout the log' switched on — nothing is stored, so start this first)");
+console.error("(phones must have 'send the log' switched on — nothing is stored, so start this first)");
 console.error("waiting to be found — this takes a few seconds after the relay reservation");
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
