@@ -127,12 +127,18 @@ What the run bought beyond the crossing itself:
 - **A 32-byte presence answer waited 8 m 51 s** behind a 5.7 KB delta in the
   same FIFO outbox — bridge issue #128. No window on the consumer side can
   repair a nine-minute answer.
-- **And the delta joined nothing, three times.** The same 5738 bytes crossed at
-  20:13:30, 20:22:28 and 20:30:56; `synced` never fired, no `want` was ever
-  posted, and each arrival's announce drew the next copy. Complete, joined
-  nothing, repeat — nine minutes of airtime per round, with no way for the
-  exchange to go quiet. Bridge issue #127, and the open half is *why* a
-  complete delta joined nothing.
+- **And the delta joined nothing, three times.** The same 5738 bytes arrived at
+  20:22:17, 20:30:55 and 20:38:11; `synced` never fired, no `want` was ever
+  posted, and each arrival's announce drew the next copy — about eight minutes
+  apart, with nobody touching either phone. Complete, joined nothing, repeat.
+  The fourth round was overtaken by new writes, so whether it would have ended
+  on its own is not known.
+- **The delta is the log, not the change.** Two todos added at 20:38:26 are
+  worth about 456 bytes; what went on the air was 6080 bytes one way and 6194
+  the other — ten minutes of airtime each. `createDelta` stops its walk only at
+  the peer's announced heads, so once those are not stop-points on our own
+  ancestry it walks to the root and ships the whole database. Both of these are
+  bridge issue #127; the open half is *why* a complete delta joined nothing.
 
 The offline log buffer (#156) is what makes this entry possible: none of it was
 observable while it happened, and all of it was waiting when the phones came
