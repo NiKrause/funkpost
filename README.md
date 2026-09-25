@@ -2,7 +2,7 @@
 
 [<img src="docs/badges/m-pwrd.svg" alt="Meshtastic Powered" width="84" align="right">](https://meshtastic.org)
 
-*Post über Funk* — a byte courier for local-first applications over LoRa mesh
+*Post über Funk* — a byte courier for local-first applications over LoRa® mesh
 radios; works with Meshtastic® devices. A courier carries what it is handed,
 and this one is handed three very different things: **handshakes, databases and
 events.** One radio, three planes — they share the courier and nothing else, so

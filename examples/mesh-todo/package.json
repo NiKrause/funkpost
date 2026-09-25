@@ -2,7 +2,7 @@
   "name": "@le-space/mesh-todo-example",
   "private": true,
   "version": "0.1.0",
-  "description": "Two phones, two Meshtastic nodes, no IP path: a todo list replicates over LoRa. The demo is also the bench instrument.",
+  "description": "Two phones, two Meshtastic® nodes, no IP path: a todo list replicates over LoRa®. The demo is also the bench instrument.",
   "type": "module",
   "license": "GPL-3.0-only",
   "scripts": {

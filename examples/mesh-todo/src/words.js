@@ -11,10 +11,10 @@ const plural = (n, one, many) => (n === 1 ? one : many);
 
 export const WORDS = {
   en: {
-    title: "mesh-todo — a todo list over LoRa",
+    title: "mesh-todo — a todo list over LoRa®",
     tagline: (internet) =>
       `no servers · no accounts · ${internet ? "internet first, the mesh when it goes" : "no IP path"} — a todo list over LoRa`,
-    linkKinds: { bc: "BroadcastChannel (fake mesh)", ble: "Meshtastic node (Web Bluetooth)" },
+    linkKinds: { bc: "BroadcastChannel (fake mesh)", ble: "Meshtastic® node (Web Bluetooth)" },
     led: {
       title:
         "Blinks until a LoRa node is connected and another device keeping this list answers its heartbeat. One round an hour: up to five beats a minute apart, until one is answered.",
@@ -251,10 +251,10 @@ export const WORDS = {
     },
   },
   de: {
-    title: "mesh-todo — eine Todo-Liste über LoRa",
+    title: "mesh-todo — eine Todo-Liste über LoRa®",
     tagline: (internet) =>
       `keine Server · keine Konten · ${internet ? "zuerst das Internet, das Mesh, wenn es wegfällt" : "kein IP-Pfad"} — eine Todo-Liste über LoRa`,
-    linkKinds: { bc: "BroadcastChannel (Mesh-Attrappe)", ble: "Meshtastic-Knoten (Web Bluetooth)" },
+    linkKinds: { bc: "BroadcastChannel (Mesh-Attrappe)", ble: "Meshtastic®-Knoten (Web Bluetooth)" },
     led: {
       title:
         "Blinkt, bis ein LoRa-Knoten verbunden ist und ein anderes Gerät mit dieser Liste auf den Herzschlag antwortet. Eine Runde pro Stunde: bis zu fünf Schläge im Minutenabstand, bis einer beantwortet wird.",
