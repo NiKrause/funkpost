@@ -73,6 +73,16 @@ parameters. The internet path is on by default.
 on most phones it switches Bluetooth off too, and the link to the node is the
 one thing that has to survive. On a laptop, Wi-Fi off.
 
+**And leave it off longer than the transfer takes.** The carrier moves about
+half a kilobyte a minute ([field notes](field-notes.md)), so a list of a few
+kilobytes needs ten to twenty minutes on the air, not two — work out
+`bytes ÷ 500` in minutes before step 7 and do not switch anything back on
+until step 11 is done. On 24 September the internet came back six minutes into
+a nine-minute transfer, and every delta that arrived afterwards joined
+nothing. Whether that was because the entries had already come over IP, or
+because the radio path never worked at all, is exactly what the run could no
+longer say.
+
 | # | where | do | expect |
 |---|---|---|---|
 | 1 | both | open the page | the sync pane: `internet path up — relays from Aleph (orbitdb-relay)` |
@@ -174,10 +184,11 @@ both already held the list, so no device bootstrapped one. What it did establish
 is the ground this run stands on: the radio carries a full log between two
 offline phones, at about nine minutes for 5.7 KB, and the app now builds its
 mesh path when the button is pressed ([#167](https://github.com/NiKrause/funkpost/pull/167)).
-Two defects found there will shape this run: a delta that joins nothing is
-re-sent forever (bridge #127), and a presence answer can arrive nine minutes
-late (bridge #128). Expect the cold join to be slow, and give it half an hour
-before calling it failed.
+Two defects found there will shape this run: a delta that joined nothing was
+re-sent, three identical rounds before new writes overtook it (bridge #127 —
+the other half, every delta carrying the whole log, is fixed in bridge #129),
+and a presence answer can arrive nine minutes late (bridge #128). Expect the
+cold join to be slow, and give it half an hour before calling it failed.
 
 **Page:** <https://nikrause.github.io/funkpost/mesh-todo/?log=1>, so the run
 can be read afterwards — the log is kept while offline and sent when the
@@ -224,6 +235,13 @@ RELAY_ADDRS=/dns4/…/p2p/12D3… node scripts/watch-field-log.mjs --out run-c.n
   the page estimates, that is #73's suspicion that `want_ack` on broadcasts
   triples the cost. Beacons and telemetry count in the node's number too, so
   write both down either way.
+- **The `⇅ … heads:` line after every `← blocks`.** A delivery that joins
+  nothing now says why. `already held` (`schon vorhanden`) means another route
+  got there first, so the radio is not what is being tested; `never sent`
+  (`nicht mitgeschickt`) means the delta itself was wrong. Until this line existed both were silence, which is how a
+  whole day's log came back unreadable (bridge #127). It needs a bridge
+  released after 0.13.0, and the lockfile here still holds 0.12.0 — if the
+  line never appears at all, check that before reading anything into it.
 - **Lines that start with `!`** are errors the page caught. A screenshot is
   worth more than a description.
 

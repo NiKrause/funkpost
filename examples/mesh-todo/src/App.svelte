@@ -503,6 +503,14 @@
       pushLog(`${direction === "out" ? "→" : "←"} ${type} ${bytes} B`),
     );
     s.on("synced", ({ joined }) => pushLog(w().log.synced(joined)));
+    // A delivery that joins nothing used to leave no line at all, which is how
+    // a whole day of field logs came back unreadable: five `blocks` arrivals,
+    // no joins, and nothing to say whether the entries were already here or
+    // never sent. "synced" covers the clean case; this covers the silence.
+    s.on("applied", (report) => {
+      if (report.complete && report.heads > 0 && report.joined === report.heads) return;
+      pushLog(w().log.applied(report));
+    });
     s.on("error", (e) => pushLog(w().log.syncError(e.message)));
   };
 
