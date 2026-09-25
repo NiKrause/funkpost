@@ -184,6 +184,17 @@ export const WORDS = {
       delivered: (id, rounds) => `✓ delivered msg ${id} after ${rounds} round(s)`,
       giveup: (id, rounds, reason) => `✗ gave up on msg ${id} after ${rounds} round(s)${reason ? ` — ${reason}` : ""}`,
       synced: (n) => `⇅ joined ${n} ${plural(n, "entry", "entries")}`,
+      applied: ({ complete, heads, missing, joined, held, absent, malformed, refused }) => {
+        if (!complete)
+          return `⇅ ${heads} ${plural(heads, "head", "heads")}, incomplete — ${missing} ${plural(missing, "block", "blocks")} still missing`;
+        const parts = [];
+        if (joined) parts.push(`${joined} joined`);
+        if (held) parts.push(`${held} already held`);
+        if (absent) parts.push(`${absent} never sent`);
+        if (malformed) parts.push(`${malformed} unreadable`);
+        if (refused) parts.push(`${refused} refused`);
+        return `⇅ ${heads} ${plural(heads, "head", "heads")}: ${parts.join(", ") || "nothing"}`;
+      },
       syncError: (message) => `! sync: ${message}`,
       dbOpen: (address) => `db open: ${address}…`,
       attachedMesh: "the node carries the list now — invite sent",
@@ -415,6 +426,17 @@ export const WORDS = {
       delivered: (id, rounds) => `✓ Nachricht ${id} zugestellt nach ${rounds} Runde(n)`,
       giveup: (id, rounds, reason) => `✗ Nachricht ${id} aufgegeben nach ${rounds} Runde(n)${reason ? ` — ${reason}` : ""}`,
       synced: (n) => `⇅ ${n} ${plural(n, "Eintrag", "Einträge")} übernommen`,
+      applied: ({ complete, heads, missing, joined, held, absent, malformed, refused }) => {
+        if (!complete)
+          return `⇅ ${heads} ${plural(heads, "Kopf", "Köpfe")}, unvollständig — ${missing} ${plural(missing, "Block fehlt", "Blöcke fehlen")} noch`;
+        const parts = [];
+        if (joined) parts.push(`${joined} übernommen`);
+        if (held) parts.push(`${held} schon vorhanden`);
+        if (absent) parts.push(`${absent} nicht mitgeschickt`);
+        if (malformed) parts.push(`${malformed} unlesbar`);
+        if (refused) parts.push(`${refused} abgelehnt`);
+        return `⇅ ${heads} ${plural(heads, "Kopf", "Köpfe")}: ${parts.join(", ") || "nichts"}`;
+      },
       syncError: (message) => `! Sync: ${message}`,
       dbOpen: (address) => `DB offen: ${address}…`,
       attachedMesh: "der Knoten trägt die Liste jetzt — Einladung gesendet",
