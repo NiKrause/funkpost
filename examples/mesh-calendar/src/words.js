@@ -24,7 +24,7 @@ export const WORDS = {
     eyebrow: "funkpost · Termine",
     tag: "Terminbuchung über ein LoRa-Mesh — ohne Server, ohne Internet",
     dismiss: "Verstanden — nicht mehr zeigen",
-    linkKinds: { bc: "BroadcastChannel (Mesh-Attrappe)", ble: "Meshtastic-Knoten (Web Bluetooth)" },
+    linkKinds: { bc: "BroadcastChannel (Mesh-Attrappe)", ble: "Meshtastic®-Knoten (Web Bluetooth)" },
     link: {
       off: "kein Funk",
       waiting: "Funk offen, noch niemand gehört",
@@ -130,7 +130,7 @@ export const WORDS = {
     eyebrow: "funkpost · appointments",
     tag: "Appointments booked over a LoRa mesh — no server, no internet",
     dismiss: "Got it — don't show again",
-    linkKinds: { bc: "BroadcastChannel (fake mesh)", ble: "Meshtastic node (Web Bluetooth)" },
+    linkKinds: { bc: "BroadcastChannel (fake mesh)", ble: "Meshtastic® node (Web Bluetooth)" },
     link: {
       off: "no radio",
       waiting: "radio open, nobody heard yet",
