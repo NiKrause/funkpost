@@ -5,7 +5,14 @@ import { mountPill, FUNKPOST_HOME } from "@le-space/funkpost-brand";
 import App from "./App.svelte";
 
 // Deliberately still `termine`, and it must stay — see the note in public/sw.js.
-const CACHE = "funkpost-termine-v1";
+//
+// It must also be the SAME name the worker uses. The worker's activate handler
+// deletes every cache that is not its own, so a page filling a differently
+// named one is filling something that is about to be thrown away — and
+// `data-offline-ready` would then promise a shell that is not there. They
+// disagreed (v1 here, v2 there), which is what `test/offline-shell-cache.test.js`
+// now refuses to let happen again.
+const CACHE = "funkpost-termine-v2";
 
 /**
  * Put the shell in the cache from the page, not from the worker.

@@ -4,7 +4,12 @@ import "@le-space/funkpost-brand/brand.css";
 import { mountPill, FUNKPOST_HOME } from "@le-space/funkpost-brand";
 import App from "./App.svelte";
 
-const CACHE = "funkpost-mesh-todo-v1";
+// It must be the SAME name the worker uses: the worker's activate handler
+// deletes every cache that is not its own, so a page filling a differently
+// named one is filling something about to be thrown away, and the offline
+// shell it promises may not be there. Checked by
+// `test/offline-shell-cache.test.js`.
+const CACHE = "funkpost-mesh-todo-v2";
 
 /**
  * Put the shell in the cache from the page, not from the worker.
