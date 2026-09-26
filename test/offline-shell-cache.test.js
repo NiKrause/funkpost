@@ -25,25 +25,41 @@ import { fileURLToPath } from "node:url";
 const read = (rel) =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 
+// Quoted, so a cache name in prose — the comments explain this very rule —
+// is not mistaken for a declaration.
 const cacheNamesIn = (source) => [
-  ...new Set(source.match(/funkpost-termine-v\d+/g) ?? []),
+  ...new Set(
+    (source.match(/"funkpost-[a-z-]+-v\d+"/g) ?? []).map((q) => q.slice(1, -1)),
+  ),
 ];
 
+// Every app that keeps an offline shell. Both had drifted, which is why this
+// checks all of them rather than the one whose test happened to go red.
+const APPS = ["mesh-todo", "mesh-calendar"];
+
 describe("the offline shell cache", () => {
-  const page = cacheNamesIn(read("../examples/mesh-calendar/src/main.js"));
-  const worker = cacheNamesIn(read("../examples/mesh-calendar/public/sw.js"));
+  for (const app of APPS) {
+    describe(app, () => {
+      const page = cacheNamesIn(read(`../examples/${app}/src/main.js`));
+      const worker = cacheNamesIn(read(`../examples/${app}/public/sw.js`));
 
-  test("the page and the worker name exactly one cache each", () => {
-    assert.equal(page.length, 1, `page names ${page.join(", ") || "none"}`);
-    assert.equal(worker.length, 1, `worker names ${worker.join(", ") || "none"}`);
-  });
+      test("the page and the worker name exactly one cache each", () => {
+        assert.equal(page.length, 1, `page names ${page.join(", ") || "none"}`);
+        assert.equal(
+          worker.length,
+          1,
+          `worker names ${worker.join(", ") || "none"}`,
+        );
+      });
 
-  test("and it is the same one", () => {
-    assert.equal(
-      page[0],
-      worker[0],
-      "the worker deletes every cache but its own, so a page filling another " +
-        "name fills something about to be thrown away",
-    );
-  });
+      test("and it is the same one", () => {
+        assert.equal(
+          page[0],
+          worker[0],
+          "the worker deletes every cache but its own, so a page filling " +
+            "another name fills something about to be thrown away",
+        );
+      });
+    });
+  }
 });
