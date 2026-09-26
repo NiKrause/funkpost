@@ -23,6 +23,20 @@ name: Deploy the demos to GitHub Pages
 on:
   push:
     branches: [main]
+    # Only what reaches `site/` is worth a deploy. The build below copies
+    # examples/landing, mesh-todo/dist and mesh-calendar/dist — nothing from
+    # docs/ or the READMEs, so a documentation push produced a byte-identical
+    # site, a deployment record, and a full npm ci over libp2p, Helia and
+    # Meshtastic plus two Vite builds for it. Two of eleven merges in the week
+    # this was written were exactly that.
+    #
+    # A commit touching both an ignored path and a real one still deploys:
+    # GitHub skips only when every changed file matches.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "test/**"
+      - "scripts/**"
   workflow_dispatch:
 
 permissions:
