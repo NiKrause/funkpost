@@ -16,7 +16,7 @@
   import { FIELD_LOG_TOPIC } from "./pubsub-topics.js";
   import { createFieldLogBuffer } from "./field-log-buffer.js";
   import { measureGattOverlap } from "@le-space/funkpost/links/gatt-probe";
-  import { serialiseGattOperations } from "@le-space/funkpost/links/gatt-queue";
+  import { applyGattQueue } from "@le-space/funkpost-radio";
   import {
     createDatabaseStack,
     joinOverInternet,
@@ -813,10 +813,13 @@
     //
     // Applied before the probe, so that with `?gatt=1` the probe still reports
     // the overlapping *calls* while the failures underneath them disappear.
-    if (params.get("gattq") !== "0") {
-      stopGattQueue = serialiseGattOperations();
-      pushLog(w().log.gattQueueOn);
-    }
+    // The policy moved into the shared connector, so mesh-calendar and
+    // mesh-heartbeat get it too — they connect the same radio and did not have
+    // it. Still applied here, this early, because `?gatt=1` below has to wrap
+    // the queue rather than the other way round; the connector then finds it
+    // already on.
+    stopGattQueue = applyGattQueue();
+    if (stopGattQueue) pushLog(w().log.gattQueueOn);
 
     if (params.get("gatt") === "1") {
       stopGattProbe = measureGattOverlap((line) => pushLog(line));

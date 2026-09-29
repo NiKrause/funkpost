@@ -159,7 +159,7 @@
   /** Every device heard so far, so the partner can be picked rather than typed. */
   let heardIds = $state([]);
 
-  let pingOut = $state(null); // { at, n, of }
+  let pingOut = $state(null); // a beat { at, n, of } or an echo { at, echo, to, n }
   let pingIn = $state(null); // { at, type, from, n, bytes }
 
   let rows = $state([]); // the track, newest first for the screen
@@ -247,6 +247,9 @@
         // lost — reload to reconnect" sends the operator round a loop the
         // library was already getting them out of.
         onStatus: (name) => pushLog(w().log.nodeStatus(name)),
+        // mesh-todo's GATT queue, now applied by the shared connector rather
+        // than by whichever page remembered to ask for it.
+        onGattQueue: () => pushLog(w().log.gattQueueOn),
         onRegion: (name) => {
           // Only when it *becomes* usable. The node re-reports its region on
           // every reconfiguration, and restarting on each one tears down a
@@ -469,7 +472,15 @@
         refreshTrack();
       }
     }
-    if (event.kind === "echo") pushLog(w().log.echo(event.to, event.n));
+    if (event.kind === "echo") {
+      // The lamp is "what this device last put on the air", and for the
+      // stationary half that is only ever an echo. Without this it reads
+      // "nothing sent yet" while it answers all day — indistinguishable from a
+      // device that is not answering at all, which is the one thing the other
+      // end needs to know.
+      pingOut = { at: Date.now(), echo: true, to: event.to, n: event.n };
+      pushLog(w().log.echo(event.to, event.n));
+    }
     if (event.kind === "round") {
       // Fired whether the round was answered or not, which is exactly when the
       // button becomes useful again.
@@ -542,7 +553,7 @@
   const resultOf = (point) =>
     point.answered != null
       ? { text: t.track.answered(point.answered), kind: point.answered === 1 ? "first" : "late" }
-      : point.answeredAt === null && point === track.points().at(-1) && pingOut
+      : point.answeredAt === null && point === track.points().at(-1) && pingOut && !pingOut.echo
         ? { text: t.track.waiting, kind: "open" }
         : { text: t.track.silent, kind: "silent" };
 
@@ -713,8 +724,12 @@
       <span class="lamp" data-testid="beat-out" data-lit={pingOut ? "yes" : "no"}>
         <span class="led out" aria-hidden="true"></span>
         <span>
-          <strong>{t.led.out}</strong>
-          <small>{pingOut ? t.led.outAt(pingOut.n, pingOut.of, clockText(pingOut.at)) : t.led.outIdle}</small>
+          <strong>{pingOut?.echo ? t.led.outAnswer : t.led.out}</strong>
+          <small>
+            {#if !pingOut}{t.led.outIdle}
+            {:else if pingOut.echo}{t.led.outEcho(pingOut.to, pingOut.n, clockText(pingOut.at))}
+            {:else}{t.led.outAt(pingOut.n, pingOut.of, clockText(pingOut.at))}{/if}
+          </small>
         </span>
       </span>
       <span class="lamp" data-testid="beat-in" data-lit={pingIn ? "yes" : "no"}>

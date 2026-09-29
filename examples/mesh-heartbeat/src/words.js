@@ -61,6 +61,11 @@ export const WORDS = {
       out: "beat out",
       outIdle: "nothing sent yet",
       outAt: (n, of, time) => `beat ${n} of ${of} · ${time}`,
+      // The stationary device sends nothing but echoes, so its lamp has to
+      // name one — otherwise the half of the experiment whose only job is to
+      // answer has no way of showing that it did.
+      outAnswer: "answer out",
+      outEcho: (to, n, time) => `echo to ${to} · answers beat ${n} · ${time}`,
       in: "heard",
       inIdle: "nothing heard yet",
       // An echo answers a beat; a beat *is* one. Saying "answers beat 1" of an
@@ -126,6 +131,7 @@ export const WORDS = {
       wakeOn: "screen kept awake",
       wakeOff: "screen may sleep again",
       wakeRefused: (why) => `the screen lock was refused: ${why}`,
+      gattQueueOn: "one Bluetooth operation at a time",
       position: (source, text) => `position (${source}) ${text}`,
       officePosition: (text) => `the other device is at ${text}`,
       error: (message) => `error: ${message}`,
@@ -186,6 +192,8 @@ export const WORDS = {
       out: "Beat raus",
       outIdle: "noch nichts gesendet",
       outAt: (n, of, time) => `Beat ${n} von ${of} · ${time}`,
+      outAnswer: "Antwort raus",
+      outEcho: (to, n, time) => `echo an ${to} · beantwortet Beat ${n} · ${time}`,
       in: "gehört",
       inIdle: "noch nichts gehört",
       inAt: (type, from, n, bytes, time) =>
@@ -248,6 +256,7 @@ export const WORDS = {
       wakeOn: "Bildschirm wird wach gehalten",
       wakeOff: "Bildschirm darf wieder schlafen",
       wakeRefused: (why) => `die Bildschirmsperre wurde verweigert: ${why}`,
+      gattQueueOn: "immer nur eine Bluetooth-Operation gleichzeitig",
       position: (source, text) => `Position (${source}) ${text}`,
       officePosition: (text) => `das andere Gerät steht bei ${text}`,
       error: (message) => `Fehler: ${message}`,
