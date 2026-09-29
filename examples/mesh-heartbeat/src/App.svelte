@@ -485,11 +485,14 @@
       // Fired whether the round was answered or not, which is exactly when the
       // button becomes useful again.
       roundRunning = false;
-      if (!event.answered) {
-        track.unanswered();
-        refreshTrack();
-        pushLog(w().log.alone);
-      }
+      // Close whatever beat is still open, either way. Usually that is the
+      // last beat of a round nobody answered. It can also be a *later* beat in
+      // a round that was answered by an earlier one — an echo slower than the
+      // fifteen seconds to the next beat — and that beat is a silence of its
+      // own rather than a row left waiting for an answer that will never come.
+      const stillOpen = track.unanswered();
+      if (!event.answered) pushLog(w().log.alone);
+      if (stillOpen || !event.answered) refreshTrack();
     }
     // Logged only: `beatState.lastError` carries it on screen for as long as
     // it is still true, and the heartbeat clears that itself.
@@ -550,10 +553,20 @@
   const distanceFromOffice = (point) =>
     point.position && officeAt ? distanceMetres(officeAt, point.position) : null;
 
+  /**
+   * What a row says happened.
+   *
+   * `waiting` is for a beat that is still in the air — which is why this asks
+   * the round rather than the lamp. It used to compare against a fresh
+   * `track.points()`, which hands out copies, so the comparison was never true
+   * and a waiting row never said so; and `pingOut` stays lit after the round
+   * is over, which would have left the last silence of every round claiming to
+   * be waiting for an answer that had already been given up on.
+   */
   const resultOf = (point) =>
     point.answered != null
       ? { text: t.track.answered(point.answered), kind: point.answered === 1 ? "first" : "late" }
-      : point.answeredAt === null && point === track.points().at(-1) && pingOut && !pingOut.echo
+      : point.answeredAt === null && point === rows[0] && roundRunning
         ? { text: t.track.waiting, kind: "open" }
         : { text: t.track.silent, kind: "silent" };
 
