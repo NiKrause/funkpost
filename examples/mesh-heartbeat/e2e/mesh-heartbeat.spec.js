@@ -189,7 +189,12 @@ test("a beat cut short by a channel change is dropped, not marked a silence", as
   context,
 }) => {
   const roomId = room();
-  const page = await open(context, roomId, "role=rider&every=0");
+  // A wider gap than the rest of the suite, on purpose: this test has to act
+  // *between* two beats, and at the usual seventh of a second the second beat
+  // lands while Playwright is still crossing into the page — which leaves a
+  // row `abandon()` never claimed and fails about a race rather than about
+  // the behaviour. Measured at roughly one full run in three.
+  const page = await open(context, roomId, "role=rider&every=0&gap=1200");
 
   await page.getByTestId("ask-now").click();
   await expect(page.getByTestId("track-summary")).toContainText(/1 (beat|Beat)/, { timeout: 10_000 });

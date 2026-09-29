@@ -22,7 +22,11 @@ export const FAST = "gap=150";
 export async function open(context, roomId, query = "", position = null) {
   const page = await context.newPage();
   if (position) await pinTo(page, position);
-  await page.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO&${FAST}&log=1&${query}`);
+  // A `gap=` in the query wins, because `URLSearchParams.get` takes the first
+  // occurrence and this one would otherwise be unoverridable. A test that has
+  // to act *between* two beats needs a wider gap, not a faster one.
+  const gap = /(^|&)gap=/.test(query) ? "" : `${FAST}&`;
+  await page.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO&${gap}log=1&${query}`);
   await expect(page.getByTestId("radio-status")).toHaveAttribute("data-phase", "ready", {
     timeout: 30_000,
   });
