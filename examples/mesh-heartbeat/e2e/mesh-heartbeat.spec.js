@@ -38,8 +38,12 @@ test("a beat that is answered is recorded with its place and its beat number", a
   // that was not answering at all.
   await expect(office.getByTestId("beat-out")).toHaveAttribute("data-lit", "yes");
   await expect(office.getByTestId("beat-out")).toContainText(/echo (to|an) /);
-  // It answered; it never asked. Its own track stays empty either way.
-  await expect(office.getByTestId("track-empty")).toBeVisible();
+  // It answered; it never asked — and it keeps its own record of that, which
+  // is the half of every silence the riding phone cannot see.
+  await expect(office.getByTestId("heard-summary")).toContainText(
+    /1 (beat|Beat).*1 (answered|beantwortet)/,
+  );
+  await expect(office.locator('[data-testid="heard"] tbody tr')).toHaveCount(1);
 
   await rider.close();
   await office.close();

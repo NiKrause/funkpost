@@ -111,6 +111,29 @@ export const WORDS = {
       },
     },
 
+    // The stationary device's own record. Deliberately not the same shape as
+    // the ride: it knows what arrived, not where the other device was.
+    heard: {
+      legend: "What reached this device",
+      empty: "Nothing yet. A row appears when a beat arrives.",
+      summary: ({ heard, answered, askers, echoes }) =>
+        `${heard} ${plural(heard, "beat", "beats")} heard · ${answered} answered · from ${askers} ${plural(askers, "device", "devices")}` +
+        (echoes ? ` · ${echoes} other ${plural(echoes, "echo", "echoes")} on the channel` : ""),
+      beat: (n) => (n ? `beat ${n}` : "beat"),
+      foreign: "somebody else's echo",
+      yes: "answered",
+      no: "not answered",
+      clear: "Clear what was heard",
+      note: "Where the other device was is not here — only the device that stays announces a position, and only once. The places are on the phone that rode.",
+      columns: {
+        time: "time",
+        from: "from",
+        what: "what",
+        bytes: "size",
+        answered: "our answer",
+      },
+    },
+
     log: {
       legend: "Field log",
       beat: (n, of) => `→ beat ${n}/${of}`,
@@ -233,6 +256,27 @@ export const WORDS = {
         distance: "zum anderen Gerät",
         result: "Ergebnis",
         by: "beantwortet von",
+      },
+    },
+
+    heard: {
+      legend: "Was hier ankam",
+      empty: "Noch nichts. Eine Zeile erscheint, wenn ein Beat ankommt.",
+      summary: ({ heard, answered, askers, echoes }) =>
+        `${heard} ${plural(heard, "Beat", "Beats")} gehört · ${answered} beantwortet · von ${askers} ${plural(askers, "Gerät", "Geräten")}` +
+        (echoes ? ` · ${echoes} fremde ${plural(echoes, "Antwort", "Antworten")} auf dem Kanal` : ""),
+      beat: (n) => (n ? `Beat ${n}` : "Beat"),
+      foreign: "fremdes Echo",
+      yes: "beantwortet",
+      no: "nicht beantwortet",
+      clear: "Empfangenes löschen",
+      note: "Wo das andere Gerät war, steht hier nicht — nur das stehende Gerät sagt einmal, wo es steht. Die Orte stehen auf dem Telefon, das gefahren ist.",
+      columns: {
+        time: "Zeit",
+        from: "von",
+        what: "was",
+        bytes: "Größe",
+        answered: "unsere Antwort",
       },
     },
 

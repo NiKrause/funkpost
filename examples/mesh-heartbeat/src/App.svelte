@@ -56,6 +56,7 @@
   import { createHeartbeat } from "@le-space/funkpost/heartbeat";
   import { databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
   import { createCoverageTrack } from "./track.js";
+  import { createHeardLog } from "./heard.js";
   import {
     decodeNodePosition,
     encodeNodePosition,
@@ -163,6 +164,8 @@
   let pingIn = $state(null); // { at, type, from, n, bytes }
 
   let rows = $state([]); // the track, newest first for the screen
+  let heardRows = $state([]); // what reached this device, newest first
+  let heardSummary = $state({ heard: 0, answered: 0, askers: 0, echoes: 0 });
   let summary = $state({ sent: 0, reached: 0, firstBeat: 0, located: 0 });
   let log = $state([]);
 
@@ -209,6 +212,10 @@
   let roundRunning = $state(false);
   let stopWatchingBrowser = null;
   const track = createCoverageTrack();
+  // The stationary half's own record. It is not the ride: it is what reached
+  // this device and what it sent back, which is the other half of every
+  // silence on the phone.
+  const heardLog = createHeardLog();
 
   /**
    * One device id for the life of the page, not one per heartbeat.
@@ -228,6 +235,11 @@
   const refreshTrack = () => {
     rows = track.points().reverse();
     summary = track.summary();
+  };
+
+  const refreshHeard = () => {
+    heardRows = heardLog.rows();
+    heardSummary = heardLog.summary();
   };
 
   // ---------------------------------------------------------------- the radio
@@ -455,6 +467,8 @@
         bytes: event.bytes,
       };
       if (!heardIds.includes(event.from)) heardIds = [...heardIds, event.from];
+      heardLog.heard({ type: event.type, from: event.from, n: event.n, bytes: event.bytes });
+      refreshHeard();
       pushLog(w().log.heard(event.type, event.from, event.n, event.bytes));
       const mine = !partner || event.from === partner;
       if (event.pos && mine) {
@@ -479,6 +493,8 @@
       // device that is not answering at all, which is the one thing the other
       // end needs to know.
       pingOut = { at: Date.now(), echo: true, to: event.to, n: event.n };
+      heardLog.answered({ to: event.to, n: event.n });
+      refreshHeard();
       pushLog(w().log.echo(event.to, event.n));
     }
     if (event.kind === "round") {
@@ -530,7 +546,9 @@
   function clearTrack() {
     if (!confirm(w().track.confirmClear)) return;
     track.clear();
+    heardLog.clear();
     refreshTrack();
+    refreshHeard();
   }
 
   // --------------------------------------------------------------- the screen
@@ -800,6 +818,47 @@
     </p>
   </section>
 
+  {#if role === "office"}
+    <!-- The stationary half's own record. Its "ride" is empty by definition —
+         it sends no beats — and a summary line about a ride it was not on was
+         the only thing this screen had to say about hours of answering. -->
+    <section class="card">
+      <h2>{t.heard.legend}</h2>
+      <p class="dim mono" data-testid="heard-summary">{t.heard.summary(heardSummary)}</p>
+      {#if heardRows.length === 0}
+        <p class="dim" data-testid="heard-empty">{t.heard.empty}</p>
+      {:else}
+        <div class="scroll">
+          <table data-testid="heard">
+            <thead>
+              <tr>
+                <th>{t.heard.columns.time}</th>
+                <th>{t.heard.columns.from}</th>
+                <th>{t.heard.columns.what}</th>
+                <th>{t.heard.columns.bytes}</th>
+                <th>{t.heard.columns.answered}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each heardRows as row}
+                <tr data-result={row.type === "echo" ? "open" : row.answered ? "first" : "silent"}>
+                  <td class="mono">{clockText(row.at)}</td>
+                  <td class="mono dim">{row.from ?? "—"}</td>
+                  <td class="mono">
+                    {row.type === "echo" ? t.heard.foreign : t.heard.beat(row.n)}
+                  </td>
+                  <td class="mono">{row.bytes ?? "—"} B</td>
+                  <td>{row.type === "echo" ? "—" : row.answered ? t.heard.yes : t.heard.no}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <p class="dim">{t.heard.note}</p>
+        <button class="quiet" data-testid="clear-track" onclick={clearTrack}>{t.heard.clear}</button>
+      {/if}
+    </section>
+  {:else}
   <section class="card">
     <h2>{t.track.legend}</h2>
     <p class="dim mono" data-testid="track-summary">{t.track.summary(summary)}</p>
@@ -834,6 +893,7 @@
       <button class="quiet" data-testid="clear-track" onclick={clearTrack}>{t.track.clear}</button>
     {/if}
   </section>
+  {/if}
 
   {#if showLog}
     <section class="card">
