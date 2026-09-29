@@ -87,7 +87,9 @@ lose the same afternoon.
 ## A heartbeat, there and back, and a give-up that was not one
 
 **29 September 2026, morning.** The first heartbeat measured over real LoRa
-rather than over a BroadcastChannel. It works, and it took forty-four seconds.
+rather than over a BroadcastChannel. It works, and the round trip is a range
+rather than a number: **18 s and 44 s**, measured twice twenty minutes apart,
+both answered on the first beat of the round.
 
 ```
 07:57:40  B  ♥ beat 1 of 5 — is another device keeping this list?
@@ -98,13 +100,21 @@ rather than over a BroadcastChannel. It works, and it took forty-four seconds.
 ```
 
 A's beat left at 07:57:54, B had it twelve seconds later, and the echo was home
-at 07:58:38 — **44 s for the round trip, answered on the first beat of the
-round, 34 bytes each way.** One frame, as designed. At half a kilobyte a minute
-a heartbeat costs about four seconds of air; the round of five is a minute
-apart, so being answered on the first beat rather than the fourth is three
-minutes of difference and worth knowing. That is why the echo now carries the
-number of the beat it answers (#174) — and this is that feature's first showing
-in the field.
+at 07:58:38 — **44 s**, 34 bytes each way. One frame, as designed. A second
+exchange at 08:15:48 came home in **18 s**. Same channel, same two devices,
+same first beat.
+
+Do not take either as the figure. Across this log five deliveries needed one
+ARQ round and three needed two, and a retransmission round is most of the
+difference between eighteen seconds and forty-four. The useful statement is
+that a heartbeat answered on the first beat comes back in **well under a
+minute**, and that the variance is the carrier, not the protocol.
+
+At half a kilobyte a minute a heartbeat costs about four seconds of air; the
+round of five is a minute apart, so being answered on the first beat rather
+than the fourth is three minutes of difference and worth knowing. That is why
+the echo now carries the number of the beat it answers (#174) — and this is
+that feature's first showing in the field.
 
 **B's beat at 07:57:40 was never heard by A.** Not a fault: it is the reason a
 round is five beats and not one. A's own beat came through fourteen seconds
@@ -123,6 +133,14 @@ than assumed:
 The message arrived. The **acknowledgement** did not, so the ARQ ran out of
 rounds and the sender reported a give-up for a message the receiver had already
 acted on — B's echo at 07:58:06 *is* the reply to it.
+
+It happened again twenty minutes later, the other way round, which is what
+turns this from an oddity into a rule:
+
+```
+08:16:05  A  ⇠ payload 34 B (msg 422172446)     ← A has it
+08:16:05  B  ✗ gave up on msg 422172446          ← B calls it lost
+```
 
 So `✗ gave up` means *no acknowledgement came back*, and nothing more. Counting
 those lines as losses overstates the loss rate and sends the next person looking
