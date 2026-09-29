@@ -118,3 +118,71 @@ test("an office has no interval to choose, because it never asks", async ({ cont
 
   await page.close();
 });
+
+/**
+ * Channel selection, through the seam mesh-todo already found worth having:
+ * the fake mesh reports no channels, and a wrong channel fails *silently* —
+ * both devices transmit, neither hears the other, and nothing on either screen
+ * says why. Two devices measuring each other must be on the same one, and the
+ * index is per device, so a name is the only thing they can agree on.
+ */
+test("it moves itself onto the preferred channel, by name", async ({ context }) => {
+  const roomId = room();
+  const page = await open(context, roomId, "role=rider&every=0");
+
+  // The node reports its channels one at a time, and the wanted one is not
+  // first — which is the case that broke this elsewhere. Index 1, not 0, so
+  // "it moved" is distinguishable from "it never left the default".
+  await page.evaluate(async () => {
+    await window.__nodeChannel({ index: 1, role: 1, settings: { name: "LongFast", psk: new Uint8Array([1]) } });
+    await window.__nodeChannel({ index: 3, role: 2, settings: { name: "le-space.de", psk: new Uint8Array([2, 3]) } });
+  });
+
+  await expect(page.getByTestId("tx-channel")).toHaveValue("3");
+  await expect(page.getByTestId("log")).toContainText("le-space.de");
+
+  await page.close();
+});
+
+test("a channel chosen by hand is final", async ({ context }) => {
+  const roomId = room();
+  const page = await open(context, roomId, "role=rider&every=0");
+
+  // Only a channel the preference does not match, so nothing has been applied
+  // yet — which is the only window in which the hand guard does any work. An
+  // earlier version of this test chose by hand *after* the preference had
+  // landed, where `preferenceApplied` already returns early, and it stayed
+  // green with the guard removed.
+  await page.evaluate(async () => {
+    await window.__nodeChannel({ index: 1, role: 1, settings: { name: "LongFast", psk: new Uint8Array([1]) } });
+  });
+  const select = page.getByTestId("tx-channel");
+  await select.selectOption("1");
+
+  // Now the preferred one arrives. It must not move a selector a person set.
+  await page.evaluate(async () => {
+    await window.__nodeChannel({ index: 3, role: 2, settings: { name: "le-space.de", psk: new Uint8Array([2, 3]) } });
+  });
+  await expect(select).toHaveValue("1");
+
+  await page.close();
+});
+
+test("a beat cut short by a channel change is dropped, not marked a silence", async ({
+  context,
+}) => {
+  const roomId = room();
+  const page = await open(context, roomId, "role=rider&every=0");
+
+  await page.getByTestId("ask-now").click();
+  await expect(page.getByTestId("track-summary")).toContainText(/1 (beat|Beat)/, { timeout: 10_000 });
+
+  // Mid-round, the radio moves. That place was never actually tested, so it
+  // must leave no row — a red mark there would be a measurement nobody made.
+  await page.evaluate(async () => {
+    await window.__nodeChannel({ index: 1, role: 2, settings: { name: "le-space.de", psk: new Uint8Array([9]) } });
+  });
+  await expect(page.getByTestId("track-empty")).toBeVisible({ timeout: 10_000 });
+
+  await page.close();
+});

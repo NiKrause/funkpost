@@ -95,6 +95,25 @@ export function createCoverageTrack({ limit = LIMIT, now = Date.now } = {}) {
       return point;
     },
 
+    /**
+     * The round was cut short — the radio was reconfigured, the role changed,
+     * the interval changed. The open beat is removed rather than kept.
+     *
+     * A silence is evidence: it says this place was tried and nothing came
+     * back. A beat whose round never got to finish says nothing about the
+     * place at all, and filing it as a silence would put a red mark on a spot
+     * that was never actually tested. This is the difference between a track
+     * that under-reports and one that lies.
+     */
+    abandon() {
+      if (!open) return null;
+      const index = points.indexOf(open);
+      if (index !== -1) points.splice(index, 1);
+      const point = open;
+      open = null;
+      return point;
+    },
+
     /** Oldest first, the way a ride happened. */
     points: () => points.map((p) => ({ ...p })),
 
