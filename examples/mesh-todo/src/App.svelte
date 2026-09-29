@@ -550,6 +550,11 @@
    * @returns {Promise<void>} settles when the mesh path is attached
    */
   function wireList() {
+    // Before the guard, not after it: the heartbeat needs a courier and no
+    // longer needs a list, and this early return is the list's. Leaving the
+    // call below it is what kept the open question unaskable — the switch was
+    // on, the node was configured, and nothing ever called this.
+    maybeStartHeartbeat();
     if (!db || !courier) return Promise.resolve();
     if (!sync && !wiring && syncOn) {
       wiring = attachCourier({ db, courier, start: carriedBy === "mesh" })
@@ -561,17 +566,45 @@
         .catch((e) => pushLog(w().log.attachFailed(e.message)))
         .finally(() => (wiring = null));
     }
-    maybeStartHeartbeat();
     return wiring ?? Promise.resolve();
   }
 
+  /**
+   * What the heartbeat asks about when there is no list.
+   *
+   * The tag is an 8-byte hash of an address, and it is what keeps two
+   * conversations apart on one channel. A well-known name gives the question
+   * without a list a tag of its own: *is any funkpost device on this channel
+   * at all?* — which is the first thing anyone wants to know, and used to be
+   * unaskable because the heartbeat refused to start without a database.
+   *
+   * The consequence, and it is the surprising half: a device asking about a
+   * list and a device asking this one have different tags and **do not hear
+   * each other**. They are different questions. Both phones have to be in the
+   * same state for the answer to mean anything.
+   */
+  const ANYBODY = "funkpost/anybody-there/1";
+
+  /** Which address the running heartbeat is asking about. */
+  let beatAbout = null;
+
   async function maybeStartHeartbeat() {
-    if (heartbeat || heartbeatStarting || !courier || !db || !beatOn) return;
+    if (heartbeatStarting || !courier || !beatOn) return;
+    const about = db ? db.address : ANYBODY;
+    if (heartbeat && beatAbout === about) return;
+    if (heartbeat) {
+      // A list arrived, so the question changed. Asking the old one would be
+      // asking about a list this device no longer cares about.
+      heartbeat.stop();
+      heartbeat = null;
+      beat = null;
+    }
     heartbeatStarting = true;
     try {
+      beatAbout = about;
       heartbeat = await startHeartbeat({
         courier,
-        address: db.address,
+        address: about,
         minuteMs,
         onChange: (state) => (beat = state),
         onEvent: logBeat,
@@ -619,7 +652,11 @@
       pingOut = null;
       pingIn = null;
     }
-    pushLog(on ? w().log.beatOn : w().log.beatOff);
+    // A heartbeat asks about a *list* — it is tagged with the list's address,
+    // and `maybeStartHeartbeat` refuses without one. Saying "heartbeat on"
+    // regardless is how a field log came back with the switch on, the node
+    // configured, and not one beat in it.
+    pushLog(on ? (db ? w().log.beatOn : w().log.beatOpen) : w().log.beatOff);
   }
 
   /**
@@ -1450,6 +1487,12 @@
           </label>
         {/each}
       </fieldset>
+      {#if beatOn && !db}
+        <!-- Not a blocked state: a different question, and saying which one is
+             the whole point. Two devices asking different questions never hear
+             each other, so an operator must be able to see which this is. -->
+        <p class="dim" data-testid="beat-open-question">{t.beatOpenQuestion}</p>
+      {/if}
       {#if beatOn}
         <!-- Two lamps, because one cannot answer the question. Out says a beat
              left and which of the round it was; in says something came back,
