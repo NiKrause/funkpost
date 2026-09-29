@@ -29,9 +29,14 @@ jobs:
       # Every app the Pages workflow deploys builds here first, so a broken
       # import fails the PR rather than the deploy after the merge.
       - run: npm run build -w @le-space/mesh-calendar-example
+      - run: npm run build -w @le-space/mesh-heartbeat-example
       - run: npx playwright install --with-deps chromium
         working-directory: examples/mesh-todo
       - run: npm run test:e2e -w @le-space/mesh-todo-example
       # The booking demo drives two roles over the fake mesh: request, decide,
       # converge, download the .ics and parse it back.
       - run: npm run test:e2e -w @le-space/mesh-calendar-example
+      # The range test drives two roles too — one asking, one answering — and
+      # checks the thing no unit test can: that a browser will install the page
+      # and that the shell is in the cache afterwards.
+      - run: npm run test:e2e -w @le-space/mesh-heartbeat-example

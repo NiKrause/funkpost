@@ -11,8 +11,11 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import {
   decodeNodePosition,
+  encodeNodePosition,
   watchBrowserPosition,
   formatPosition,
+  distanceMetres,
+  formatDistance,
 } from "../examples/mesh-heartbeat/src/position.js";
 
 // Eggenfelden, where the bench is.
@@ -101,5 +104,72 @@ describe("formatting", () => {
   test("five decimals, and nothing for nothing", () => {
     assert.equal(formatPosition({ lat: LAT, lon: LON }), "48.40639, 12.76167");
     assert.equal(formatPosition(null), "");
+  });
+});
+
+/**
+ * The way back onto the wire, and what two positions add up to.
+ *
+ * The scale rests on the raw-integer cases here and nowhere else. It cannot
+ * rest on the page: both ends of the link scale with the same constant, so an
+ * error of a factor of ten cancels itself out between encode and decode and
+ * the distance on screen still reads right. Verified by breaking it — the e2e
+ * suite stayed green with `SCALE` at 1e-6.
+ */
+describe("putting a position back on the wire", () => {
+  test("the integers are the ones Meshtastic writes, not ten times them", () => {
+    const pair = encodeNodePosition({ lat: 48.40639, lon: 12.76167 });
+    // Spelled out rather than derived from SCALE: a test that computes the
+    // expected value the same way the code does agrees with any scale at all.
+    assert.deepEqual(pair, [484063900, 127616700]);
+  });
+
+  test("a round trip is the place it started at", () => {
+    const here = { lat: 48.40639, lon: 12.76167 };
+    const there = decodeNodePosition({
+      latitudeI: encodeNodePosition(here)[0],
+      longitudeI: encodeNodePosition(here)[1],
+    });
+    assert.equal(there.lat.toFixed(5), here.lat.toFixed(5));
+    assert.equal(there.lon.toFixed(5), here.lon.toFixed(5));
+  });
+
+  test("nothing, nonsense and the null island all come back null", () => {
+    assert.equal(encodeNodePosition(null), null);
+    assert.equal(encodeNodePosition({ lat: 0, lon: 0 }), null);
+    assert.equal(encodeNodePosition({ lat: 91, lon: 0 }), null);
+    assert.equal(encodeNodePosition({ lat: NaN, lon: 12 }), null);
+  });
+});
+
+describe("how far apart two fixes are", () => {
+  // Eggenfelden to Landshut. 0.131° of latitude is 14.5 km; 0.610° of
+  // longitude at this latitude is 45.0 km — 47.3 km together, which is what
+  // the numbers below have to come out at.
+  const EGGENFELDEN = { lat: 48.40639, lon: 12.76167 };
+  const LANDSHUT = { lat: 48.53718, lon: 12.15165 };
+
+  test("a known pair comes out at the known distance", () => {
+    const m = distanceMetres(EGGENFELDEN, LANDSHUT);
+    assert.ok(m > 47_000 && m < 47_500, `${Math.round(m)} m`);
+  });
+
+  test("a step of a thousandth of a degree north is about 111 m", () => {
+    const m = distanceMetres(EGGENFELDEN, { ...EGGENFELDEN, lat: EGGENFELDEN.lat + 0.001 });
+    assert.ok(m > 110 && m < 112, `${m.toFixed(1)} m`);
+  });
+
+  test("nowhere to nowhere is null, and a place to itself is zero", () => {
+    assert.equal(distanceMetres(null, EGGENFELDEN), null);
+    assert.equal(distanceMetres(EGGENFELDEN, null), null);
+    assert.equal(distanceMetres(EGGENFELDEN, EGGENFELDEN), 0);
+  });
+
+  test("metres below a kilometre, kilometres above it", () => {
+    assert.equal(formatDistance(0), "0 m");
+    assert.equal(formatDistance(842.4), "842 m");
+    assert.equal(formatDistance(1234), "1.23 km");
+    assert.equal(formatDistance(44_500), "44.5 km");
+    assert.equal(formatDistance(null), "");
   });
 });

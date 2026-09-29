@@ -35,7 +35,7 @@ const cacheNamesIn = (source) => [
 
 // Every app that keeps an offline shell. Both had drifted, which is why this
 // checks all of them rather than the one whose test happened to go red.
-const APPS = ["mesh-todo", "mesh-calendar"];
+const APPS = ["mesh-todo", "mesh-calendar", "mesh-heartbeat"];
 
 describe("the offline shell cache", () => {
   for (const app of APPS) {

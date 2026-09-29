@@ -483,3 +483,253 @@ describe("heartbeat over the courier", () => {
     for (const c of couriers) c.close();
   });
 });
+
+/**
+ * The two halves of a range test (#180): one device that asks and moves, one
+ * that answers and stays. Both live in the heartbeat rather than in the page,
+ * because a page cannot be tested with a clock that skips an hour.
+ */
+describe("a device that only answers", () => {
+  test("opens no round of its own, and still echoes what it hears", () => {
+    const air = fakeAir();
+    const clock = fakeClock();
+    const office = createHeartbeat({
+      courier: air.courier("office"),
+      tag: TAG,
+      id: ID_B,
+      beatsPerRound: 0,
+      minuteMs: MINUTE,
+      timers: clock,
+    });
+    const rider = createHeartbeat({
+      courier: air.courier("rider"),
+      tag: TAG,
+      id: ID_A,
+      minuteMs: MINUTE,
+      timers: clock,
+    });
+
+    office.start();
+    // An hour of an office on its own is an hour of silence. This is the whole
+    // point: on a carrier with a duty cycle, a device that has nothing to ask
+    // must not spend airtime asking it.
+    clock.advance(2 * HOUR);
+    assert.equal(air.beatsFrom("office").length, 0);
+    assert.equal(office.state().rounds, 0);
+
+    rider.start();
+    clock.advance(1000);
+    assert.equal(air.beatsFrom("rider").length, 1);
+    assert.equal(air.echoesFrom("office").length, 1, "it answers, it just does not ask");
+    assert.equal(rider.state().verdict, "answered");
+
+    office.stop();
+    rider.stop();
+  });
+
+  test("a round of no beats needs no room, so the timing rule does not apply", () => {
+    const air = fakeAir();
+    // Five beats a minute apart would not fit in this round; none always do.
+    assert.throws(
+      () =>
+        createHeartbeat({ courier: air.courier("a"), tag: TAG, roundEveryMs: MINUTE }),
+      /round must end/,
+    );
+    assert.doesNotThrow(() =>
+      createHeartbeat({
+        courier: air.courier("b"),
+        tag: TAG,
+        beatsPerRound: 0,
+        roundEveryMs: MINUTE,
+      }),
+    );
+    assert.throws(
+      () => createHeartbeat({ courier: air.courier("c"), tag: TAG, beatsPerRound: -1 }),
+      /whole number/,
+    );
+  });
+});
+
+describe("where the stationary device is", () => {
+  const OFFICE = [485200000, 113400000]; // Meshtastic's scaling, München-ish
+  /** Every pending promise, whatever the fake clock says the time is. */
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test("rides on the first echo and never again", () => {
+    const air = fakeAir();
+    const clock = fakeClock();
+    const office = createHeartbeat({
+      courier: air.courier("office"),
+      tag: TAG,
+      id: ID_B,
+      beatsPerRound: 0,
+      minuteMs: MINUTE,
+      timers: clock,
+      position: () => OFFICE,
+    });
+    const heard = [];
+    const rider = createHeartbeat({
+      courier: air.courier("rider"),
+      tag: TAG,
+      id: ID_A,
+      minuteMs: MINUTE,
+      timers: clock,
+      onEvent: (event) => event.kind === "heard" && heard.push(event),
+    });
+
+    office.start();
+    rider.start();
+    clock.advance(1000);
+    assert.deepEqual(heard.at(-1).pos, OFFICE, "the first answer says where it is");
+
+    // A second round, an hour later: the office answers again and says nothing
+    // about itself, because it has not moved and the air is not free.
+    clock.advance(HOUR + 1000);
+    assert.ok(heard.length >= 2, "a second round was answered");
+    assert.equal(heard.at(-1).pos, null, "and it cost nothing to answer it");
+
+    office.stop();
+    rider.stop();
+  });
+
+  test("a send that failed keeps the position for the next one", async () => {
+    const air = fakeAir();
+    const clock = fakeClock();
+    let region = "UNSET";
+    const office = createHeartbeat({
+      courier: air.courier("office", { fail: () => region === "UNSET" }),
+      tag: TAG,
+      id: ID_B,
+      beatsPerRound: 0,
+      minuteMs: MINUTE,
+      timers: clock,
+      position: () => OFFICE,
+    });
+    const heard = [];
+    const rider = createHeartbeat({
+      courier: air.courier("rider"),
+      tag: TAG,
+      id: ID_A,
+      minuteMs: MINUTE,
+      timers: clock,
+      onEvent: (event) => event.kind === "heard" && heard.push(event),
+    });
+
+    office.start();
+    rider.start();
+    clock.advance(1000);
+    // The clock is fake; the rejection is not. Real microtasks have to drain
+    // before the heartbeat has learnt that the send failed.
+    await settled();
+    assert.equal(heard.length, 0, "an unconfigured node transmits nothing");
+
+    region = "EU_868";
+    clock.advance(HOUR + 1000);
+    await settled();
+    // The *first* echo that got through, not the last: by now a second round
+    // has been answered too, and that one rightly says nothing about a device
+    // that has not moved.
+    assert.deepEqual(heard[0].pos, OFFICE, "the position waited for a node that could send it");
+    assert.equal(heard.at(-1).pos, null, "and was not repeated once it had");
+
+    office.stop();
+    rider.stop();
+  });
+
+  test("the null island is refused, on the way out and on the way in", () => {
+    const from = ID_A;
+    assert.equal(decodeHeartbeat(encodeHeartbeat({ type: "echo", tag: TAG, from, pos: [0, 0] })).pos, null);
+    assert.equal(decodeHeartbeat(encodeHeartbeat({ type: "echo", tag: TAG, from, pos: [1, 2.5] })).pos, null);
+    assert.equal(
+      decodeHeartbeat(dagCbor.encode({ v: 1, t: "echo", tag: TAG, p: from, pos: [0, 0] })).pos,
+      null,
+    );
+    assert.deepEqual(
+      decodeHeartbeat(encodeHeartbeat({ type: "echo", tag: TAG, from, pos: [485200000, 113400000] })).pos,
+      [485200000, 113400000],
+    );
+  });
+});
+
+describe("asking only when asked", () => {
+  const rider = (air, clock, extra = {}) =>
+    createHeartbeat({
+      courier: air.courier("rider"),
+      tag: TAG,
+      id: ID_A,
+      minuteMs: MINUTE,
+      timers: clock,
+      ...extra,
+    });
+
+  test("no schedule means nothing goes out until the button", () => {
+    const air = fakeAir();
+    const clock = fakeClock();
+    const heart = rider(air, clock, { roundEveryMs: null });
+
+    heart.start();
+    clock.advance(24 * HOUR);
+    assert.equal(air.beatsFrom("rider").length, 0, "a day of silence");
+
+    assert.equal(heart.beatNow(), true);
+    assert.equal(air.beatsFrom("rider").length, 1);
+    // After a round, not before it: the round is what would name a next time,
+    // and a screen saying "next at 14:20" when nothing is coming is worse than
+    // one that says nothing.
+    assert.equal(heart.state().nextRoundAt, null, "and still no time to promise");
+    // Still nothing on its own afterwards: one press is one round.
+    clock.advance(24 * HOUR);
+    assert.equal(air.beatsFrom("rider").length, beatsAfterOneUnansweredRound);
+
+    heart.stop();
+  });
+
+  // A round nobody answers spends all its beats; that is what the round is for.
+  const beatsAfterOneUnansweredRound = 5;
+
+  test("the button resets the clock, so a round does not land on its heels", () => {
+    const air = fakeAir();
+    const clock = fakeClock();
+    const heart = rider(air, clock, { roundEveryMs: HOUR, beatsPerRound: 1 });
+
+    heart.start();
+    assert.equal(air.beatsFrom("rider").length, 1, "the first round is at start");
+    clock.advance(50 * MINUTE);
+
+    heart.beatNow();
+    assert.equal(air.beatsFrom("rider").length, 2);
+    // Ten minutes later the original schedule would have fired. It must not:
+    // the press moved the hour.
+    clock.advance(11 * MINUTE);
+    assert.equal(air.beatsFrom("rider").length, 2, "the old timer was cancelled");
+    clock.advance(50 * MINUTE);
+    assert.equal(air.beatsFrom("rider").length, 3, "an hour after the press");
+
+    heart.stop();
+  });
+
+  test("it refuses when there is nothing to ask", () => {
+    const air = fakeAir();
+    const clock = fakeClock();
+
+    const stopped = rider(air, clock, { roundEveryMs: null });
+    assert.equal(stopped.beatNow(), false, "not started");
+
+    const office = createHeartbeat({
+      courier: air.courier("office"),
+      tag: TAG,
+      id: ID_B,
+      beatsPerRound: 0,
+      timers: clock,
+    });
+    office.start();
+    assert.equal(office.beatNow(), false, "a device that only answers");
+    office.stop();
+
+    const busy = rider(air, clock, { roundEveryMs: null });
+    busy.start();
+    busy.beatNow();
+    assert.equal(busy.beatNow(), false, "a round is already in the air");
+    busy.stop();
+  });
+});

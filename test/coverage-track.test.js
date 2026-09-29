@@ -94,3 +94,41 @@ describe("the coverage track", () => {
     );
   });
 });
+
+/**
+ * A shared channel (#180).
+ *
+ * Everyone running this app with the same question hears everyone else. Two
+ * parties testing their own pair of devices on the public channel answer each
+ * other's beats, and a track that only remembered *that* something answered
+ * would report a stranger's coverage as this device's.
+ */
+describe("who answered", () => {
+  test("the row names the device, and the summary counts how many there were", () => {
+    const track = createCoverageTrack();
+
+    track.sent({ n: 1, of: 3 });
+    track.answered({ n: 1, from: "myoffice" });
+    track.sent({ n: 1, of: 3 });
+    track.answered({ n: 1, from: "astranger" });
+    track.sent({ n: 1, of: 3 });
+    track.answered({ n: 1, from: "myoffice" });
+
+    assert.deepEqual(
+      track.points().map((p) => p.answeredBy),
+      ["myoffice", "astranger", "myoffice"],
+    );
+    // Three answered beats, two devices behind them: the second number is the
+    // one that says the channel was shared.
+    assert.equal(track.summary().reached, 3);
+    assert.equal(track.summary().answerers, 2);
+  });
+
+  test("a silence names nobody", () => {
+    const track = createCoverageTrack();
+    track.sent({ n: 1, of: 3 });
+    track.unanswered();
+    assert.equal(track.points()[0].answeredBy, null);
+    assert.equal(track.summary().answerers, 0);
+  });
+});
