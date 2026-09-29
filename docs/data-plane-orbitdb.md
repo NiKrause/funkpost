@@ -66,6 +66,75 @@ sequenceDiagram
     Note over A,B: Batching is the whole point of the button: sent one at a time,<br/>three todos are three announce → want → blocks round trips.<br/>createDelta walks from the heads down to theirs, so one carries all.
 ```
 
+### A change, end to end — the operation plane
+
+The bootstrap above moves the *log*: signed entries, their ancestry, the
+identity that vouches for them. That is real replication and it is what a cold
+join needs. It is also expensive out of all proportion to a ticked box.
+
+`liveUpdates: "operations"` sends the change instead. OrbitDB already hands it
+to every `update` listener, so there is nothing to invent:
+
+```mermaid
+sequenceDiagram
+    participant A as Phone A (OrbitDB)
+    participant CA as Courier A
+    participant CB as Courier B
+    participant B as Phone B (OrbitDB)
+
+    Note over A,B: Both offline. Both already hold the list —<br/>the bootstrap above is what put it there.
+
+    Note over A: Somebody ticks a box.
+    A->>A: db.put(t1727…, { text, done, ts })
+    Note over A: OrbitDB emits update with the entry.<br/>Its payload IS the operation: { op, key, value }.<br/>The signed entry is 519 B. The delta plane<br/>would put 1774 B on the air for it.
+
+    A->>CA: op { id, o: { op, key, value } }
+    CA--)CB: 86 B — one frame
+    CB->>B: op { id, o }
+
+    Note over B: Seen this id before? Then stop.<br/>A retransmission must not write twice.
+    B->>B: db.put(o.key, o.value)
+    Note over B: B's own entry, B's identity, B's hash —<br/>but A's KEY. That is the whole trick.
+    B->>B: update fires — the list moves on screen
+    Note over B: The applying guard stops that update<br/>from being sent straight back to A.
+```
+
+**And when the internet comes back, is that two todos?** No — and the reason is
+the key, not the protocol:
+
+```mermaid
+sequenceDiagram
+    participant A as Phone A
+    participant IP as OrbitDB own sync (internet)
+    participant B as Phone B
+
+    Note over A,B: The internet returns. Each side holds its own<br/>entry for the same change.
+    A->>IP: entry a1 — key t1727…, signed by A
+    B->>IP: entry b1 — key t1727…, signed by B
+    IP->>B: a1
+    IP->>A: b1
+
+    Note over A,B: Both logs now hold BOTH entries.<br/>Two entries, one key.
+    Note over A,B: A keyvalue store resolves all() to the latest<br/>value PER KEY — so the list shows ONE row,<br/>and the same one on both devices.
+```
+
+So the duplicate is prevented by the receiver performing the change **under the
+sender's key** and never inventing one. `performOperation` does exactly that:
+`target.put(op.key, op.value)`. Let B generate its own `t${Date.now()}` and the
+two entries land under two keys, and then it really is two todos.
+
+What this does **not** solve, and no arrangement of keys can:
+
+- **The log grows twice.** One entry per device per change. Bounded by changes
+  rather than by time, and a third device bootstrapping later carries both.
+- **Two devices editing the same key while both are offline.** After the merge
+  both resolve to the same winner — converged, but one edit is silently gone.
+  That is last-write-wins, and only a CRDT escapes it. Two people ticking the
+  same item off is harmless; two renaming it is not.
+- **Authorship.** The entry B wrote is signed by B, so the log names the wrong
+  author. If that matters, the origin belongs in the *value* — a signature
+  cannot carry it.
+
 ### Deeper: four layers, and two acknowledgements
 
 The diagram above is the *what*. Underneath it are four layers, each with one
