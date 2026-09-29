@@ -84,6 +84,87 @@ lose the same afternoon.
 - Web Bluetooth support and spec:
   [WebBluetoothCG/web-bluetooth](https://github.com/WebBluetoothCG/web-bluetooth).
 
+## A heartbeat, there and back, and a give-up that was not one
+
+**29 September 2026, morning.** The first heartbeat measured over real LoRa
+rather than over a BroadcastChannel. It works, and the round trip is a range
+rather than a number: **18 s and 44 s**, measured twice twenty minutes apart,
+both answered on the first beat of the round.
+
+```
+07:57:40  B  ♥ beat 1 of 5 — is another device keeping this list?
+07:57:54  A  ♥ beat 1 of 5 — is another device keeping this list?
+07:58:06  B  ♥ beat from device … — beat 1, 34 B
+07:58:06  B  ♥ echo to device … — its beat 1
+07:58:38  A  ♥ echo from device … — beat 1, 34 B
+```
+
+A's beat left at 07:57:54, B had it twelve seconds later, and the echo was home
+at 07:58:38 — **44 s**, 34 bytes each way. One frame, as designed. A second
+exchange at 08:15:48 came home in **18 s**. Same channel, same two devices,
+same first beat.
+
+Do not take either as the figure. Across this log five deliveries needed one
+ARQ round and three needed two, and a retransmission round is most of the
+difference between eighteen seconds and forty-four. The useful statement is
+that a heartbeat answered on the first beat comes back in **well under a
+minute**, and that the variance is the carrier, not the protocol.
+
+At half a kilobyte a minute a heartbeat costs about four seconds of air; the
+round of five is a minute apart, so being answered on the first beat rather
+than the fourth is three minutes of difference and worth knowing. That is why
+the echo now carries the number of the beat it answers (#174) — and this is
+that feature's first showing in the field.
+
+**B's beat at 07:57:40 was never heard by A.** Not a fault: it is the reason a
+round is five beats and not one. A's own beat came through fourteen seconds
+later and ended both rounds.
+
+### `✗ gave up` does not mean "did not arrive"
+
+The same minutes contain the proof, which is why it is written down here rather
+than assumed:
+
+```
+07:58:06  B  ⇠ payload 34 B (msg 1813487857)     ← B has it
+07:58:31  A  ✗ gave up on msg 1813487857          ← A calls it lost
+```
+
+The message arrived. The **acknowledgement** did not, so the ARQ ran out of
+rounds and the sender reported a give-up for a message the receiver had already
+acted on — B's echo at 07:58:06 *is* the reply to it.
+
+It happened again twenty minutes later, the other way round, which is what
+turns this from an oddity into a rule:
+
+```
+08:16:05  A  ⇠ payload 34 B (msg 422172446)     ← A has it
+08:16:05  B  ✗ gave up on msg 422172446          ← B calls it lost
+```
+
+So `✗ gave up` means *no acknowledgement came back*, and nothing more. Counting
+those lines as losses overstates the loss rate and sends the next person looking
+for a fault in the radio. The heartbeat is unharmed by it, because it counts
+answers and not deliveries; anything that counts deliveries has to know this.
+
+This is the sibling of the reading rule below about outgoing timestamps: both
+are numbers a log hands you that mean something other than what they look like.
+
+### And why there were no beats at all until a list existed
+
+The run before this one came back with the switch on, both nodes configured on
+one channel, and not a single `♥` in fifty-four lines. Two guards, and the
+second made fixing the first pointless: `maybeStartHeartbeat` refused without a
+database, and `wireList` — the only thing that calls it once a courier exists —
+returns early without one, with the call sitting *below* that return. A
+heartbeat was a list's, and nobody had made a list.
+
+It now asks a different question when there is no list — *is any device on this
+channel at all* — under a tag of its own (#175). The two questions do not mix:
+different tags, so a device asking about a list neither hears the open one nor
+is heard by it. Both phones have to be in the same state before an answer means
+anything.
+
 ## A list over the radio, with nobody's internet on
 
 **24 September 2026, evening.** Not Run C — that one is the cold join, and both
@@ -158,6 +239,11 @@ is slow, so the two can be twelve minutes apart — at 20:38:43 one
 `handleAnnounce` decided both a `blocks` and a `want`, and the `want` reached the
 air at 20:50:56. Read an outgoing timestamp as a decision time and every
 conclusion about who answered whom comes out wrong.
+
+**And `✗ gave up` means no acknowledgement came back, not that nothing
+arrived** — measured on 29 September, where the receiver logged the payload and
+answered it while the sender was still calling it lost. Counting those as losses
+overstates the loss rate.
 
 The offline log buffer (#156) is what makes this entry possible: none of it was
 observable while it happened, and all of it was waiting when the phones came
