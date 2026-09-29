@@ -16,6 +16,13 @@ stack. This one sends 34 bytes and writes down what happened to them.
 
 ## What it measures, and what it refuses to
 
+Each device keeps its own half of it, and the two are not the same record: the
+phone knows where it was and whether an answer came back; the device that stays
+knows what actually reached it and what it sent in reply. That matters, because
+**a silence on the phone is two different failures** — a beat that never
+arrived, and an answer that never made it home — and they are indistinguishable
+from the saddle. Side by side they are not.
+
 | it answers | it does not answer |
 |---|---|
 | was there an answer from *here* | how far the radio would reach from somewhere else |
@@ -39,7 +46,7 @@ sheet.
 |---|---|---|
 | in the library | `beatsPerRound: 0`, `roundEveryMs: null` | three beats a round, a round every 1 / 2 / 5 min, or only on the button |
 | sends | an echo for every beat it hears, at most one per 7.5 s per sender | a round, and an echo for anything it hears itself |
-| position | announces where it is, **once** | reads its own for every beat, and records it |
+| position | announces where it is, **once** | says where it is on the **first beat of each round**, and records its own for every beat |
 | a phone for it | anything that holds a Bluetooth link on a windowsill | the one in the pocket that is moving |
 
 There is no list here, so the heartbeat's tag is the hash of a well-known
@@ -71,19 +78,20 @@ round.
 
 ## What a run costs
 
-A beat is **34 bytes on the wire** — measured in `test/heartbeat.test.js`,
-not estimated. An answered round is **cheaper than a lonely one**, because it
-stops early:
+A beat is **34 bytes on the wire**, and saying where you are costs **15 more**
+— both measured in `test/heartbeat.test.js`, not estimated. An answered round
+is **cheaper than a lonely one**, because it stops early:
 
 | on the channel | on the air, per interval | every 5 min | every 1 min |
 |---|---|---|---|
-| a rider nobody answers | 102 B — three beats | 1224 B/h · 4 % | 6120 B/h · 20 % |
-| a rider and one answering device | 68 B | 816 B/h · 3 % | 4080 B/h · 14 % |
-| a rider and three answering devices | 136 B | 1632 B/h · 5 % | 8160 B/h · 27 % |
-| three riders, each hearing the others | 306 B | 3672 B/h · 12 % | 18 360 B/h · **61 %** |
+| a rider nobody answers | 117 B — three beats, the first with a place | 1404 B/h · 5 % | 7020 B/h · 23 % |
+| a rider and one answering device | 83 B | 996 B/h · 3 % | 4980 B/h · 17 % |
+| a rider and three answering devices | 151 B | 1812 B/h · 6 % | 9060 B/h · 30 % |
+| three riders, each hearing the others | 351 B | 4212 B/h · 14 % | 21 060 B/h · **70 %** |
 
-The rule behind the table: an unanswered round is three beats; an answered one
-is one beat **plus one echo from every device that heard it**.
+The rule behind the table: a round's first beat is 49 B and the rest are 34;
+an unanswered round is three of them; an answered one is the first **plus one
+echo from every device that heard it**.
 
 The percentages are of what this carrier was measured to move — about
 [500 bytes a minute](field-notes.md#a-list-over-the-radio-with-nobodys-internet-on),
@@ -96,12 +104,21 @@ deliberate ride**, not for leaving on. And **a crowd is expensive in a way one
 rider cannot see**: three riders at a one-minute interval spend most of the
 carrier between them, and each of them reads a page that says 20 %.
 
-## The position, once
+## Where each device says it is
 
-The stationary device sends where it is **once**, on its first message, and
-never again: a device that does not move has nothing to add by repeating
-itself, and fifteen bytes on every beat for the length of a ride is a tax on
-the one carrier here that is rationed by law.
+Two rhythms, because there are two kinds of device.
+
+**The one that stays says it once**, on its first message, and never again: it
+has nothing to add by repeating itself.
+
+**The one that moves says it on the first beat of every round.** That is fifteen
+bytes a round rather than fifteen a beat — the whole ride would be a tax on a
+carrier rationed by law, and one place per round is the resolution a round has
+anyway. What it buys is that **the stationary device holds the ride too**: if
+the phone loses its link, runs out of battery or is simply the unreliable half
+of the pair, the measurement is not gone with it. The beats in between carry no
+place and say so, rather than repeating the last one — a place that is actually
+a guess would put a mark on a spot that was never measured.
 
 It travels as two integers in Meshtastic's own scaling (`lat / 1e-7`), which
 is what the node reports, so nothing is converted twice. `0, 0` is refused on

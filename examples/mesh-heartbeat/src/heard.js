@@ -14,11 +14,12 @@
  * heard and nothing else: no count, no history, and a summary line describing
  * a ride it was not on.
  *
- * What it deliberately does not have is a place per row. Only the stationary
- * device announces where it is, and only once — a rider carrying its position
- * on every beat is fifteen bytes on top of thirty-four, for the length of a
- * ride, on the one carrier here that is rationed by law. So this records what
- * arrived, and the phone records where it was standing when it sent it.
+ * A row carries a place when the message did. The device that moves says where
+ * it is on the **first beat of each round** — fifteen bytes a round rather
+ * than fifteen a beat, which is what makes this affordable on a carrier
+ * rationed by law — so the rows in between have none, and say so rather than
+ * repeating the last one. A place that is actually a guess is worse than a
+ * dash: it would put a mark on a spot that was never measured.
  */
 
 /** How many rows to keep. Long enough for a ride, short enough for a phone. */
@@ -39,13 +40,14 @@ export function createHeardLog({ limit = LIMIT, now = Date.now } = {}) {
      * on a shared channel a stationary device hears other people's answers
      * too, and a count that mixed them would overstate what it was asked.
      */
-    heard({ type = "beat", from = null, n = null, bytes = null } = {}) {
+    heard({ type = "beat", from = null, n = null, bytes = null, position = null } = {}) {
       const row = {
         at: now(),
         type,
         from,
         n,
         bytes,
+        position,
         answered: false,
         answeredAt: null,
       };
@@ -86,6 +88,7 @@ export function createHeardLog({ limit = LIMIT, now = Date.now } = {}) {
         answered: beats.filter((r) => r.answered).length,
         askers: new Set(beats.map((r) => r.from).filter(Boolean)).size,
         echoes: rows.length - beats.length,
+        located: beats.filter((r) => r.position).length,
       };
     },
 

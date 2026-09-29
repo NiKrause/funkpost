@@ -116,20 +116,22 @@ export const WORDS = {
     heard: {
       legend: "What reached this device",
       empty: "Nothing yet. A row appears when a beat arrives.",
-      summary: ({ heard, answered, askers, echoes }) =>
-        `${heard} ${plural(heard, "beat", "beats")} heard · ${answered} answered · from ${askers} ${plural(askers, "device", "devices")}` +
+      summary: ({ heard, answered, askers, echoes, located }) =>
+        `${heard} ${plural(heard, "beat", "beats")} heard · ${answered} answered · ${located} with a place · from ${askers} ${plural(askers, "device", "devices")}` +
         (echoes ? ` · ${echoes} other ${plural(echoes, "echo", "echoes")} on the channel` : ""),
       beat: (n) => (n ? `beat ${n}` : "beat"),
       foreign: "somebody else's echo",
       yes: "answered",
       no: "not answered",
       clear: "Clear what was heard",
-      note: "Where the other device was is not here — only the device that stays announces a position, and only once. The places are on the phone that rode.",
+      note: "A place arrives on the first beat of each round, so the beats in between have none rather than repeating the last one. The device that stays announces its own position once.",
       columns: {
         time: "time",
         from: "from",
         what: "what",
         bytes: "size",
+        place: "where it was",
+        distance: "from here",
         answered: "our answer",
       },
     },
@@ -262,20 +264,22 @@ export const WORDS = {
     heard: {
       legend: "Was hier ankam",
       empty: "Noch nichts. Eine Zeile erscheint, wenn ein Beat ankommt.",
-      summary: ({ heard, answered, askers, echoes }) =>
-        `${heard} ${plural(heard, "Beat", "Beats")} gehört · ${answered} beantwortet · von ${askers} ${plural(askers, "Gerät", "Geräten")}` +
+      summary: ({ heard, answered, askers, echoes, located }) =>
+        `${heard} ${plural(heard, "Beat", "Beats")} gehört · ${answered} beantwortet · ${located} mit Ort · von ${askers} ${plural(askers, "Gerät", "Geräten")}` +
         (echoes ? ` · ${echoes} fremde ${plural(echoes, "Antwort", "Antworten")} auf dem Kanal` : ""),
       beat: (n) => (n ? `Beat ${n}` : "Beat"),
       foreign: "fremdes Echo",
       yes: "beantwortet",
       no: "nicht beantwortet",
       clear: "Empfangenes löschen",
-      note: "Wo das andere Gerät war, steht hier nicht — nur das stehende Gerät sagt einmal, wo es steht. Die Orte stehen auf dem Telefon, das gefahren ist.",
+      note: "Ein Ort kommt auf dem ersten Beat jeder Runde, die Beats dazwischen haben keinen — statt den letzten zu wiederholen. Das stehende Gerät sagt einmal, wo es selbst steht.",
       columns: {
         time: "Zeit",
         from: "von",
         what: "was",
         bytes: "Größe",
+        place: "wo es war",
+        distance: "von hier",
         answered: "unsere Antwort",
       },
     },

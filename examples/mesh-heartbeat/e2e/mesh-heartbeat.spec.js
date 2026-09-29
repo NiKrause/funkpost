@@ -76,6 +76,14 @@ test("the stationary device says where it is once, and the distance follows", as
   const saidWhereItIs = positionLines.filter((line) => /is at|steht bei/.test(line));
   expect(saidWhereItIs).toHaveLength(1);
 
+  // And the other way: the device that stays holds the ride too. The rider
+  // says where it is on the first beat of *each* round — twice here, once per
+  // press — so the office's own record has a place against those rows, and a
+  // distance, because it knows where it is standing.
+  await expect(office.getByTestId("heard")).toContainText("48.41500");
+  await expect(office.getByTestId("heard")).toContainText(/1\.\d\d km/);
+  await expect(office.getByTestId("heard-summary")).toContainText(/2 (with a place|mit Ort)/);
+
   await rider.close();
   await office.close();
 });
