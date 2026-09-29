@@ -86,7 +86,7 @@ sequenceDiagram
 
     Note over A: Somebody ticks a box.
     A->>A: db.put(t1727…, { text, done, ts })
-    Note over A: OrbitDB emits update with the entry.<br/>Its payload IS the operation: { op, key, value }.<br/>The signed entry is 519 B; the delta plane<br/>would put 1774 B on the air for it.
+    Note over A: OrbitDB emits update with the entry.<br/>Its payload IS the operation: { op, key, value }.<br/>The signed entry is 519 B. The delta plane<br/>would put 1774 B on the air for it.
 
     A->>CA: op { id, o: { op, key, value } }
     CA--)CB: 86 B — one frame
@@ -95,7 +95,7 @@ sequenceDiagram
     Note over B: Seen this id before? Then stop.<br/>A retransmission must not write twice.
     B->>B: db.put(o.key, o.value)
     Note over B: B's own entry, B's identity, B's hash —<br/>but A's KEY. That is the whole trick.
-    B->>B: update fires; the list moves on screen
+    B->>B: update fires — the list moves on screen
     Note over B: The applying guard stops that update<br/>from being sent straight back to A.
 ```
 
