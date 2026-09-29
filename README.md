@@ -174,6 +174,7 @@ what is built and what is not:
 | **[Field notes](docs/field-notes.md)** | what broke on real hardware, and why |
 | **[Neighbours](docs/related-work.md)** | the other people doing this, and the meshes within range |
 | **[Why a separate repository](docs/why-separate-repository.md)** | a licence decision, and a one-way door |
+| **[Notes for agents](AGENTS.md)** | the traps that cost a field evening each — read §0 and §1 before touching the connect path |
 
 ## Using it
 
