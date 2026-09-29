@@ -1,0 +1,16 @@
+{
+  "name": "@le-space/funkpost-radio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Connecting a Meshtastic node, once, for every funkpost demo that needs one.",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./connect.js",
+    "./fake-bc-link.js": "./fake-bc-link.js"
+  },
+  "files": ["connect.js", "fake-bc-link.js"],
+  "dependencies": {
+    "@le-space/funkpost": "file:../.."
+  }
+}

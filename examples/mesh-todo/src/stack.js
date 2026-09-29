@@ -46,6 +46,9 @@ import { MemoryBlockstore } from "blockstore-core";
 import { MemoryDatastore } from "datastore-core";
 import { createOrbitDB, IPFSAccessController } from "@orbitdb/core";
 import { createCourierSync, databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
+// Connecting the radio moved out: mesh-calendar carried a near-identical copy
+// and mesh-heartbeat would have been a third. See examples/radio.
+export { connectCourier, MESHTASTIC_BLE_SERVICE } from "@le-space/funkpost-radio";
 
 /**
  * What every sync on this radio is given.
@@ -83,13 +86,7 @@ import {
   decodeFoundingPointer,
 } from "@le-space/funkpost/founding-pointer";
 import * as dagCbor from "@ipld/dag-cbor";
-import {
-  createMeshtasticCourier,
-  connectMeshtasticDevice,
-  describeMeshtasticError,
-} from "@le-space/funkpost";
 import { createHeartbeat } from "@le-space/funkpost/heartbeat";
-import { createBroadcastChannelLink } from "./fake-bc-link.js";
 import { PUBSUB_TOPICS } from "./pubsub-topics.js";
 
 const INVITE_VERSION = 1;
@@ -228,92 +225,7 @@ export async function createDatabaseStack({ internet = false } = {}) {
  * (two tabs, no hardware); anything else opens the Web Bluetooth chooser —
  * which must be called from a user gesture.
  */
-const MESHTASTIC_BLE_SERVICE = "6ba1b218-15a8-461f-9fa8-5dcae273eafd";
 
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp }) {
-  if (mode.kind === "bc") {
-    const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
-    // preset only changes the airtime *estimates* (and with them the ARQ's
-    // patience) — e2e uses SHORT_TURBO so lossy runs heal at test pace.
-    const courier = createMeshtasticCourier({
-      link,
-      region: "EU_868",
-      preset: mode.preset,
-      onEvent,
-    });
-    return {
-      courier,
-      kind: "bc", // the page words it
-      region: "EU_868",
-      device: null,
-      setTxChannel: () => {},
-    };
-  }
-
-  const [{ TransportWebBluetooth }, { MeshDevice }] = await Promise.all([
-    import("@meshtastic/transport-web-bluetooth"),
-    import("@meshtastic/core"),
-  ]);
-  // Request the device ourselves (rather than TransportWebBluetooth.create,
-  // which hides it) so we hold the BluetoothDevice and can reconnect to it
-  // later without a chooser — the supervisor needs a repeatable createDevice.
-  const bleDevice = await navigator.bluetooth.requestDevice({
-    filters: [{ services: [MESHTASTIC_BLE_SERVICE] }],
-  });
-
-  // Everything about surviving a phone's Bluetooth — subscribe-before-configure,
-  // the generation guard, teardown-first reconnect, backoff, the stability
-  // timer, the give-up cap — now lives in the library (issue #37). The courier
-  // is built through the supervisor so it exists BEFORE configure() runs and
-  // cannot miss the config stream; region and airtime are wired into it there.
-  const managed = await connectMeshtasticDevice({
-    createDevice: async () =>
-      new MeshDevice(await TransportWebBluetooth.createFromDevice(bleDevice)),
-    // The transport reports a failed GATT write as a disconnection, and
-    // Android Chrome produces those readily. This is the ground truth that
-    // stops us closing a connection that never actually dropped.
-    isLinkAlive: () => bleDevice.gatt?.connected === true,
-    // minFrameGapMs paces BLE writes so a multi-fragment payload (the bootstrap
-    // blocks) does not burst and flood the phone's stack. maxRounds 12 (vs the
-    // lib default 8): first contact is the biggest payload and the public
-    // channel is lossy, so give the selective-ACK ARQ room to fill the gaps.
-    createCourier: (link) =>
-      createMeshtasticCourier({
-        link,
-        region: "UNSET", // provisional — the node reports the real one live
-        onEvent,
-        minFrameGapMs: 150,
-        maxRounds: 12,
-      }),
-    on: {
-      region: onRegion,
-      airUtilTx: onTelemetry,
-      status: onStatus,
-      nodeInfo: onNodeInfo,
-      channel: onChannel,
-      myNodeInfo: onMyNodeInfo,
-      reconnecting: onReconnecting,
-      reconnected: onReconnected,
-      gaveUp: onGaveUp,
-      error: (e) => onError && onError(describeMeshtasticError(e)),
-    },
-  });
-
-  return {
-    courier: managed.courier,
-    kind: "ble",
-    region: "UNSET", // provisional; onRegion carries the live value
-    get device() {
-      return managed.device;
-    },
-    /** Frames the radio gave up retransmitting — see funkpost issue #73. */
-    get refusals() {
-      return managed.link.refusals;
-    },
-    setTxChannel: (index) => managed.setChannel(index),
-    close: () => managed.close(),
-  };
-}
 
 /**
  * Create a fresh list, and announce it over the mesh if there is a node. Write
