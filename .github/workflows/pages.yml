@@ -81,13 +81,8 @@ jobs:
           # beside it for the page QR. The demos bundle their own copy.
           cp examples/brand/brand.js examples/brand/brand.css site/brand/
           cp node_modules/uqr/dist/index.mjs site/brand/uqr.mjs
-          # Not linked from the menu: it is a diagnostic for #93, reached by
-          # its address, and it creates a test passkey on whatever key taps it.
           cp -R examples/mesh-todo/dist/. site/mesh-todo/
           cp -R examples/mesh-calendar/dist/. site/mesh-calendar/
-          # Also not linked from the menu: it asks a security key for an
-          # identity and publishes a backup, which is a bench instrument for
-          # #93 rather than something to wander into.
           # Keeps every .ics ever issued working — see the header. The worker
           # retires the one still installed at the old scope, which would
           # otherwise keep serving the old build instead of the redirect.
