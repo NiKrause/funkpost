@@ -116,6 +116,8 @@
 
   /** A beat on the wire, measured rather than guessed — see test/heartbeat.test.js. */
   const BEAT_BYTES = 34;
+  /** What saying where costs, on the first beat of each round. Measured there too. */
+  const POSITION_BYTES = 15;
 
   let phase = $state("idle"); // idle → connecting → ready | lost
   let linkKind = $state("");
@@ -165,7 +167,7 @@
 
   let rows = $state([]); // the track, newest first for the screen
   let heardRows = $state([]); // what reached this device, newest first
-  let heardSummary = $state({ heard: 0, answered: 0, askers: 0, echoes: 0 });
+  let heardSummary = $state({ heard: 0, answered: 0, askers: 0, echoes: 0, located: 0 });
   let summary = $state({ sent: 0, reached: 0, firstBeat: 0, located: 0 });
   let log = $state([]);
 
@@ -399,13 +401,17 @@
         id: deviceId,
         minuteMs: beatGapMs,
         beatsPerRound: role === "office" ? 0 : BEATS_PER_ROUND,
+        // The one that stays says where it is once and has nothing to add.
+        // The one that moves says it on the first beat of every round, so the
+        // far end holds the ride as well — fifteen bytes a round, and the half
+        // most likely to lose its link is not the only copy.
+        positionEvery: role === "office" ? "once" : "round",
         roundEveryMs,
         answerWindowMs,
-        // Only the stationary device announces where it is, and only once.
-        // A rider's position changes every beat, so putting it on the wire
-        // would cost fifteen bytes a beat to say something already recorded
-        // on the device that cares about it.
-        position: () => (role === "office" ? encodeNodePosition(here) : null),
+        // Both devices say where they are; the rhythm above is the difference.
+        // A rider's position changes, which is why it repeats it once a round
+        // rather than once ever — and why it is not on every beat.
+        position: () => encodeNodePosition(here),
         // `lastError` is set when a send fails and cleared on the next one
         // that does not — so reading it here gives a transient message rather
         // than a banner that outlives the fault it describes.
@@ -467,7 +473,15 @@
         bytes: event.bytes,
       };
       if (!heardIds.includes(event.from)) heardIds = [...heardIds, event.from];
-      heardLog.heard({ type: event.type, from: event.from, n: event.n, bytes: event.bytes });
+      heardLog.heard({
+        type: event.type,
+        from: event.from,
+        n: event.n,
+        bytes: event.bytes,
+        position: event.pos
+          ? decodeNodePosition({ latitudeI: event.pos[0], longitudeI: event.pos[1] })
+          : null,
+      });
       refreshHeard();
       pushLog(w().log.heard(event.type, event.from, event.n, event.bytes));
       const mine = !partner || event.from === partner;
@@ -556,7 +570,7 @@
   /** What a chosen interval costs, so the choice is not made blind. */
   const cost = $derived.by(() => {
     if (role === "office" || everyMin === 0) return null;
-    const perRound = BEATS_PER_ROUND * BEAT_BYTES;
+    const perRound = BEATS_PER_ROUND * BEAT_BYTES + POSITION_BYTES;
     const perHour = perRound * (60 / everyMin);
     return {
       perRound,
@@ -836,6 +850,8 @@
                 <th>{t.heard.columns.from}</th>
                 <th>{t.heard.columns.what}</th>
                 <th>{t.heard.columns.bytes}</th>
+                <th>{t.heard.columns.place}</th>
+                <th>{t.heard.columns.distance}</th>
                 <th>{t.heard.columns.answered}</th>
               </tr>
             </thead>
@@ -848,6 +864,11 @@
                     {row.type === "echo" ? t.heard.foreign : t.heard.beat(row.n)}
                   </td>
                   <td class="mono">{row.bytes ?? "—"} B</td>
+                  <td class="mono">{row.position ? formatPosition(row.position) : "—"}</td>
+                  <td class="mono">
+                    {(row.position && here && formatDistance(distanceMetres(here, row.position))) ||
+                      "—"}
+                  </td>
                   <td>{row.type === "echo" ? "—" : row.answered ? t.heard.yes : t.heard.no}</td>
                 </tr>
               {/each}

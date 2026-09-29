@@ -613,6 +613,47 @@ describe("where the stationary device is", () => {
     rider.stop();
   });
 
+  test("the device that moves says where it is once a round, on the first beat", () => {
+    // Chosen deliberately over once-a-ride and over every-beat: the far end
+    // can keep the ride too — which matters when the moving half is the phone
+    // most likely to lose its link — at fifteen bytes a round rather than
+    // fifteen a beat.
+    const air = fakeAir();
+    const clock = fakeClock();
+    const places = [
+      [484116100, 127603500],
+      [484200000, 127700000],
+    ];
+    let ride = 0;
+    const rider = createHeartbeat({
+      courier: air.courier("rider"),
+      tag: TAG,
+      id: ID_A,
+      minuteMs: MINUTE,
+      beatsPerRound: 3,
+      roundEveryMs: 4 * MINUTE,
+      timers: clock,
+      positionEvery: "round",
+      position: () => places[ride],
+    });
+
+    rider.start();
+    clock.advance(3 * MINUTE); // nobody answers, so the whole round goes out
+    const first = air.beatsFrom("rider");
+    assert.equal(first.length, 3, "three beats with nobody there");
+    assert.deepEqual(first[0].message.pos, places[0], "the first carries the place");
+    assert.equal(first[1].message.pos, null, "and the rest do not repeat it");
+    assert.equal(first[2].message.pos, null);
+
+    ride = 1; // it moved
+    clock.advance(4 * MINUTE);
+    const next = air.beatsFrom("rider").slice(3);
+    assert.ok(next.length >= 1, "a second round started");
+    assert.deepEqual(next[0].message.pos, places[1], "the new place, not the old one");
+
+    rider.stop();
+  });
+
   test("a send that failed keeps the position for the next one", async () => {
     const air = fakeAir();
     const clock = fakeClock();
