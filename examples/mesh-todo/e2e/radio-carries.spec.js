@@ -33,6 +33,31 @@ test("the radio carries one thing at a time", async ({ context }) => {
   await expect(a.getByTestId("carries-list")).not.toBeChecked();
 });
 
+/**
+ * The switch said yes and the air stayed empty.
+ *
+ * A heartbeat asks about a *list* — it is tagged with the list's address, and
+ * refuses to start without one. A field log came back with the switch on, both
+ * nodes configured on the same channel, and not one beat in it: nothing was
+ * wrong except that nobody had made a list, and nothing said so.
+ */
+test("with no list, the heartbeat says so instead of showing idle lamps", async ({ context }) => {
+  const a = await openPhone(context, room());
+
+  await expect(a.getByTestId("carries-beat")).toBeChecked();
+  await expect(a.getByTestId("beat-needs-list")).toBeVisible();
+  // Not two unlit lamps: those read as "running, nothing yet", which is the
+  // one thing this is not.
+  await expect(a.getByTestId("ping-out")).toHaveCount(0);
+
+  await a.getByRole("button", { name: "Create a list" }).click();
+  await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
+
+  // A list, and the heartbeat has something to ask about.
+  await expect(a.getByTestId("beat-needs-list")).toHaveCount(0);
+  await expect(a.getByTestId("ping-out")).toHaveAttribute("data-lit", "yes", { timeout: 30_000 });
+});
+
 test("the outgoing lamp lights when a beat goes, and the lamps belong to the heartbeat", async ({
   context,
 }) => {

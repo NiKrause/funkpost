@@ -619,7 +619,11 @@
       pingOut = null;
       pingIn = null;
     }
-    pushLog(on ? w().log.beatOn : w().log.beatOff);
+    // A heartbeat asks about a *list* — it is tagged with the list's address,
+    // and `maybeStartHeartbeat` refuses without one. Saying "heartbeat on"
+    // regardless is how a field log came back with the switch on, the node
+    // configured, and not one beat in it.
+    pushLog(on ? (db ? w().log.beatOn : w().log.beatWaiting) : w().log.beatOff);
   }
 
   /**
@@ -1450,7 +1454,14 @@
           </label>
         {/each}
       </fieldset>
-      {#if beatOn}
+      {#if beatOn && !db}
+        <!-- The switch is on and nothing is on the air, because a heartbeat
+             asks about a list and there is none. Two unlit lamps would read as
+             "running, nothing yet", which is the one thing this is not. -->
+        <p class="ping-lights">
+          <span class="ping" data-testid="beat-needs-list">{t.beatNeedsList}</span>
+        </p>
+      {:else if beatOn}
         <!-- Two lamps, because one cannot answer the question. Out says a beat
              left and which of the round it was; in says something came back,
              from whom, answering which beat, and what it cost. A single
