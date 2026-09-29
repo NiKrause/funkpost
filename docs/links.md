@@ -5,7 +5,7 @@
 Status: **built and tested** — the supervisor against a stub device
 ([`test/supervisor.test.js`](../test/supervisor.test.js)), the link against the
 in-memory mesh. The Bluetooth behaviour it exists to survive can only ever be
-*confirmed* on hardware; see [field notes in the README](../README.md#field-notes).
+*confirmed* on hardware; see the [field notes](field-notes.md).
 
 Two files, deliberately split:
 
@@ -147,8 +147,8 @@ the delivery authority; letting one of these abort a multi-fragment payload
 throws away every fragment that got through. Hard errors (`NO_CHANNEL`,
 `NOT_AUTHORIZED`, `TOO_LARGE`) still throw, named.
 
-The full two-acknowledgements explanation is in
-[the README](../README.md#deeper-four-layers-and-two-acknowledgements).
+What each of the two acknowledgements does and does not prove is in the
+[field notes](field-notes.md#-gave-up-does-not-mean-did-not-arrive).
 
 ## The link itself
 

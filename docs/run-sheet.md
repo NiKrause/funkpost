@@ -2,14 +2,16 @@
 
 # Run sheet: what the next bench has to show
 
-Status: **three runs open.** All pass in the browser over a fake mesh; what is
-left needs two Meshtastic nodes on a bench, not another commit.
+Status: **four runs open.** All pass in the browser over a fake mesh; what is
+left needs two Meshtastic nodes — three of them on a bench, and one on a
+bicycle.
 
 | run | the question | gate |
 |---|---|---|
 | [**A** · internet first, the mesh when it goes](#run-a-internet-first-the-mesh-when-it-goes) | does the fallback hold on real radios? | [ROADMAP](../ROADMAP.md) P10 · [#82](https://github.com/NiKrause/funkpost/issues/82) |
 | [**B** · a decision crosses the mesh](#run-b-a-decision-crosses-the-mesh) | does a salon's yes reach the customer? | [ROADMAP](../ROADMAP.md) P7 · [#38](https://github.com/NiKrause/funkpost/issues/38) A7 |
 | [**C** · a whole list over LoRa, cold](#run-c-a-whole-list-over-lora-cold) | can a list be joined with no internet at all? | [#153](https://github.com/NiKrause/funkpost/issues/153) · [#158](https://github.com/NiKrause/funkpost/pull/158) |
+| [**D** · how far the mesh reaches](#run-d-how-far-the-mesh-reaches) | does any of this work outside one room? | [#180](https://github.com/NiKrause/funkpost/issues/180) |
 
 Each run says what to press, what to write down, and **when it counts**. The
 pass line is the ROADMAP's gate, not a new one. Results go into the
@@ -17,9 +19,9 @@ pass line is the ROADMAP's gate, not a new one. Results go into the
 
 Not on this sheet: **P11**, a lost phone and the same passkey. It needs no
 radio — two phones, one security key and the
-[recovery page](https://nikrause.github.io/funkpost/recovery/).
+[recovery page](https://nikrause.github.io/orbitdb-storage-bridge/recovery/).
 
-## Before either run
+## Before any run
 
 Once per bench, and again after anything that reboots a node.
 
@@ -222,6 +224,71 @@ watcher picks all of it up afterwards:
 RELAY_ADDRS=/dns4/…/p2p/12D3… node scripts/watch-field-log.mjs --out run-c.ndjson
 ```
 
+## Run D: how far the mesh reaches
+
+The other three runs happen in one room, where the radio is never the thing
+being tested. This one takes a node outside and asks the question the whole
+project rests on — **does any of it work at a distance?** No database is
+involved: [mesh-heartbeat](mesh-heartbeat.md) sends 34 bytes and records what
+happened to them.
+
+**Pages:** [`/mesh-heartbeat/?role=office&log=1`](https://nikrause.github.io/funkpost/mesh-heartbeat/?role=office&log=1)
+on the device that stays, [`/mesh-heartbeat/?role=rider&every=2&log=1`](https://nikrause.github.io/funkpost/mesh-heartbeat/?role=rider&every=2&log=1)
+on the one that moves.
+
+Setup beyond *before any run*:
+
+- [ ] **Where the stationary node is.** Either a fixed position set on the node
+      in the Meshtastic app, or allow the browser's location on that phone. It
+      is announced once, and without it the ride records answers with no
+      distance against them.
+- [ ] **Keep the screen awake on both**, and plug the riding phone in. Web
+      Bluetooth pauses when the screen locks: the node stays connected and the
+      page stops being able to talk to it, which on a bicycle nobody notices.
+- [ ] **An interval.** `every=2` for a ride of an hour or so. `every=1` only
+      for a short deliberate one — it is four times the air of `every=5`, and
+      a second party riding at the same interval doubles that again
+      ([what a run costs](mesh-heartbeat.md#what-a-run-costs)).
+- [ ] **A partner, once it has been heard.** *Whose answer counts* pins the
+      other device. On the public test channel a stranger's node can answer a
+      beat, and the track would then record their coverage as yours.
+
+| # | where | do | expect |
+|---|---|---|---|
+| 1 | both | open the page, *Connect a Meshtastic® node*, pick the TX channel | `node connected · EU_868`, and the same `⌗fingerprint` in the selector on both |
+| 2 | office | *Stays here and answers*; read *Where this is* | `from the node` or `from the browser` with a place — **not** `no fix yet` |
+| 3 | rider | *Travels and asks*, interval, *Keep the screen awake* | a row appears within the interval |
+| 4 | rider | *Ask now*, still beside the other device | `answered at once` — and *the other device says it is at …* with a distance of a few metres. **This is the control**: it proves both ends and the position before anything moves |
+| 5 | rider | pin the partner | it stops saying several devices have answered, if it did |
+| 6 | rider | ride, and leave the phone alone | rows fill: a place, a distance, and `answered on beat n` or `no answer` |
+| 7 | rider | at the far end, *Ask now* twice with a minute between | two rows from one place — one silence there is a lost frame, two is a boundary |
+| 8 | rider | come back the same way | answers resume, at roughly the distance they stopped |
+
+**It counts** when the track holds answers *and* silences with places against
+them, and step 8 shows the answers coming back on the return leg — a silence
+that never recovers is as likely to be a phone that fell asleep as a mesh that
+ran out.
+
+**Compare the two logs afterwards, and do not skip this.** The office page
+records every beat it heard. A place is out of range only if **neither** end
+has anything at that time. If the office heard the beat but the rider never
+saw the echo, the link was asymmetric, not absent — worth its own line in the
+write-up, because it is the failure the demo cannot tell you about on the
+ride.
+
+**What this run cannot say**, and the write-up should not claim: on a public
+channel an answer may have been relayed by somebody else's node, and nothing
+in the demo can see that. It measures **coverage from that spot**, not a link
+budget between two radios. A beat that got through also does not promise that
+a 5.7 KB list would have — it gives the boundary to try that inside.
+
+**Write down:** both devices and nodes with firmware, TX power and antenna on
+each, the preset, the interval, the summary line (`n beats · n answered · n at
+once · n with a place`), the longest distance with an answer, the shortest with
+a silence, `AirUtilTX` on both before and after, and how many link drops the
+riding phone had. A screenshot of the track is the record; nothing exports yet
+([#180](https://github.com/NiKrause/funkpost/issues/180)).
+
 ## Watch during every run
 
 - **Bluetooth drops** (#1). `mesh-todo` says `link dropped — reconnecting
@@ -253,7 +320,7 @@ line of the [ROADMAP](../ROADMAP.md), in the [README](../README.md#status)'s
 status, and on [lora.le-space.de](https://lora.le-space.de/).
 
 ```text
-Run A / B / C — date, time, place
+Run A / B / C / D — date, time, place
 Devices    A: model · Android · Chrome        B: model · Android · Chrome
 Nodes      A: model · firmware                B: model · firmware
 Air        region · preset · »channel« ⌗fingerprint · role · TX power · distance

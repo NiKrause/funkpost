@@ -380,7 +380,7 @@ act, and the sentence hid the difference. Recorded in
 ## A list back on a phone that never had it
 
 **21 September 2026.** A Galaxy Fold 5 made a list on
-[the recovery page](https://nikrause.github.io/funkpost/recovery/), backed it
+[the recovery page](https://nikrause.github.io/orbitdb-storage-bridge/recovery/), backed it
 up — the list as a CAR to Aleph, a pointer under a name the key derives — and
 was reset. A Galaxy A57 with the same YubiKey showed the same DID and
 signing-key fingerprints, brought the list back with the key alone, and wrote an

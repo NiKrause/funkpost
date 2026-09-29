@@ -120,6 +120,27 @@ describe("heartbeat on the wire", () => {
     assert.equal(total, 1, `a numbered beat is ${bytes.length} bytes`);
   });
 
+  // 34 and 15 are quoted as measurements — by the range demo's own cost
+  // estimate, by docs/mesh-heartbeat.md and by the run sheet. A number three
+  // documents repeat is a number a test should hold still.
+  test("a beat is 34 bytes, and a position costs 15 more", () => {
+    for (const n of [1, 2, 3]) {
+      const bytes = encodeHeartbeat({ type: "beat", tag: TAG, from: ID_A, n });
+      assert.equal(bytes.length, 34, `beat ${n}`);
+    }
+
+    const echo = encodeHeartbeat({ type: "echo", tag: TAG, from: ID_A, n: 1 });
+    const located = encodeHeartbeat({
+      type: "echo",
+      tag: TAG,
+      from: ID_A,
+      n: 1,
+      pos: [485200000, 113400000],
+    });
+    assert.equal(echo.length, 34);
+    assert.equal(located.length - echo.length, 15, "what saying where costs");
+  });
+
   test("round-trips type, tag and sender", () => {
     const message = decodeHeartbeat(encodeHeartbeat({ type: "echo", tag: TAG, from: ID_B }));
     assert.equal(message.type, "echo");

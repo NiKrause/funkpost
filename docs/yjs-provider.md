@@ -32,8 +32,11 @@ running the provider over a bare in-memory pair with no framing, no ARQ and no
 radio anywhere — *"works with any courier — nothing here is funkpost-specific"*.
 
 ```bash
-npm install @le-space/funkpost yjs
+npm install yjs   # funkpost itself is not published — see the README
 ```
+
+funkpost is taken from a checkout (`"@le-space/funkpost": "file:../.."`, as the
+examples here do) while the experimental warning stands.
 
 `yjs` is an **optional peer dependency**: funkpost's core does not pull it in,
 and the provider lives behind its own subpath, so projects that only want the
