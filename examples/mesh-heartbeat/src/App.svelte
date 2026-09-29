@@ -56,6 +56,7 @@
   import { createHeartbeat } from "@le-space/funkpost/heartbeat";
   import { databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
   import { createCoverageTrack } from "./track.js";
+  import { createHeardLog } from "./heard.js";
   import {
     decodeNodePosition,
     encodeNodePosition,
@@ -159,10 +160,12 @@
   /** Every device heard so far, so the partner can be picked rather than typed. */
   let heardIds = $state([]);
 
-  let pingOut = $state(null); // { at, n, of }
+  let pingOut = $state(null); // a beat { at, n, of } or an echo { at, echo, to, n }
   let pingIn = $state(null); // { at, type, from, n, bytes }
 
   let rows = $state([]); // the track, newest first for the screen
+  let heardRows = $state([]); // what reached this device, newest first
+  let heardSummary = $state({ heard: 0, answered: 0, askers: 0, echoes: 0 });
   let summary = $state({ sent: 0, reached: 0, firstBeat: 0, located: 0 });
   let log = $state([]);
 
@@ -209,6 +212,10 @@
   let roundRunning = $state(false);
   let stopWatchingBrowser = null;
   const track = createCoverageTrack();
+  // The stationary half's own record. It is not the ride: it is what reached
+  // this device and what it sent back, which is the other half of every
+  // silence on the phone.
+  const heardLog = createHeardLog();
 
   /**
    * One device id for the life of the page, not one per heartbeat.
@@ -230,6 +237,11 @@
     summary = track.summary();
   };
 
+  const refreshHeard = () => {
+    heardRows = heardLog.rows();
+    heardSummary = heardLog.summary();
+  };
+
   // ---------------------------------------------------------------- the radio
 
   async function connect() {
@@ -247,6 +259,9 @@
         // lost — reload to reconnect" sends the operator round a loop the
         // library was already getting them out of.
         onStatus: (name) => pushLog(w().log.nodeStatus(name)),
+        // mesh-todo's GATT queue, now applied by the shared connector rather
+        // than by whichever page remembered to ask for it.
+        onGattQueue: () => pushLog(w().log.gattQueueOn),
         onRegion: (name) => {
           // Only when it *becomes* usable. The node re-reports its region on
           // every reconfiguration, and restarting on each one tears down a
@@ -452,6 +467,8 @@
         bytes: event.bytes,
       };
       if (!heardIds.includes(event.from)) heardIds = [...heardIds, event.from];
+      heardLog.heard({ type: event.type, from: event.from, n: event.n, bytes: event.bytes });
+      refreshHeard();
       pushLog(w().log.heard(event.type, event.from, event.n, event.bytes));
       const mine = !partner || event.from === partner;
       if (event.pos && mine) {
@@ -469,16 +486,29 @@
         refreshTrack();
       }
     }
-    if (event.kind === "echo") pushLog(w().log.echo(event.to, event.n));
+    if (event.kind === "echo") {
+      // The lamp is "what this device last put on the air", and for the
+      // stationary half that is only ever an echo. Without this it reads
+      // "nothing sent yet" while it answers all day — indistinguishable from a
+      // device that is not answering at all, which is the one thing the other
+      // end needs to know.
+      pingOut = { at: Date.now(), echo: true, to: event.to, n: event.n };
+      heardLog.answered({ to: event.to, n: event.n });
+      refreshHeard();
+      pushLog(w().log.echo(event.to, event.n));
+    }
     if (event.kind === "round") {
       // Fired whether the round was answered or not, which is exactly when the
       // button becomes useful again.
       roundRunning = false;
-      if (!event.answered) {
-        track.unanswered();
-        refreshTrack();
-        pushLog(w().log.alone);
-      }
+      // Close whatever beat is still open, either way. Usually that is the
+      // last beat of a round nobody answered. It can also be a *later* beat in
+      // a round that was answered by an earlier one — an echo slower than the
+      // fifteen seconds to the next beat — and that beat is a silence of its
+      // own rather than a row left waiting for an answer that will never come.
+      const stillOpen = track.unanswered();
+      if (!event.answered) pushLog(w().log.alone);
+      if (stillOpen || !event.answered) refreshTrack();
     }
     // Logged only: `beatState.lastError` carries it on screen for as long as
     // it is still true, and the heartbeat clears that itself.
@@ -516,7 +546,9 @@
   function clearTrack() {
     if (!confirm(w().track.confirmClear)) return;
     track.clear();
+    heardLog.clear();
     refreshTrack();
+    refreshHeard();
   }
 
   // --------------------------------------------------------------- the screen
@@ -539,10 +571,20 @@
   const distanceFromOffice = (point) =>
     point.position && officeAt ? distanceMetres(officeAt, point.position) : null;
 
+  /**
+   * What a row says happened.
+   *
+   * `waiting` is for a beat that is still in the air — which is why this asks
+   * the round rather than the lamp. It used to compare against a fresh
+   * `track.points()`, which hands out copies, so the comparison was never true
+   * and a waiting row never said so; and `pingOut` stays lit after the round
+   * is over, which would have left the last silence of every round claiming to
+   * be waiting for an answer that had already been given up on.
+   */
   const resultOf = (point) =>
     point.answered != null
       ? { text: t.track.answered(point.answered), kind: point.answered === 1 ? "first" : "late" }
-      : point.answeredAt === null && point === track.points().at(-1) && pingOut
+      : point.answeredAt === null && point === rows[0] && roundRunning
         ? { text: t.track.waiting, kind: "open" }
         : { text: t.track.silent, kind: "silent" };
 
@@ -713,8 +755,12 @@
       <span class="lamp" data-testid="beat-out" data-lit={pingOut ? "yes" : "no"}>
         <span class="led out" aria-hidden="true"></span>
         <span>
-          <strong>{t.led.out}</strong>
-          <small>{pingOut ? t.led.outAt(pingOut.n, pingOut.of, clockText(pingOut.at)) : t.led.outIdle}</small>
+          <strong>{pingOut?.echo ? t.led.outAnswer : t.led.out}</strong>
+          <small>
+            {#if !pingOut}{t.led.outIdle}
+            {:else if pingOut.echo}{t.led.outEcho(pingOut.to, pingOut.n, clockText(pingOut.at))}
+            {:else}{t.led.outAt(pingOut.n, pingOut.of, clockText(pingOut.at))}{/if}
+          </small>
         </span>
       </span>
       <span class="lamp" data-testid="beat-in" data-lit={pingIn ? "yes" : "no"}>
@@ -772,6 +818,47 @@
     </p>
   </section>
 
+  {#if role === "office"}
+    <!-- The stationary half's own record. Its "ride" is empty by definition —
+         it sends no beats — and a summary line about a ride it was not on was
+         the only thing this screen had to say about hours of answering. -->
+    <section class="card">
+      <h2>{t.heard.legend}</h2>
+      <p class="dim mono" data-testid="heard-summary">{t.heard.summary(heardSummary)}</p>
+      {#if heardRows.length === 0}
+        <p class="dim" data-testid="heard-empty">{t.heard.empty}</p>
+      {:else}
+        <div class="scroll">
+          <table data-testid="heard">
+            <thead>
+              <tr>
+                <th>{t.heard.columns.time}</th>
+                <th>{t.heard.columns.from}</th>
+                <th>{t.heard.columns.what}</th>
+                <th>{t.heard.columns.bytes}</th>
+                <th>{t.heard.columns.answered}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each heardRows as row}
+                <tr data-result={row.type === "echo" ? "open" : row.answered ? "first" : "silent"}>
+                  <td class="mono">{clockText(row.at)}</td>
+                  <td class="mono dim">{row.from ?? "—"}</td>
+                  <td class="mono">
+                    {row.type === "echo" ? t.heard.foreign : t.heard.beat(row.n)}
+                  </td>
+                  <td class="mono">{row.bytes ?? "—"} B</td>
+                  <td>{row.type === "echo" ? "—" : row.answered ? t.heard.yes : t.heard.no}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <p class="dim">{t.heard.note}</p>
+        <button class="quiet" data-testid="clear-track" onclick={clearTrack}>{t.heard.clear}</button>
+      {/if}
+    </section>
+  {:else}
   <section class="card">
     <h2>{t.track.legend}</h2>
     <p class="dim mono" data-testid="track-summary">{t.track.summary(summary)}</p>
@@ -806,6 +893,7 @@
       <button class="quiet" data-testid="clear-track" onclick={clearTrack}>{t.track.clear}</button>
     {/if}
   </section>
+  {/if}
 
   {#if showLog}
     <section class="card">

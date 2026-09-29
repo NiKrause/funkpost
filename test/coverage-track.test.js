@@ -162,3 +162,43 @@ describe("a round that was cut short", () => {
     assert.equal(track.points().length, 1);
   });
 });
+
+test("an echo slower than the gap between beats still answers its beat", () => {
+  // Reported from the field: the stationary device's screen showed the beat
+  // arriving, and the riding phone's table said "no answer" against it.
+  //
+  // On LONG_FAST an answer can easily take longer than the fifteen seconds to
+  // the next beat. Beat 1 goes out, beat 2 follows, and *then* the echo naming
+  // beat 1 arrives — matched against the open beat alone it is discarded as a
+  // duplicate, and a round the office demonstrably answered is filed as two
+  // silences.
+  const track = createCoverageTrack({ now: () => 1 });
+  track.sent({ n: 1, of: 3, position: { lat: 48.4, lon: 12.7 } });
+  track.sent({ n: 2, of: 3, position: { lat: 48.4, lon: 12.8 } });
+
+  const answered = track.answered({ n: 1, from: "b38a691f" });
+  assert.ok(answered, "the echo answers the beat it names");
+  assert.equal(answered.n, 1);
+  assert.equal(answered.answered, 1, "and says which beat got through");
+  assert.equal(answered.answeredBy, "b38a691f");
+
+  const points = track.points();
+  assert.equal(points[0].answeredAt, 1, "beat 1's row is the one that closed");
+  assert.equal(points[1].answered, null, "beat 2 was not answered, and does not pretend to be");
+});
+
+test("an echo from a round already over does not reopen it", () => {
+  const track = createCoverageTrack({ now: () => 1 });
+  track.sent({ n: 1, of: 3 });
+  track.unanswered();
+  track.sent({ n: 1, of: 3 }); // the next round
+
+  // The radio repeats; a stale echo naming beat 1 belongs to the round that is
+  // running, not to the one that was given up on.
+  const answered = track.answered({ n: 1, from: "b38a691f" });
+  const points = track.points(); // copies, so compare what they say
+  assert.ok(answered, "the running round is answered");
+  assert.equal(points.at(-1).answeredBy, "b38a691f", "by the beat that is in the air");
+  assert.equal(points[0].answered, null, "and the old round stays a silence");
+  assert.equal(points[0].answeredAt, null);
+});

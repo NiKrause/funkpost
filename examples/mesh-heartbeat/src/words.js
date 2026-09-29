@@ -61,6 +61,11 @@ export const WORDS = {
       out: "beat out",
       outIdle: "nothing sent yet",
       outAt: (n, of, time) => `beat ${n} of ${of} · ${time}`,
+      // The stationary device sends nothing but echoes, so its lamp has to
+      // name one — otherwise the half of the experiment whose only job is to
+      // answer has no way of showing that it did.
+      outAnswer: "answer out",
+      outEcho: (to, n, time) => `echo to ${to} · answers beat ${n} · ${time}`,
       in: "heard",
       inIdle: "nothing heard yet",
       // An echo answers a beat; a beat *is* one. Saying "answers beat 1" of an
@@ -106,6 +111,29 @@ export const WORDS = {
       },
     },
 
+    // The stationary device's own record. Deliberately not the same shape as
+    // the ride: it knows what arrived, not where the other device was.
+    heard: {
+      legend: "What reached this device",
+      empty: "Nothing yet. A row appears when a beat arrives.",
+      summary: ({ heard, answered, askers, echoes }) =>
+        `${heard} ${plural(heard, "beat", "beats")} heard · ${answered} answered · from ${askers} ${plural(askers, "device", "devices")}` +
+        (echoes ? ` · ${echoes} other ${plural(echoes, "echo", "echoes")} on the channel` : ""),
+      beat: (n) => (n ? `beat ${n}` : "beat"),
+      foreign: "somebody else's echo",
+      yes: "answered",
+      no: "not answered",
+      clear: "Clear what was heard",
+      note: "Where the other device was is not here — only the device that stays announces a position, and only once. The places are on the phone that rode.",
+      columns: {
+        time: "time",
+        from: "from",
+        what: "what",
+        bytes: "size",
+        answered: "our answer",
+      },
+    },
+
     log: {
       legend: "Field log",
       beat: (n, of) => `→ beat ${n}/${of}`,
@@ -126,6 +154,7 @@ export const WORDS = {
       wakeOn: "screen kept awake",
       wakeOff: "screen may sleep again",
       wakeRefused: (why) => `the screen lock was refused: ${why}`,
+      gattQueueOn: "one Bluetooth operation at a time",
       position: (source, text) => `position (${source}) ${text}`,
       officePosition: (text) => `the other device is at ${text}`,
       error: (message) => `error: ${message}`,
@@ -186,6 +215,8 @@ export const WORDS = {
       out: "Beat raus",
       outIdle: "noch nichts gesendet",
       outAt: (n, of, time) => `Beat ${n} von ${of} · ${time}`,
+      outAnswer: "Antwort raus",
+      outEcho: (to, n, time) => `echo an ${to} · beantwortet Beat ${n} · ${time}`,
       in: "gehört",
       inIdle: "noch nichts gehört",
       inAt: (type, from, n, bytes, time) =>
@@ -228,6 +259,27 @@ export const WORDS = {
       },
     },
 
+    heard: {
+      legend: "Was hier ankam",
+      empty: "Noch nichts. Eine Zeile erscheint, wenn ein Beat ankommt.",
+      summary: ({ heard, answered, askers, echoes }) =>
+        `${heard} ${plural(heard, "Beat", "Beats")} gehört · ${answered} beantwortet · von ${askers} ${plural(askers, "Gerät", "Geräten")}` +
+        (echoes ? ` · ${echoes} fremde ${plural(echoes, "Antwort", "Antworten")} auf dem Kanal` : ""),
+      beat: (n) => (n ? `Beat ${n}` : "Beat"),
+      foreign: "fremdes Echo",
+      yes: "beantwortet",
+      no: "nicht beantwortet",
+      clear: "Empfangenes löschen",
+      note: "Wo das andere Gerät war, steht hier nicht — nur das stehende Gerät sagt einmal, wo es steht. Die Orte stehen auf dem Telefon, das gefahren ist.",
+      columns: {
+        time: "Zeit",
+        from: "von",
+        what: "was",
+        bytes: "Größe",
+        answered: "unsere Antwort",
+      },
+    },
+
     log: {
       legend: "Feldprotokoll",
       beat: (n, of) => `→ Beat ${n}/${of}`,
@@ -248,6 +300,7 @@ export const WORDS = {
       wakeOn: "Bildschirm wird wach gehalten",
       wakeOff: "Bildschirm darf wieder schlafen",
       wakeRefused: (why) => `die Bildschirmsperre wurde verweigert: ${why}`,
+      gattQueueOn: "immer nur eine Bluetooth-Operation gleichzeitig",
       position: (source, text) => `Position (${source}) ${text}`,
       officePosition: (text) => `das andere Gerät steht bei ${text}`,
       error: (message) => `Fehler: ${message}`,

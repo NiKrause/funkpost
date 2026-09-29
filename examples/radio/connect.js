@@ -28,12 +28,54 @@ import {
   connectMeshtasticDevice,
   describeMeshtasticError,
 } from "@le-space/funkpost";
+import { serialiseGattOperations } from "@le-space/funkpost/links/gatt-queue";
 import { createBroadcastChannelLink } from "./fake-bc-link.js";
 
 /** The Meshtastic BLE service, which is how the chooser knows what to offer. */
 export const MESHTASTIC_BLE_SERVICE = "6ba1b218-15a8-461f-9fa8-5dcae273eafd";
 
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp }) {
+/**
+ * One Bluetooth operation at a time — the fix that belongs to every demo.
+ *
+ * It was found and paid for in mesh-todo (#153, #160): Android Chrome allows a
+ * single GATT operation, the Meshtastic connection sequence reads the node's
+ * configuration without awaiting each read, and the loser of every race fails
+ * with "GATT operation already in progress". The transport reports a failed
+ * operation as a **disconnection**, so the supervisor repairs a link that
+ * never broke — 121 failures a minute on one phone, measured, and a link that
+ * drops continuously.
+ *
+ * It lived in mesh-todo's page, which is why mesh-calendar and mesh-heartbeat
+ * did not have it: this module was extracted (#182) to be the one place that
+ * knows how to connect a radio, and its own docstring names this storm — but
+ * the call stayed behind. Any demo that reaches the Bluetooth branch now gets
+ * it whether or not its page remembers to ask.
+ *
+ * Patched once per page, never twice: the queue wraps the browser's own
+ * methods, and wrapping the wrapper would serialise a serialiser and reverse
+ * the order the `?gatt=1` probe depends on. mesh-todo applies it early, before
+ * that probe; the call below then finds it already on and does nothing.
+ *
+ * `?gattq=0` turns it off — patching a browser prototype should have a way out
+ * that does not need a deploy.
+ *
+ * @returns {(() => void) | null} how to undo it, or null if it was already on
+ *   or turned off
+ */
+let undoGattQueue = null;
+
+export function applyGattQueue({ search = globalThis.location?.search ?? "", target = null } = {}) {
+  if (undoGattQueue) return null;
+  if (new URLSearchParams(search).get("gattq") === "0") return null;
+  const restore = serialiseGattOperations({ target });
+  undoGattQueue = () => {
+    restore();
+    undoGattQueue = null;
+  };
+  return undoGattQueue;
+}
+
+export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp, onGattQueue }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
     // preset only changes the airtime *estimates* (and with them the ARQ's
@@ -55,6 +97,11 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
       close: () => courier.close(),
     };
   }
+
+  // Before anything talks to the radio: the transport's first act is to
+  // subscribe for notifications, and a `startNotifications` that loses the
+  // race is a device that transmits and never hears an answer.
+  if (applyGattQueue() && onGattQueue) onGattQueue();
 
   const [{ TransportWebBluetooth }, { MeshDevice }] = await Promise.all([
     import("@meshtastic/transport-web-bluetooth"),

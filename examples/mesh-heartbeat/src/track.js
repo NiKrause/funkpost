@@ -32,6 +32,16 @@ export function createCoverageTrack({ limit = LIMIT, now = Date.now } = {}) {
   /** The beat we are waiting on, if any. */
   let open = null;
 
+  /**
+   * Which round each point belongs to, so an answer cannot cross into one.
+   *
+   * A round's beats are numbered from one, so a beat number that does not
+   * advance is a new round — whether the schedule started it or the button
+   * did.
+   */
+  let round = 0;
+  let lastN = null;
+
   const drop = () => {
     while (points.length > limit) points.shift();
   };
@@ -47,10 +57,13 @@ export function createCoverageTrack({ limit = LIMIT, now = Date.now } = {}) {
      * the ride was.
      */
     sent({ n, of, position = null }) {
+      if (lastN == null || n == null || n <= lastN) round += 1;
+      lastN = n;
       const point = {
         at: now(),
         n,
         of,
+        round,
         position,
         answered: null, // becomes the beat number the echo named
         answeredAt: null,
@@ -78,14 +91,27 @@ export function createCoverageTrack({ limit = LIMIT, now = Date.now } = {}) {
      * the same problem; what this does is make the row say who.
      */
     answered({ n = null, from = null } = {}) {
-      if (!open) return null;
-      if (n != null && open.n !== n) return null;
-      open.answered = n ?? open.n;
-      open.answeredAt = now();
-      open.answeredBy = from;
-      const point = open;
-      open = null;
-      return point;
+      // Reported from the field, and the reason this searches rather than
+      // matching the open beat alone: on LONG_FAST an answer can take longer
+      // than the fifteen seconds to the next beat. Beat 1 goes out, beat 2
+      // follows, and *then* the echo naming beat 1 arrives. Matched against
+      // the open beat that is a number we are not waiting on — and a round the
+      // other device demonstrably answered was filed as two silences, while
+      // its screen showed the beat arriving.
+      //
+      // Confined to the round that is running, which is what the old comment
+      // was reaching for: a repeat of an old echo must not reopen a silence
+      // that has already been recorded and ridden away from.
+      const target =
+        n == null
+          ? open
+          : points.findLast((p) => p.round === round && p.n === n && p.answered == null);
+      if (!target) return null;
+      target.answered = n ?? target.n;
+      target.answeredAt = now();
+      target.answeredBy = from;
+      if (open === target) open = null;
+      return target;
     },
 
     /** The round ended with nobody answering. The open beat stays a silence. */
@@ -141,6 +167,7 @@ export function createCoverageTrack({ limit = LIMIT, now = Date.now } = {}) {
     clear() {
       points.length = 0;
       open = null;
+      lastN = null;
     },
   };
 }

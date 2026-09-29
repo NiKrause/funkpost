@@ -32,9 +32,18 @@ test("a beat that is answered is recorded with its place and its beat number", a
   // list of times, and this demo exists to produce places.
   await expect(row).toContainText("48.40639");
 
-  // And the office really did stay quiet the whole time.
-  await expect(office.getByTestId("beat-out")).toHaveAttribute("data-lit", "no");
-  await expect(office.getByTestId("track-empty")).toBeVisible();
+  // And the office says what it did: it answered. The lamp used to track only
+  // beats, so the device whose entire job is answering read "nothing sent yet"
+  // all day — indistinguishable, from the other end of a radio link, from one
+  // that was not answering at all.
+  await expect(office.getByTestId("beat-out")).toHaveAttribute("data-lit", "yes");
+  await expect(office.getByTestId("beat-out")).toContainText(/echo (to|an) /);
+  // It answered; it never asked — and it keeps its own record of that, which
+  // is the half of every silence the riding phone cannot see.
+  await expect(office.getByTestId("heard-summary")).toContainText(
+    /1 (beat|Beat).*1 (answered|beantwortet)/,
+  );
+  await expect(office.locator('[data-testid="heard"] tbody tr')).toHaveCount(1);
 
   await rider.close();
   await office.close();
