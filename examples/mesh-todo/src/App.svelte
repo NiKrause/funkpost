@@ -189,6 +189,12 @@
     }
     return fallback;
   };
+  // The two ping lights, kept as whole events rather than flags: what the
+  // operator wants from a lamp in a field is not "something happened" but
+  // when, from whom, which beat of the round, and what it cost in bytes.
+  let pingOut = $state(null); // { at, n, of }
+  let pingIn = $state(null); // { at, type, from, n, bytes }
+
   let beatOn = $state(askedFor("beat", true));
   let syncOn = $state(askedFor("sync", false));
   let logOn = $state(askedFor("log", false));
@@ -577,6 +583,27 @@
     }
   }
 
+  /**
+   * What the radio carries, as one choice instead of two switches.
+   *
+   * They were two, and both could be on: the heartbeat's few bytes an hour
+   * then shared the air with a list sync that can take minutes, and a beat
+   * queued behind a delta arrives long after the round that sent it gave up.
+   * On a carrier rationed by law that is not a combination worth offering.
+   *
+   * `none` stays reachable, because "the radio carries nothing" is a real
+   * setting and was reachable before.
+   */
+  const carries = $derived(syncOn ? "list" : beatOn ? "beat" : "none");
+
+  /** Stop the other one first, so the radio never briefly carries both. */
+  async function setCarries(kind) {
+    if (kind !== "beat" && beatOn) setBeat(false);
+    if (kind !== "list" && syncOn) await setSync(false);
+    if (kind === "beat" && !beatOn) setBeat(true);
+    if (kind === "list" && !syncOn) await setSync(true);
+  }
+
   /** Flip the heartbeat without reloading: start it, or stop it and forget what it heard. */
   function setBeat(on) {
     beatOn = on;
@@ -587,6 +614,10 @@
       heartbeat.stop();
       heartbeat = null;
       beat = null;
+      // The lights describe a heartbeat that is running. Leaving them lit
+      // would report a ping from a radio that is no longer sending any.
+      pingOut = null;
+      pingIn = null;
     }
     pushLog(on ? w().log.beatOn : w().log.beatOff);
   }
@@ -622,15 +653,29 @@
     at == null
       ? "—"
       : new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  // A ping is a second's event, so it gets seconds. `clockText` rounds to the
+  // minute, which is right for "next round at" and useless for "just now".
+  const pingTime = (at) =>
+    at == null ? "" : new Date(at).toLocaleTimeString(undefined, { hour12: false });
   const agoText = (ms) =>
     ms == null ? "" : ms < 60_000 ? t.led.justNow : t.led.minAgo(Math.round(ms / 60_000));
 
   const logBeat = (event) => {
     if (event.kind === "beat") {
+      pingOut = { at: Date.now(), n: event.beat, of: event.of };
       pushLog(w().log.beat(event.beat, event.of));
     }
-    if (event.kind === "heard") pushLog(w().log.heard(event.type, event.from));
-    if (event.kind === "echo") pushLog(w().log.echo(event.to));
+    if (event.kind === "heard") {
+      pingIn = {
+        at: Date.now(),
+        type: event.type,
+        from: event.from,
+        n: event.n,
+        bytes: event.bytes,
+      };
+      pushLog(w().log.heard(event.type, event.from, event.n, event.bytes));
+    }
+    if (event.kind === "echo") pushLog(w().log.echo(event.to, event.n));
     if (event.kind === "round" && !event.answered) {
       pushLog(w().log.alone(clockText(event.nextRoundAt)));
     }
@@ -1383,32 +1428,56 @@
             · {t.thisNode} {myNode}{/if}
         </p>
       {/if}
-      <!-- What the radio may carry, as two decisions rather than one. The
-           heartbeat is a few bytes an hour; the list sync is everything else.
-           Splitting them is what makes "nothing arrives — which half?" a
-           question a field test can answer. The log switch is not here: it
-           says nothing about the radio, and it is needed most when there is
-           no radio to describe. -->
-      <p class="radio-switches">
-        <label title={t.beatSwitchTitle}>
-          <input
-            type="checkbox"
-            checked={beatOn}
-            data-testid="beat-switch"
-            onchange={(event) => setBeat(event.currentTarget.checked)}
-          />
-          {t.beatSwitch}
-        </label>
-        <label title={t.syncSwitchTitle}>
-          <input
-            type="checkbox"
-            checked={syncOn}
-            data-testid="sync-switch"
-            onchange={(event) => setSync(event.currentTarget.checked)}
-          />
-          {t.syncSwitch}
-        </label>
-      </p>
+      <!-- What the radio carries, as one choice. The heartbeat is a few bytes
+           an hour; the list sync is everything else. Both at once put a beat
+           behind a delta that can take minutes, so the round it belongs to has
+           given up by the time it lands. The log switch is not here: it says
+           nothing about the radio, and it is needed most when there is no
+           radio to describe. -->
+      <fieldset class="radio-switches" data-testid="radio-carries">
+        <legend class="dim">{t.carriesLegend}</legend>
+        {#each [["none", t.carriesNone, t.carriesNoneTitle], ["beat", t.beatSwitch, t.beatSwitchTitle], ["list", t.syncSwitch, t.syncSwitchTitle]] as [kind, label, hint] (kind)}
+          <label title={hint}>
+            <input
+              type="radio"
+              name="radio-carries"
+              value={kind}
+              checked={carries === kind}
+              data-testid="carries-{kind}"
+              onchange={() => setCarries(kind)}
+            />
+            {label}
+          </label>
+        {/each}
+      </fieldset>
+      {#if beatOn}
+        <!-- Two lamps, because one cannot answer the question. Out says a beat
+             left and which of the round it was; in says something came back,
+             from whom, answering which beat, and what it cost. A single
+             "activity" light would hide exactly the part that is expensive. -->
+        <p class="ping-lights">
+          <span
+            class="ping"
+            data-testid="ping-out"
+            data-lit={pingOut ? "yes" : "no"}
+            title={t.pingOutTitle}
+          >
+            <span class="ping-led out" aria-hidden="true"></span>
+            {pingOut ? t.pingOut(pingOut.n, pingOut.of, pingTime(pingOut.at)) : t.pingIdle}
+          </span>
+          <span
+            class="ping"
+            data-testid="ping-in"
+            data-lit={pingIn ? "yes" : "no"}
+            title={t.pingInTitle}
+          >
+            <span class="ping-led in" aria-hidden="true"></span>
+            {pingIn
+              ? t.pingIn({ ...pingIn, time: pingTime(pingIn.at) })
+              : t.pingIdle}
+          </span>
+        </p>
+      {/if}
       {#if channels.length > 0}
         <p class="dim mono">
           <label title={t.txChannelTitle}>
@@ -1805,6 +1874,52 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+  }
+  /* A fieldset, because these three are one choice. Its default frame says so
+     twice and crowds a phone, so only the legend carries the meaning. */
+  fieldset.radio-switches {
+    border: 0;
+    padding: 0;
+    min-inline-size: 0;
+  }
+  fieldset.radio-switches legend {
+    padding: 0;
+    font-size: 0.8rem;
+  }
+
+  /* Two lamps, two colours, and never the same one: out and back are the
+     question a field test asks, and a single colour would answer neither. */
+  .ping-lights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 4px 0 8px;
+    font-size: 0.85rem;
+    color: var(--ls-text-dim);
+    font-family: var(--ls-font-mono);
+  }
+  .ping {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .ping-led {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    /* Unlit is a visible state, not an absent one: an operator must be able to
+       tell "nothing has happened" from "this lamp is not on the page". */
+    background: var(--ls-bg-3);
+    box-shadow: none;
+  }
+  .ping[data-lit="yes"] .ping-led.out {
+    background: var(--ls-amber);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--ls-amber) 55%, transparent);
+  }
+  .ping[data-lit="yes"] .ping-led.in {
+    background: var(--ls-mark-cyan);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--ls-mark-cyan) 55%, transparent);
   }
 
   :global(body) {

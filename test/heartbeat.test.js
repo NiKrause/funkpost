@@ -76,7 +76,14 @@ function fakeAir() {
   });
   const beatsFrom = (name) => sent.filter((s) => s.from === name && s.message?.type === "beat");
   const echoesFrom = (name) => sent.filter((s) => s.from === name && s.message?.type === "echo");
-  return { courier, sent, beatsFrom, echoesFrom, deafen: (name) => deaf.add(name) };
+  return {
+    courier,
+    sent,
+    beatsFrom,
+    echoesFrom,
+    deafen: (name) => deaf.add(name),
+    undeafen: (name) => deaf.delete(name),
+  };
 }
 
 describe("heartbeat on the wire", () => {
@@ -86,6 +93,31 @@ describe("heartbeat on the wire", () => {
       const { total } = fragmentPayload(bytes, { mtu: 200 });
       assert.equal(total, 1, `a ${type} is ${bytes.length} bytes and needs ${total} frames`);
     }
+  });
+
+  test("round-trips the beat number, and says so when there is none", () => {
+    const withNumber = decodeHeartbeat(
+      encodeHeartbeat({ type: "beat", tag: TAG, from: ID_A, n: 3 }),
+    );
+    assert.equal(withNumber.n, 3);
+
+    // A peer on an older version sends no number. Unknown, not zero: a zero
+    // would read as an answer to a beat that never went out.
+    const without = decodeHeartbeat(encodeHeartbeat({ type: "echo", tag: TAG, from: ID_A }));
+    assert.equal(without.n, null);
+
+    for (const bad of [0, -1, 1.5, "2", null]) {
+      const message = decodeHeartbeat(
+        encodeHeartbeat({ type: "beat", tag: TAG, from: ID_A, n: bad }),
+      );
+      assert.equal(message.n, null, `n=${JSON.stringify(bad)} is not a beat number`);
+    }
+  });
+
+  test("the number costs nothing on the air: still one frame", () => {
+    const bytes = encodeHeartbeat({ type: "beat", tag: TAG, from: ID_A, n: 5 });
+    const { total } = fragmentPayload(bytes, { mtu: 200 });
+    assert.equal(total, 1, `a numbered beat is ${bytes.length} bytes`);
   });
 
   test("round-trips type, tag and sender", () => {
@@ -232,6 +264,87 @@ describe("heartbeat schedule", () => {
     clock.advance(MINUTE / 2);
     raw.send(encodeHeartbeat({ type: "beat", tag: TAG, from: ID_B }));
     assert.equal(air.echoesFrom("a").length, 2);
+  });
+
+  /**
+   * Which try got through, not merely that one did.
+   *
+   * The beats of a round are a minute apart, so being answered on the fourth
+   * costs three minutes of waiting that the first would not have. On a carrier
+   * rationed by law that is the number worth seeing, and only the far side
+   * knows it — so it says so in the echo.
+   */
+  test("an echo names the beat it answers", () => {
+    const clock = fakeClock();
+    const air = fakeAir();
+    const b = createHeartbeat({ courier: air.courier("b"), tag: TAG, id: ID_B, timers: clock });
+    const a = createHeartbeat({ courier: air.courier("a"), tag: TAG, id: ID_A, timers: clock });
+
+    // B beats into an empty room and its round runs out — A is not listening
+    // yet, so none of it is heard, and B's next round is an hour away. Then B
+    // goes deaf, so A beats alone without B answering or speaking.
+    b.start();
+    clock.advance(6 * MINUTE);
+    assert.equal(b.state().verdict, "alone");
+
+    air.deafen("b");
+    a.start();
+    clock.advance(2 * MINUTE + 1);
+    assert.equal(air.beatsFrom("a").length, 3, "three beats went out unanswered");
+    assert.equal(air.echoesFrom("b").length, 0);
+
+    air.undeafen("b");
+    clock.advance(MINUTE);
+
+    const echo = air.echoesFrom("b").at(-1);
+    assert.equal(echo.message.n, 4, "B heard A's fourth beat and says which");
+    assert.equal(air.beatsFrom("a").at(-1).message.n, 4, "and that is the beat that went out");
+  });
+
+  test("hearing reports what it cost and which beat it was", () => {
+    const clock = fakeClock();
+    const air = fakeAir();
+    const events = [];
+    const a = createHeartbeat({
+      courier: air.courier("a"),
+      tag: TAG,
+      id: ID_A,
+      timers: clock,
+      onEvent: (event) => events.push(event),
+    });
+    a.start();
+
+    // A stranger's beat, sent by hand so the number under test is chosen here.
+    const beat = encodeHeartbeat({ type: "beat", tag: TAG, from: ID_C, n: 2 });
+    air.courier("c").send(beat);
+
+    const heard = events.find((event) => event.kind === "heard");
+    assert.equal(heard.type, "beat");
+    assert.equal(heard.n, 2, "which beat of their round it was");
+    assert.equal(heard.bytes, beat.length, "and what came off the carrier");
+
+    const echo = events.find((event) => event.kind === "echo");
+    assert.equal(echo.n, 2, "the answer carries the same number back");
+  });
+
+  test("a peer that sends no number is heard as unknown, not as beat zero", () => {
+    const clock = fakeClock();
+    const air = fakeAir();
+    const events = [];
+    const a = createHeartbeat({
+      courier: air.courier("a"),
+      tag: TAG,
+      id: ID_A,
+      timers: clock,
+      onEvent: (event) => events.push(event),
+    });
+    a.start();
+
+    air.courier("c").send(encodeHeartbeat({ type: "beat", tag: TAG, from: ID_C }));
+
+    assert.equal(events.find((event) => event.kind === "heard").n, null);
+    // And the echo back says nothing rather than something wrong.
+    assert.equal(air.echoesFrom("a").at(-1).message.n, null);
   });
 
   test("it counts what went out and what came back", async () => {
