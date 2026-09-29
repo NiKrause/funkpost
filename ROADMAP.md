@@ -27,13 +27,22 @@ roadmap is built to keep testing.
 | **#1** | Database plane (OrbitDB) | **First over-the-air replication 2026-09-04** — two desktop browsers, two nodes, no IP path. Open: first-contact reliability on a busy public channel, and the phone Bluetooth lottery. |
 | **#36** | Event plane · Yjs provider | **Built and on air** — `@le-space/funkpost/yjs`, tested to convergence under 20 % loss, and carrying a shop's rules over a real mesh on 2026-09-06. Awareness deliberately left out. [docs](docs/yjs-provider.md) |
 | **#37** | Hoist demo scaffolding into the lib | **Built** — the device supervisor and the error humaniser are library code; `mesh-todo` is a consumer. Not yet re-run on hardware. [docs](docs/links.md) |
-| **#38** | `mesh-calendar` demo | **Built, deployed, and one booking has crossed real hardware** (A1–A6; A7 half met). Bookings moved off the CRDT onto a claim log after #45: the greeting is 111 bytes at any number of writers, and expiry is forgetting. [docs](docs/mesh-calendar.md) |
+| **#38** | `mesh-calendar` demo | **Built and deployed; open on two named items.** A1–A6 done and one booking has crossed real hardware — but in **auto mode**, so the Rückfrage (a human decision crossing the mesh) has never run on a radio, and the salon view has **no `.ics` button**, so "on both phones" cannot be met as the app stands. Both are spelled out in P7 below, because "A7 half met" once read as "nearly done" and it is not. Bookings moved off the CRDT onto a claim log after #45: the greeting is 111 bytes at any number of writers, and expiry is forgetting. [docs](docs/mesh-calendar.md) |
 | **#45** | Is Yjs right for bookings? | **Answered and acted on** — no, at scale, for bookings; yes for the rules. Both now sit where they belong. |
-| **#55** | Authorisation | **Open, measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. |
+| **#55** | Authorisation | **Open on purpose, and measured** — a request carries a public key and no signature, so a neighbour can take 516 of 516 slots. Deliberately not patched: the README says authorisation has not been designed, and that should stay true until it is. Closing this would make the README a lie. |
 | **#75** | Reshape `mesh-todo`? | **Decided** — no. None of what made `mesh-calendar` cheap transfers; the announce is already small. A send button and `courier-sync` in-house do transfer, and are P8. |
 | **#68** | The founding off the radio | **P9, built** — one frame over the radio names a backup, and the bytes come over HTTPS: a page that has never seen a list restores it from the CID alone, with no account, and the courier carries the changes from there (e2e, 2026-09-18). +3.8 kB gzipped. Not yet on hardware, and not an archive: Aleph's keyless upload is not kept (#125). |
-| **#82** | Internet first, mesh as fallback | **P10, built** — the fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. The loss is established by a failed dial rather than a flag, the switch is a question rather than a reflex, and the app can ask the air whether another app — not another radio — is out there. |
+| **#82** | Internet first, mesh as fallback | **P10, built — closed 2026-09-29.** The fallback is cheaper than #82 feared, because phones that synced over IP already share the log; only the changes cross the mesh. OrbitDB's own sync and `courier-sync` carry one log **one at a time** without losing or duplicating a write; running both at once stalled, so the app switches between them and never runs both. The loss is established by a failed dial rather than a flag, the switch is a question rather than a reflex, and the app can ask the air whether another app — not another radio — is out there. |
+| **#180** | `mesh-heartbeat` demo | **Built and deployed 2026-09-29, and that is all it proves.** A third demo carrying **no database at all** — one device stays and answers, one travels and asks, and every beat is recorded with where it went out and which beat of the round was answered. Every number in it so far comes from a simulated hour or a BroadcastChannel; how far it actually reaches is a question only a bicycle answers. Its map is #184. |
+| **#164** | Is the payload the problem? | **Measured, then overtaken — closed 2026-09-29.** The two cheap candidates were already in place (`courier-sync` gzips above 256 B; `referencesCount` is 0), and the expensive one — rebuilding blocks from a leaner wire format — was worth ~200 B per entry against the *compressed* size. The **operation plane** then shipped `{op, key, value}` instead of the entry: **86 B against 1774 B**, an order of magnitude more, without reconstructing anything. The bootstrap is unchanged and rightly so. [docs](docs/data-plane-orbitdb.md) |
 | **#93** | A lost phone, the same passkey | **P11, gate met on hardware 2026-09-21** — a Fold 5 made a list, backed it up and was reset; an A57 with the same YubiKey had the same identity, brought the list back with the key alone, and wrote to it ([#93](https://github.com/NiKrause/funkpost/issues/93#issuecomment-5765768993)). Its open half is now #125: Aleph's keyless upload is ingest, not persistence. |
+
+**Three of these threads are still open**, and each for its own reason: #38
+because two named gates have not been met, #55 because not designing
+authorisation is the honest state and closing it would make the README a lie,
+and #180 because the demo is built and the measurement it exists for has not
+been taken. Every other row is a closed issue; a date is given where the
+closing is recent enough that someone may remember it differently.
 
 Both planes stay. OrbitDB gives signed entries, an access controller and a
 verifiable hash-linked history. Yjs gives tiny, loss-tolerant, order-independent
@@ -188,9 +197,18 @@ hourly allowance.
 
 **What the gate still wants:** the Rückfrage mode (a human decision crossing the
 mesh, which auto mode never exercises — nobody signs in auto mode, so no
-decision record travels), and an `.ics` on both phones. What the run surfaced
-instead is in #73: `want_ack` on broadcasts may be tripling our airtime, two
-payloads were dropped after 2 rounds, and the store errors on an empty room.
+decision record travels), and an `.ics` on both phones. Neither has happened,
+and the 31 s above is an **auto-mode** figure — worth saying twice, because the
+shorthand "A7 half met" has already been read once as "nearly done" and used to
+close the issue.
+
+What the run surfaced instead was #73, **now closed**: the store error on an
+empty room is fixed and tested (`settle()` in
+`examples/mesh-calendar/src/domain/persistence.js`); the round budget went from
+2 to 8 in the library and 12 in the shared connector; and `want_ack` stays on,
+because the client library's queue completes a send only on a routing ACK and
+without it every send hangs for 60 s — written where someone would reach for
+it, in `lib/links/meshtastic-device-link.js`.
 
 *How to run it:* [run B of the run sheet](docs/run-sheet.md#run-b-a-decision-crosses-the-mesh).
 Writing it found two things the bench cannot do yet. The salon view has **no
