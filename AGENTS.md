@@ -51,6 +51,11 @@ If exactly one demo calls it, say in the PR why the other two do not need it.
 "Nobody has reported it there" is not an answer — mesh-calendar carried this
 defect for weeks with nobody riding a bicycle to find it.
 
+The same sweep, run deliberately, found three more of these. They are listed in
+[#191](https://github.com/NiKrause/funkpost/issues/191); it is worth reading
+before adding a demo, because whatever is still open there is something the new
+one will also be missing.
+
 ## 1. One Bluetooth operation at a time
 
 Android Chrome allows exactly one GATT operation, and the Meshtastic connection
