@@ -733,3 +733,42 @@ describe("asking only when asked", () => {
     busy.stop();
   });
 });
+
+/**
+ * A refused send is transient, and the state has to say so.
+ *
+ * The commonest one in the field is the node reporting its region a second
+ * after the link comes up: the first beat goes out before the courier knows
+ * the local airtime law, and the courier rightly refuses it. A page that
+ * copies that message into a banner leaves "region is UNSET — refusing to
+ * transmit" sitting under a green "connected · EU_868" for the rest of the
+ * session, which is exactly what a field photograph showed. So `lastError`
+ * has to clear itself, and a page can then read it instead of accumulating.
+ */
+describe("the error a heartbeat reports about itself", () => {
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test("appears when a send fails and goes when one does not", async () => {
+    const air = fakeAir();
+    const clock = fakeClock();
+    let region = "UNSET";
+    const heart = createHeartbeat({
+      courier: air.courier("a", { fail: () => region === "UNSET" }),
+      tag: TAG,
+      id: ID_A,
+      minuteMs: MINUTE,
+      timers: clock,
+    });
+
+    heart.start();
+    await settled();
+    assert.match(heart.state().lastError, /UNSET/);
+
+    region = "EU_868";
+    clock.advance(MINUTE);
+    await settled();
+    assert.equal(heart.state().lastError, null, "the fault is over, so the message is too");
+
+    heart.stop();
+  });
+});

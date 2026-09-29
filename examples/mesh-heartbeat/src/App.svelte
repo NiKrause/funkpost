@@ -48,6 +48,11 @@
   import { onMount } from "svelte";
   import { creditHTML, lang } from "@le-space/funkpost-brand";
   import { connectCourier } from "@le-space/funkpost-radio";
+  import {
+    describeMeshtasticError,
+    preferredChannelIndex,
+    DEFAULT_PREFERRED_CHANNEL,
+  } from "@le-space/funkpost";
   import { createHeartbeat } from "@le-space/funkpost/heartbeat";
   import { databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
   import { createCoverageTrack } from "./track.js";
@@ -113,9 +118,24 @@
   let phase = $state("idle"); // idle → connecting → ready | lost
   let linkKind = $state("");
   let region = $state("");
+  /**
+   * A reason the page is stuck, and only that.
+   *
+   * NOT every error the courier reports. A refused send is normal and
+   * transient — the commonest is the node reporting its region a second after
+   * the link comes up, so the first beat goes out before the courier knows the
+   * local airtime law and is rightly refused. Putting that in a banner leaves
+   * "region is UNSET — refusing to transmit" sitting under a green "connected ·
+   * EU_868" for the rest of the session, which is what a field photograph
+   * showed. Those go to the log; this is for a connect that failed and for a
+   * link the supervisor has given up on.
+   */
   let error = $state("");
   let reconnecting = $state(false);
   let myNodeNum = $state(null);
+  let airUtil = $state(null);
+  /** The heartbeat's own view of itself, including an error it clears again. */
+  let beatState = $state(null);
 
   /** What this device does: answer and stay, or ask and travel. */
   let role = $state(params.get("role") === "office" ? "office" : "rider");
@@ -144,6 +164,40 @@
   let rows = $state([]); // the track, newest first for the screen
   let summary = $state({ sent: 0, reached: 0, firstBeat: 0, located: 0 });
   let log = $state([]);
+
+  // Which channel the radio transmits on. The index is per device — the same
+  // channel can be 1 here and 3 there — so the preference is by name, and the
+  // page moves itself onto it once the node has reported it.
+  const preferredChannel = params.has("channel")
+    ? params.get("channel")
+    : DEFAULT_PREFERRED_CHANNEL;
+  let channels = $state([]);
+  let txChannel = $state(0);
+  let primaryChannel = $state(null);
+  let txChannelChosenByHand = false;
+  let preferenceApplied = false;
+  const channelMap = new Map();
+  let setTxChannelFn = () => {};
+
+  /**
+   * Keeping the screen awake — the bench's quiet killer, and worse here.
+   *
+   * Phones auto-lock, and Web Bluetooth pauses with the screen: the node stays
+   * connected, the page stops being able to talk to it, and the ride records
+   * an hour of silence that was never about the radio. On a bicycle nobody is
+   * looking at the screen to keep it alive, so this is the one demo where the
+   * checkbox is close to mandatory.
+   *
+   * The detection deliberately does not trust `userAgentData.mobile` alone: an
+   * unfolded Samsung Fold and Android tablets report `false` while still being
+   * battery devices that sleep the screen.
+   */
+  const isMobileDevice =
+    navigator.userAgentData?.mobile === true ||
+    /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
+  const wakeLockSupported = "wakeLock" in navigator;
+  let keepAwake = $state(false);
+  let wakeSentinel = null;
 
   let courier = null;
   let radio = null;
@@ -184,16 +238,25 @@
     try {
       radio = await connectCourier({
         mode,
-        onStatus: (name) => {
-          if (name === "disconnected") phase = "lost";
-        },
+        onTelemetry: (value) => (airUtil = value),
+        // Logged, never a verdict. The transport reports a failed GATT write
+        // as a disconnection and Android Chrome produces those readily — the
+        // supervisor knows it, checks whether the link is actually alive, and
+        // repairs it. A page that answers every "disconnected" with "node
+        // lost — reload to reconnect" sends the operator round a loop the
+        // library was already getting them out of.
+        onStatus: (name) => pushLog(w().log.nodeStatus(name)),
         onRegion: (name) => {
+          // Only when it *becomes* usable. The node re-reports its region on
+          // every reconfiguration, and restarting on each one tears down a
+          // round that was in the air — which, before this guard, also filed
+          // the beat it was waiting on as a silence.
+          const wasUnusable = region === "" || region === "UNSET";
           region = name;
-          // A node that reports its region late was refusing to transmit until
-          // now. The heartbeat's first sends failed; start it again so the
-          // ride does not begin with a hole.
-          if (name && name !== "UNSET") restartHeartbeat();
+          pushLog(w().log.region(name));
+          if (wasUnusable && name && name !== "UNSET") restartHeartbeat();
         },
+        onChannel: handleChannel,
         onMyNodeInfo: (info) => (myNodeNum = info?.myNodeNum ?? info?.num ?? null),
         onNodeInfo: (node) => {
           // The node database includes this node. Its own entry is the fix we
@@ -203,27 +266,92 @@
           const fix = decodeNodePosition(node.position);
           if (fix) setHere(fix);
         },
-        onReconnecting: () => (reconnecting = true),
+        onReconnecting: (n) => {
+          reconnecting = true;
+          pushLog(w().log.linkDropped(n));
+        },
         onReconnected: () => {
           reconnecting = false;
           phase = "ready";
+          pushLog(w().log.reconnected);
         },
-        onGaveUp: () => (phase = "lost"),
-        onError: (message) => {
-          error = message;
-          pushLog(w().log.error(message));
+        // *This* is a lost link: the supervisor tried, backed off and stopped.
+        // Everything before it was a repair in progress.
+        onGaveUp: () => {
+          reconnecting = false;
+          phase = "lost";
+          error = w().errors.gaveUp;
+          pushLog(w().log.gaveUp);
         },
+        onError: (message) => pushLog(w().log.error(message)),
       });
       courier = radio.courier;
       linkKind = radio.kind;
       region = radio.region;
+      setTxChannelFn = radio.setTxChannel ?? (() => {});
+      // Deliberate test seam, as in mesh-todo: the fake mesh reports no
+      // channels, and channel selection is a path that fails *silently* when
+      // it is wrong — so it is worth exercising rather than reasoning about.
+      window.__nodeChannel = handleChannel;
+      // Act on whatever the node reported while the connection was still
+      // coming up, now that the switch does something.
+      applyPreferredChannel();
       phase = "ready";
       startHeartbeat();
     } catch (e) {
       phase = "idle";
-      error = e?.message ?? String(e);
+      error = describeMeshtasticError(e) ?? e?.message ?? String(e);
       pushLog(w().log.error(error));
     }
+  }
+
+  /** One channel as the node reports it. Named, so a test can hand one over. */
+  async function handleChannel(channel) {
+    if (channel.role === 0) return; // DISABLED
+    const psk = channel.settings?.psk ?? new Uint8Array();
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
+    const entry = {
+      index: channel.index,
+      role: channel.role,
+      name: channel.settings?.name || "(default)",
+      fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+    };
+    channelMap.set(entry.index, entry);
+    channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
+    if (entry.role === 1) primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
+    pushLog(w().log.nodeChannel(entry.index, entry.name, entry.fingerprint));
+    // Channels arrive one at a time and the wanted one need not be first.
+    applyPreferredChannel();
+  }
+
+  /**
+   * Only ever moves off a channel nobody chose.
+   *
+   * This matters more here than in the other demos: two devices measuring each
+   * other must be on the same channel, and the index is per device, so a name
+   * is the only thing they can agree on without the operator comparing numbers
+   * at the kerb.
+   */
+  function applyPreferredChannel() {
+    if (preferenceApplied || txChannelChosenByHand) return;
+    const index = preferredChannelIndex(channels, preferredChannel);
+    if (index == null) return;
+    preferenceApplied = true;
+    txChannel = index;
+    setTxChannelFn(index);
+    const ch = channels.find((c) => c.index === index);
+    pushLog(w().log.autoChannel(index, ch?.name, ch?.fingerprint));
+    // Another channel is another audience: what answered on the old one is no
+    // evidence about this one, and the track would be measuring two things.
+    changeChannel();
+  }
+
+  /** A channel change invalidates everything heard so far. */
+  function changeChannel() {
+    heardIds = [];
+    partner = "";
+    officeAt = null;
+    restartHeartbeat();
   }
 
   // ------------------------------------------------------------- the position
@@ -262,6 +390,10 @@
         // would cost fifteen bytes a beat to say something already recorded
         // on the device that cares about it.
         position: () => (role === "office" ? encodeNodePosition(here) : null),
+        // `lastError` is set when a send fails and cleared on the next one
+        // that does not — so reading it here gives a transient message rather
+        // than a banner that outlives the fault it describes.
+        onChange: (state) => (beatState = state),
         onEvent: onBeatEvent,
       });
       heartbeat.start();
@@ -285,13 +417,19 @@
     heartbeat.stop();
     heartbeat = null;
     roundRunning = false;
+    beatState = null;
     pingOut = null;
     pingIn = null;
-    track.unanswered();
+    // Abandoned, not filed as a silence. A round cut short by a reconfigured
+    // radio says nothing about the place it was sent from, and a red mark
+    // there would be a measurement nobody made.
+    track.abandon();
     refreshTrack();
     pushLog(w().log.stopped);
     startHeartbeat();
   }
+
+  const describeError = (e) => e?.message ?? String(e);
 
   function onBeatEvent(event) {
     if (event.kind === "beat") {
@@ -341,13 +479,38 @@
         pushLog(w().log.alone);
       }
     }
-    if (event.kind === "error") {
-      error = event.error?.message ?? String(event.error);
-      pushLog(w().log.error(error));
-    }
+    // Logged only: `beatState.lastError` carries it on screen for as long as
+    // it is still true, and the heartbeat clears that itself.
+    if (event.kind === "error") pushLog(w().log.error(describeError(event.error)));
   }
 
   const askNow = () => heartbeat?.beatNow();
+
+  async function acquireWakeLock() {
+    try {
+      wakeSentinel = await navigator.wakeLock.request("screen");
+      wakeSentinel.addEventListener("release", () => (wakeSentinel = null));
+      pushLog(w().log.wakeOn);
+    } catch (e) {
+      keepAwake = false;
+      pushLog(w().log.wakeRefused(describeError(e)));
+    }
+  }
+
+  async function toggleAwake() {
+    if (keepAwake) await acquireWakeLock();
+    else {
+      await wakeSentinel?.release();
+      wakeSentinel = null;
+      pushLog(w().log.wakeOff);
+    }
+  }
+
+  // A lock is dropped whenever the page is hidden, and comes back only if
+  // something asks again. Without this, one glance at a messenger ends it.
+  const reacquireOnReturn = () => {
+    if (keepAwake && document.visibilityState === "visible" && !wakeSentinel) acquireWakeLock();
+  };
 
   function clearTrack() {
     if (!confirm(w().track.confirmClear)) return;
@@ -393,7 +556,10 @@
     // reason. A real radio always waits for the gesture: Web Bluetooth
     // requires one, and so does anyone who did not mean to transmit.
     if (mode.kind === "bc" && params.get("autoconnect") !== "0") connect();
+    document.addEventListener("visibilitychange", reacquireOnReturn);
     return () => {
+      document.removeEventListener("visibilitychange", reacquireOnReturn);
+      wakeSentinel?.release();
       stopWatchingBrowser?.();
       heartbeat?.stop();
       radio?.close?.();
@@ -433,6 +599,43 @@
       </button>
     {/if}
     {#if error}<p class="warn mono" data-testid="radio-error">{error}</p>{/if}
+    {#if beatState?.lastError}
+      <!-- Live, not accumulated: gone as soon as a send succeeds. -->
+      <p class="warn mono" data-testid="beat-error">{beatState.lastError}</p>
+    {/if}
+    {#if channels.length > 0}
+      <p class="dim mono">
+        <label class="row">
+          {t.radio.channel}
+          <select
+            bind:value={txChannel}
+            data-testid="tx-channel"
+            onchange={() => {
+              // A hand-made choice is final: nothing may move the selector
+              // afterwards, or a late-arriving channel would silently undo it.
+              txChannelChosenByHand = true;
+              setTxChannelFn(txChannel);
+              const ch = channels.find((c) => c.index === txChannel);
+              pushLog(w().log.handChannel(txChannel, ch?.name, ch?.fingerprint));
+              changeChannel();
+            }}
+          >
+            {#each channels as ch (ch.index)}
+              <option value={ch.index}>{ch.index} · {ch.name} ⌗{ch.fingerprint}</option>
+            {/each}
+          </select>
+        </label>
+      </p>
+    {/if}
+    {#if airUtil != null}
+      <p class="dim mono" data-testid="air-util">{t.radio.airUtil(airUtil.toFixed(1))}</p>
+    {/if}
+    {#if isMobileDevice && wakeLockSupported}
+      <label class="row" title={t.radio.awakeWhy}>
+        <input type="checkbox" bind:checked={keepAwake} data-testid="keep-awake" onchange={toggleAwake} />
+        <span>{t.radio.awake}</span>
+      </label>
+    {/if}
   </section>
 
   <!-- Role and interval are one decision in two halves: what this device does,

@@ -47,6 +47,14 @@ export const WORDS = {
       reconnecting: "node dropped — reconnecting…",
       unset: "the node has no region set — it will not transmit",
       channel: "Channel",
+      airUtil: (pct) => `air used by this node: ${pct}%`,
+      awake: "Keep the screen awake",
+      awakeWhy:
+        "Web Bluetooth pauses when the screen locks: the node stays connected and the page stops being able to talk to it. On a ride nobody is there to keep the screen alive.",
+    },
+
+    errors: {
+      gaveUp: "the node did not come back — reload to connect again",
     },
 
     led: {
@@ -107,6 +115,17 @@ export const WORDS = {
       alone: "✗ no answer this round",
       started: (role) => `heartbeat started · ${role}`,
       stopped: "heartbeat stopped",
+      region: (name) => `node region ${name}`,
+      nodeStatus: (name) => `node ${name}`,
+      nodeChannel: (index, name, print) => `channel ${index} »${name}« ⌗${print}`,
+      autoChannel: (index, name, print) => `→ channel ${index} »${name}« ⌗${print} (preferred)`,
+      handChannel: (index, name, print) => `→ channel ${index} »${name}« ⌗${print} (chosen)`,
+      linkDropped: (n) => `link dropped — repair ${n}`,
+      reconnected: "link back",
+      gaveUp: "✗ the node did not come back",
+      wakeOn: "screen kept awake",
+      wakeOff: "screen may sleep again",
+      wakeRefused: (why) => `the screen lock was refused: ${why}`,
       position: (source, text) => `position (${source}) ${text}`,
       officePosition: (text) => `the other device is at ${text}`,
       error: (message) => `error: ${message}`,
@@ -153,6 +172,14 @@ export const WORDS = {
       reconnecting: "Knoten weg — verbindet neu…",
       unset: "der Knoten hat keine Region — er sendet nicht",
       channel: "Kanal",
+      airUtil: (pct) => `von diesem Knoten belegte Sendezeit: ${pct} %`,
+      awake: "Bildschirm wach halten",
+      awakeWhy:
+        "Web Bluetooth pausiert, sobald der Bildschirm sperrt: der Knoten bleibt verbunden, und die Seite kann nicht mehr mit ihm reden. Auf einer Fahrt hält niemand den Bildschirm wach.",
+    },
+
+    errors: {
+      gaveUp: "der Knoten kam nicht zurück — neu laden zum Verbinden",
     },
 
     led: {
@@ -210,6 +237,17 @@ export const WORDS = {
       alone: "✗ keine Antwort in dieser Runde",
       started: (role) => `Heartbeat gestartet · ${role}`,
       stopped: "Heartbeat gestoppt",
+      region: (name) => `Knotenregion ${name}`,
+      nodeStatus: (name) => `Knoten ${name}`,
+      nodeChannel: (index, name, print) => `Kanal ${index} »${name}« ⌗${print}`,
+      autoChannel: (index, name, print) => `→ Kanal ${index} »${name}« ⌗${print} (bevorzugt)`,
+      handChannel: (index, name, print) => `→ Kanal ${index} »${name}« ⌗${print} (gewählt)`,
+      linkDropped: (n) => `Verbindung weg — Reparatur ${n}`,
+      reconnected: "Verbindung wieder da",
+      gaveUp: "✗ der Knoten kam nicht zurück",
+      wakeOn: "Bildschirm wird wach gehalten",
+      wakeOff: "Bildschirm darf wieder schlafen",
+      wakeRefused: (why) => `die Bildschirmsperre wurde verweigert: ${why}`,
       position: (source, text) => `Position (${source}) ${text}`,
       officePosition: (text) => `das andere Gerät steht bei ${text}`,
       error: (message) => `Fehler: ${message}`,

@@ -132,3 +132,33 @@ describe("who answered", () => {
     assert.equal(track.summary().answerers, 0);
   });
 });
+
+describe("a round that was cut short", () => {
+  test("is removed, not filed as a silence", () => {
+    const track = createCoverageTrack();
+
+    track.sent({ n: 1, of: 3, position: { lat: 48.4, lon: 12.7 } });
+    track.answered({ n: 1, from: "office" });
+    track.sent({ n: 1, of: 3, position: { lat: 48.5, lon: 12.8 } });
+
+    // The radio was reconfigured mid-round. That place was never tested.
+    assert.equal(track.abandon()?.n, 1);
+    assert.equal(track.points().length, 1, "the abandoned beat is gone");
+    assert.equal(track.summary().sent, 1);
+    // And a silence still is one: the two must not collapse into each other.
+    track.sent({ n: 1, of: 3 });
+    track.unanswered();
+    assert.equal(track.points().length, 2);
+    assert.equal(track.summary().sent, 2);
+    assert.equal(track.summary().reached, 1);
+  });
+
+  test("with nothing open it does nothing", () => {
+    const track = createCoverageTrack();
+    assert.equal(track.abandon(), null);
+    track.sent({ n: 1, of: 3 });
+    track.answered({ n: 1, from: "office" });
+    assert.equal(track.abandon(), null, "an answered beat is not open");
+    assert.equal(track.points().length, 1);
+  });
+});
