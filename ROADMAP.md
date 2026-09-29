@@ -583,9 +583,9 @@ In order — check before design:
    either phone changes the design, and nothing else was built before that
    answer.
 
-   Both phones, one key, [the probe](examples/landing/passkey-probe.html)
-   (published at
-   [/funkpost/passkey-probe/](https://nikrause.github.io/funkpost/passkey-probe/)):
+   Both phones, one key, and the probe — which has since moved to the identity
+   provider's own repository, live at
+   [webauthn-did/passkey-probe/](https://le-space.github.io/orbitdb-identity-provider-webauthn-did/passkey-probe/):
 
    - the **same PRF value** on both — the identity can travel by PRF, so the
      rawId fallback #93 forbids is not merely forbidden, it is unnecessary;
@@ -684,7 +684,7 @@ schedule: first-contact bootstrap on a congested channel, and how reliably a
 full sync survives repeated BLE drops on a given phone. The standing
 recommendation for any real bench is a **private Meshtastic channel** — it
 removes the congestion that causes most of it. The
-[run sheet](docs/run-sheet.md#watch-during-both-runs) says what to watch for on
+[run sheet](docs/run-sheet.md#watch-during-every-run) says what to watch for on
 every run.
 
 ## Principles these phases are testing

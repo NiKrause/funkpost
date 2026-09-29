@@ -102,9 +102,10 @@
    *
    * The round is three beats fifteen seconds apart with a seven-and-a-half
    * second window after the last — 52.5 s, which fits inside the shortest
-   * interval on offer. It very nearly did not: three beats a *minute* apart
-   * plus the window is seventy seconds, and `createHeartbeat` refuses a round
-   * that cannot end before the next one starts. The e2e suite shortens this
+   * interval on offer. It very nearly did not: the first choice was twenty
+   * seconds apart, which with the same window is seventy, and
+   * `createHeartbeat` refuses a round that cannot end before the next one
+   * starts. The e2e suite shortens this
    * rather than waiting out a real one.
    */
   const beatGapMs = Math.max(50, Number(params.get("gap")) || 15_000);

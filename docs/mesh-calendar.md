@@ -15,6 +15,13 @@ Bookings no longer live in the CRDT: see **Two substrates** below, and
 [#45](https://github.com/NiKrause/funkpost/issues/45) for the measurement that
 moved them.
 
+**A note on the name.** This plane used to be called *the Yjs plane*, after the
+library. The library changed underneath it — since #45 the bookings live in a
+signed claim log and Yjs carries only the shop's rules — and the name went
+stale without anyone noticing, including in a sequence diagram that showed
+bookings as Yjs updates for weeks. Naming a plane after **what crosses it**
+survives a change of substrate. Naming it after the library does not.
+
 An appointment book for a local business, on the **event plane**. It is the demo that
 proves the plane, and it was chosen because it exercises what a lossy,
 duty-cycled, high-latency link is *worst* at: contention for a scarce resource
