@@ -34,28 +34,46 @@ test("the radio carries one thing at a time", async ({ context }) => {
 });
 
 /**
- * The switch said yes and the air stayed empty.
+ * A heartbeat with no list asks a different question, and says which.
  *
- * A heartbeat asks about a *list* — it is tagged with the list's address, and
- * refuses to start without one. A field log came back with the switch on, both
- * nodes configured on the same channel, and not one beat in it: nothing was
- * wrong except that nobody had made a list, and nothing said so.
+ * It used to refuse to start at all: the tag is the list's address, so no list
+ * meant no tag and no beats — while the switch said "heartbeat on" and a field
+ * log came back with both nodes configured and not one beat in it. Now the
+ * question without a list is *is any device on this channel at all*, which is
+ * the first thing anyone wants to know.
+ *
+ * The surprising half is that the two questions do not mix: different tags,
+ * so a device asking about a list neither hears this nor is heard by it. That
+ * is why the page says which one it is asking.
  */
-test("with no list, the heartbeat says so instead of showing idle lamps", async ({ context }) => {
+test("with no list the heartbeat asks the open question, and says so", async ({ context }) => {
   const a = await openPhone(context, room());
 
   await expect(a.getByTestId("carries-beat")).toBeChecked();
-  await expect(a.getByTestId("beat-needs-list")).toBeVisible();
-  // Not two unlit lamps: those read as "running, nothing yet", which is the
-  // one thing this is not.
-  await expect(a.getByTestId("ping-out")).toHaveCount(0);
+  await expect(a.getByTestId("beat-open-question")).toBeVisible();
 
+  // And it really beats — this is the part that used to be silent.
+  await expect(a.getByTestId("ping-out")).toHaveAttribute("data-lit", "yes", { timeout: 30_000 });
+
+  // A list changes the question, and the note goes with it.
   await a.getByRole("button", { name: "Create a list" }).click();
   await expect(a.locator(".addr")).toBeVisible({ timeout: 15_000 });
-
-  // A list, and the heartbeat has something to ask about.
-  await expect(a.getByTestId("beat-needs-list")).toHaveCount(0);
+  await expect(a.getByTestId("beat-open-question")).toHaveCount(0);
   await expect(a.getByTestId("ping-out")).toHaveAttribute("data-lit", "yes", { timeout: 30_000 });
+});
+
+test("two devices with no list find each other", async ({ context }) => {
+  const id = room();
+  const a = await openPhone(context, id);
+  const b = await openPhone(context, id);
+
+  // Nothing is created, nothing is joined: this is the bare reachability
+  // question, which is what somebody holding two phones asks first.
+  for (const page of [a, b]) {
+    const seen = page.getByTestId("ping-in");
+    await expect(seen).toHaveAttribute("data-lit", "yes", { timeout: 30_000 });
+    await expect(seen).toContainText(/\d+ B/);
+  }
 });
 
 test("the outgoing lamp lights when a beat goes, and the lamps belong to the heartbeat", async ({
