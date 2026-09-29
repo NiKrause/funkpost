@@ -3,10 +3,11 @@ name: Deploy the demos to GitHub Pages
 # The phones need an HTTPS address — Web Bluetooth refuses insecure origins.
 # Every push to main publishes an index and both demos:
 #
-#   https://nikrause.github.io/funkpost/               the menu
-#   https://nikrause.github.io/funkpost/mesh-todo/     mesh-todo     (OrbitDB)
-#   https://nikrause.github.io/funkpost/mesh-calendar/ mesh-calendar (Yjs)
-#   https://nikrause.github.io/funkpost/termine/       → mesh-calendar
+#   https://nikrause.github.io/funkpost/                the menu
+#   https://nikrause.github.io/funkpost/mesh-todo/      mesh-todo      (OrbitDB)
+#   https://nikrause.github.io/funkpost/mesh-calendar/  mesh-calendar  (Yjs)
+#   https://nikrause.github.io/funkpost/mesh-heartbeat/ mesh-heartbeat (no database)
+#   https://nikrause.github.io/funkpost/termine/        → mesh-calendar
 #
 # /termine/ was mesh-calendar's home and was documented as a ONE-WAY DOOR:
 # every .ics ever downloaded carries a change/cancel link pointing at it, and a
@@ -24,7 +25,7 @@ on:
   push:
     branches: [main]
     # Only what reaches `site/` is worth a deploy. The build below copies
-    # examples/landing, mesh-todo/dist and mesh-calendar/dist — nothing from
+    # examples/landing and the three demos' dist directories — nothing from
     # docs/ or the READMEs, so a documentation push produced a byte-identical
     # site, a deployment record, and a full npm ci over libp2p, Helia and
     # Meshtastic plus two Vite builds for it. Two of eleven merges in the week
@@ -71,10 +72,13 @@ jobs:
       - run: npm run build -w @le-space/mesh-calendar-example
         env:
           PAGES_BASE: /funkpost/mesh-calendar/
+      - run: npm run build -w @le-space/mesh-heartbeat-example
+        env:
+          PAGES_BASE: /funkpost/mesh-heartbeat/
       # Assemble the site rather than nesting one demo inside another's build
       # output: each demo owns its directory, and the index owns the root.
       - run: |
-          mkdir -p site/mesh-todo site/mesh-calendar site/termine site/brand
+          mkdir -p site/mesh-todo site/mesh-calendar site/mesh-heartbeat site/termine site/brand
           cp examples/landing/index.html site/index.html
           # The Le Space pill and credit line for the plain pages here, which
           # have no bundler: brand.js as written, and uqr's one-file ESM build
@@ -83,6 +87,7 @@ jobs:
           cp node_modules/uqr/dist/index.mjs site/brand/uqr.mjs
           cp -R examples/mesh-todo/dist/. site/mesh-todo/
           cp -R examples/mesh-calendar/dist/. site/mesh-calendar/
+          cp -R examples/mesh-heartbeat/dist/. site/mesh-heartbeat/
           # Keeps every .ics ever issued working — see the header. The worker
           # retires the one still installed at the old scope, which would
           # otherwise keep serving the old build instead of the redirect.

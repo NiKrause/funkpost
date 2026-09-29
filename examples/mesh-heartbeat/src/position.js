@@ -77,3 +77,47 @@ export function watchBrowserPosition(onPosition, { geolocation = null } = {}) {
 /** Six decimals is about a tenth of a metre — more than a bicycle deserves. */
 export const formatPosition = (p) =>
   p ? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}` : "";
+
+/**
+ * The way back onto the wire, for the stationary device's one announcement.
+ *
+ * `Math.round`, where `@meshtastic/core` floors: this is a round trip through
+ * our own decode, and rounding is what makes it one. The difference is a
+ * centimetre, and the point is that `decode(encode(p))` is `p` rather than
+ * almost.
+ */
+export function encodeNodePosition(position) {
+  if (!position) return null;
+  const { lat, lon } = position;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  const pair = [Math.round(lat / SCALE), Math.round(lon / SCALE)];
+  // The same refusal as on the way in: 0/0 means "no fix" far more often than
+  // it means the Gulf of Guinea, and a receiver cannot tell them apart.
+  return pair[0] === 0 && pair[1] === 0 ? null : pair;
+}
+
+/**
+ * How far apart two fixes are, in metres.
+ *
+ * Haversine on a sphere. The ellipsoid would be more correct by about a fifth
+ * of a percent, which at the ranges this demo measures — hundreds of metres to
+ * a few kilometres — is centimetres, and nothing here is accurate to
+ * centimetres. What matters is that a point 800 m out and a point 3 km out are
+ * plainly different numbers, and this gives that.
+ */
+export function distanceMetres(a, b) {
+  if (!a || !b) return null;
+  const R = 6_371_000;
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLon = (b.lon - a.lon) * rad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Metres under a kilometre, kilometres above it — what a rider reads at a glance. */
+export const formatDistance = (m) =>
+  m == null ? "" : m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m < 10_000 ? 2 : 1)} km`;

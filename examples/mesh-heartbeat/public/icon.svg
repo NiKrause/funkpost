@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#0B0E15"/>
+  <circle cx="60" cy="72" r="3" fill="#EDF1F8" opacity="0.5"/>
+  <circle cx="300" cy="60" r="2.5" fill="#EDF1F8" opacity="0.45"/>
+  <circle cx="470" cy="220" r="3" fill="#EDF1F8" opacity="0.4"/>
+  <circle cx="50" cy="430" r="2.5" fill="#EDF1F8" opacity="0.35"/>
+  <circle cx="400" cy="430" r="2.5" fill="#EDF1F8" opacity="0.4"/>
+  <circle cx="140" cy="40" r="2" fill="#EDF1F8" opacity="0.35"/>
+  <circle cx="80" cy="300" r="2" fill="#EDF1F8" opacity="0.3"/>
+  <circle cx="460" cy="330" r="2" fill="#EDF1F8" opacity="0.3"/>
+  <g fill="none" stroke="#58C7F3" stroke-linecap="round">
+    <!-- how far it reaches: two arcs leaving toward the other device -->
+    <path d="M 256 76 A 180 180 0 0 1 436 256" stroke-width="13" opacity="0.5"/>
+    <path d="M 256 36 A 220 220 0 0 1 476 256" stroke-width="10" opacity="0.28"/>
+    <!-- the locate ring, and the four ticks that make it a crosshair -->
+    <circle cx="256" cy="256" r="92" stroke-width="19"/>
+    <path d="M 256 118 V 152 M 256 360 V 394 M 118 256 H 152 M 360 256 H 394" stroke-width="19"/>
+  </g>
+  <!-- the other device: a cyan ring, as everywhere in this family -->
+  <circle cx="404" cy="108" r="21" fill="none" stroke="#58C7F3" stroke-width="12"/>
+  <!-- this device, on the spot it is marking -->
+  <circle cx="256" cy="256" r="44" fill="#FF6B5B"/>
+</svg>

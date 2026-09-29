@@ -54,6 +54,7 @@ export function createCoverageTrack({ limit = LIMIT, now = Date.now } = {}) {
         position,
         answered: null, // becomes the beat number the echo named
         answeredAt: null,
+        answeredBy: null, // which device answered — see below
       };
       points.push(point);
       drop();
@@ -68,12 +69,20 @@ export function createCoverageTrack({ limit = LIMIT, now = Date.now } = {}) {
      * this slow a second round cannot be in flight while the first is still
      * open, and an echo naming a beat we are not waiting on is a duplicate the
      * radio repeated. Counting it again would flatter the track.
+     *
+     * `from` is recorded because a channel is shared. Everyone running this
+     * app with the same question hears everyone else, so a beat can be
+     * answered by a stranger's node — and a track that only remembered *that*
+     * something answered would report their coverage as this device's. The
+     * page can also pass only the answers it wants, which is the other half of
+     * the same problem; what this does is make the row say who.
      */
-    answered({ n = null } = {}) {
+    answered({ n = null, from = null } = {}) {
       if (!open) return null;
       if (n != null && open.n !== n) return null;
       open.answered = n ?? open.n;
       open.answeredAt = now();
+      open.answeredBy = from;
       const point = open;
       open = null;
       return point;
@@ -103,6 +112,10 @@ export function createCoverageTrack({ limit = LIMIT, now = Date.now } = {}) {
         reached: answered.length,
         firstBeat: answered.filter((p) => p.answered === 1).length,
         located: points.filter((p) => p.position).length,
+        // How many different devices answered at all. One is the expected
+        // shape of a range test; more than one means the channel is shared,
+        // and the reader should know that before reading the rest.
+        answerers: new Set(answered.map((p) => p.answeredBy).filter(Boolean)).size,
       };
     },
 
