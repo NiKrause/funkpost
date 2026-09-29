@@ -59,6 +59,17 @@ export const WORDS = {
     channelTitle: "same channel name + key fingerprint on both phones = the nodes can decrypt each other",
     primaryChannel: "primary channel",
     key: "key",
+    carriesLegend: "what the radio carries",
+    carriesNone: "nothing",
+    carriesNoneTitle: "The node stays connected and the radio stays quiet.",
+    pingIdle: "nothing yet",
+    pingOutTitle: "The last beat this device put on the air, and which of the round it was.",
+    pingInTitle: "The last beat or echo heard, from whom, which beat it answers, and what it cost.",
+    pingOut: (n, of, time) => `sent beat ${n}/${of} at ${time}`,
+    pingIn: ({ type, from, n, bytes, time }) =>
+      `heard ${type} from ${from} at ${time}` +
+      (n ? ` \u2014 beat ${n}` : "") +
+      (bytes == null ? "" : `, ${bytes} B`),
     beatSwitch: "heartbeat on the air",
     beatSwitchTitle: "A few bytes an hour: is another device with this list within reach?",
     syncSwitch: "carry the list over the radio",
@@ -202,8 +213,11 @@ export const WORDS = {
       attachFailed: (message) => `! attaching the node failed: ${message}`,
       heartbeatError: (message) => `! heartbeat: ${message}`,
       beat: (beat, of) => `♥ beat ${beat} of ${of} — is another device keeping this list?`,
-      heard: (type, from) => `♥ ${type} from device ${from}`,
-      echo: (to) => `♥ echo to device ${to}`,
+      heard: (type, from, n, bytes) =>
+        `♥ ${type} from device ${from}` +
+        (n ? ` — beat ${n}` : "") +
+        (bytes == null ? "" : `, ${bytes} B`),
+      echo: (to, n) => `♥ echo to device ${to}${n ? ` — its beat ${n}` : ""}`,
       alone: (time) => `♥ nobody with this list answered — next heartbeat at ${time}`,
       windowError: (type, message) => `! window ${type}: ${message}`,
       gattProbeOn: "measuring Bluetooth operations — overlaps and failures only",
@@ -301,6 +315,17 @@ export const WORDS = {
       "gleicher Kanalname und Schlüssel-Fingerabdruck auf beiden Telefonen = die Knoten können einander entschlüsseln",
     primaryChannel: "Primärkanal",
     key: "Schlüssel",
+    carriesLegend: "was der Funk trägt",
+    carriesNone: "nichts",
+    carriesNoneTitle: "Der Knoten bleibt verbunden, der Funk bleibt still.",
+    pingIdle: "noch nichts",
+    pingOutTitle: "Der letzte Schlag, den dieses Gerät gesendet hat, und der wievielte der Runde er war.",
+    pingInTitle: "Der letzte gehörte Schlag oder sein Echo: von wem, auf welchen Schlag, und was er gekostet hat.",
+    pingOut: (n, of, time) => `Schlag ${n}/${of} gesendet um ${time}`,
+    pingIn: ({ type, from, n, bytes, time }) =>
+      `${type === "beat" ? "Schlag" : "Echo"} von ${from} um ${time}` +
+      (n ? ` \u2014 Schlag ${n}` : "") +
+      (bytes == null ? "" : `, ${bytes} B`),
     beatSwitch: "Herzschlag auf dem Funk",
     beatSwitchTitle: "Ein paar Bytes pro Stunde: ist ein anderes Gerät mit dieser Liste in Reichweite?",
     syncSwitch: "Liste über Funk tragen",
@@ -444,8 +469,11 @@ export const WORDS = {
       attachFailed: (message) => `! Anbinden des Knotens fehlgeschlagen: ${message}`,
       heartbeatError: (message) => `! Herzschlag: ${message}`,
       beat: (beat, of) => `♥ Schlag ${beat} von ${of} — führt ein anderes Gerät diese Liste?`,
-      heard: (type, from) => `♥ ${type} von Gerät ${from}`,
-      echo: (to) => `♥ Echo an Gerät ${to}`,
+      heard: (type, from, n, bytes) =>
+        `♥ ${type === "beat" ? "Schlag" : "Echo"} von Gerät ${from}` +
+        (n ? ` — Schlag ${n}` : "") +
+        (bytes == null ? "" : `, ${bytes} B`),
+      echo: (to, n) => `♥ Echo an Gerät ${to}${n ? ` — dessen Schlag ${n}` : ""}`,
       alone: (time) => `♥ niemand mit dieser Liste hat geantwortet — nächster Herzschlag um ${time}`,
       windowError: (type, message) => `! Fenster ${type}: ${message}`,
       gattProbeOn: "messe Bluetooth-Operationen — nur Überlappungen und Fehler",
