@@ -5,15 +5,24 @@ import { createHeardLog } from "../examples/mesh-heartbeat/src/heard.js";
 
 test("counts the beats it was asked, and the ones it answered", () => {
   const log = createHeardLog({ now: () => 5 });
-  log.heard({ type: "beat", from: "aaaa", n: 1, bytes: 34 });
+  log.heard({ type: "beat", from: "aaaa", n: 1, bytes: 49, position: { lat: 48.4, lon: 12.7 } });
   log.answered({ to: "aaaa", n: 1 });
-  log.heard({ type: "beat", from: "aaaa", n: 1, bytes: 34 });
+  log.heard({ type: "beat", from: "aaaa", n: 2, bytes: 34 });
 
-  assert.deepEqual(log.summary(), { heard: 2, answered: 1, askers: 1, echoes: 0 });
+  assert.deepEqual(log.summary(), {
+    heard: 2,
+    answered: 1,
+    askers: 1,
+    echoes: 0,
+    // Only the first beat of a round carries one, so this is rounds, not beats.
+    located: 1,
+  });
   const rows = log.rows();
   assert.equal(rows[0].answered, false, "newest first, and the newest is unanswered");
+  assert.equal(rows[0].position, null, "a beat in the middle of a round has no place");
   assert.equal(rows[1].answered, true);
   assert.equal(rows[1].answeredAt, 5);
+  assert.deepEqual(rows[1].position, { lat: 48.4, lon: 12.7 }, "the round's first beat has one");
 });
 
 test("an echo from somebody else's conversation is not a question to us", () => {

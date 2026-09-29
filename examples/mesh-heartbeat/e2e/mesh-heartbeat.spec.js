@@ -76,6 +76,14 @@ test("the stationary device says where it is once, and the distance follows", as
   const saidWhereItIs = positionLines.filter((line) => /is at|steht bei/.test(line));
   expect(saidWhereItIs).toHaveLength(1);
 
+  // And the other way: the device that stays holds the ride too. The rider
+  // says where it is on the first beat of *each* round — twice here, once per
+  // press — so the office's own record has a place against those rows, and a
+  // distance, because it knows where it is standing.
+  await expect(office.getByTestId("heard")).toContainText("48.41500");
+  await expect(office.getByTestId("heard")).toContainText(/1\.\d\d km/);
+  await expect(office.getByTestId("heard-summary")).toContainText(/2 (with a place|mit Ort)/);
+
   await rider.close();
   await office.close();
 });
@@ -181,7 +189,12 @@ test("a beat cut short by a channel change is dropped, not marked a silence", as
   context,
 }) => {
   const roomId = room();
-  const page = await open(context, roomId, "role=rider&every=0");
+  // A wider gap than the rest of the suite, on purpose: this test has to act
+  // *between* two beats, and at the usual seventh of a second the second beat
+  // lands while Playwright is still crossing into the page — which leaves a
+  // row `abandon()` never claimed and fails about a race rather than about
+  // the behaviour. Measured at roughly one full run in three.
+  const page = await open(context, roomId, "role=rider&every=0&gap=1200");
 
   await page.getByTestId("ask-now").click();
   await expect(page.getByTestId("track-summary")).toContainText(/1 (beat|Beat)/, { timeout: 10_000 });
