@@ -124,6 +124,21 @@ import { wallAt } from "./domain/time.js";
     budget?.dutyCycle == null ? "" : t.perHour((budget.dutyCycle * 100).toFixed(budget.dutyCycle < 0.05 ? 1 : 0)),
   );
   const airtimeBlocked = $derived(blockedForMs > 0);
+  /**
+   * What is left of this hour, not only that it is gone.
+   *
+   * The page already stopped offering what cannot happen — that half was here
+   * from the start. The half that was missing is the one somebody reads
+   * *before* the shop's afternoon runs out of allowance.
+   */
+  const budgetPercent = $derived(
+    budget?.dutyCycle == null || !Number.isFinite(budget.remainingAirtimeMs)
+      ? null
+      : Math.max(
+          0,
+          Math.min(100, Math.round((budget.remainingAirtimeMs / (budget.dutyCycle * 3_600_000)) * 100)),
+        ),
+  );
 
   const untilFree = $derived.by(() => {
     if (blockedForMs <= 0) return "";
@@ -541,6 +556,29 @@ import { wallAt } from "./domain/time.js";
     }
   }
 
+  /**
+   * The salon's own copy of an appointment.
+   *
+   * A named gate of #38, and the domain has been able to write it the whole
+   * time — `icsFor` takes `role: "salon"` and puts the customer's handle in
+   * the note. Nothing called it, so the shop could not get its own day out of
+   * the page at all.
+   *
+   * **No token.** The cancellation token lives in the customer's link, and a
+   * file the salon might forward is the last place it belongs: whoever holds
+   * it can cancel the booking. `icsFor` leaves the URL out when there is none.
+   */
+  async function saveSalonIcs(booking) {
+    const file = await live.book.icsFor(booking.id, {
+      fromISO,
+      days: DEFAULT_SHOP.horizonDays,
+      shopId: SHOP_ID,
+      role: "salon",
+    });
+    downloadFile(file.filename, file.text);
+    pushLog(w().log.saved(file.filename));
+  }
+
   async function saveIcs(entry) {
     const file = await live.book.icsFor(entry.id, {
       fromISO,
@@ -596,6 +634,12 @@ import { wallAt } from "./domain/time.js";
       {linkState.text}
       {#if region && region !== "UNSET"}<span class="dim"> · {region}</span>{/if}
     </p>
+    {#if budgetPercent != null && !airtimeBlocked}
+      <div class="bar" title={t.budgetTitle} data-testid="airtime-bar">
+        <div class="fill" class:low={budgetPercent <= 15} style={`width:${budgetPercent}%`}></div>
+      </div>
+      <p class="dim" data-testid="airtime-left">{t.airtimeLeft(budgetPercent, region)}</p>
+    {/if}
     {#if airtimeBlocked}
       <p class="airtime" data-testid="airtime-blocked">
         {#if $lang === "de"}
@@ -870,6 +914,15 @@ import { wallAt } from "./domain/time.js";
             {#if entry.booking}
               <span class="who">{entry.booking.handle}</span>
               <span class="pill {entry.booking.status}">{STATUS_TEXT[entry.booking.status]}</span>
+              {#if entry.booking.status === CONFIRMED}
+                <button
+                  class="btn ghost sm"
+                  data-testid="salon-ics"
+                  onclick={() => saveSalonIcs(entry.booking)}
+                >
+                  {t.ics}
+                </button>
+              {/if}
             {:else}
               <span class="who dim">{t.free}</span>
             {/if}
@@ -1100,6 +1153,27 @@ import { wallAt } from "./domain/time.js";
   .led.waiting { background: var(--warn); }
   .led.live { background: var(--ok); }
   .awake { display: flex; align-items: center; gap: 8px; margin: 0; }
+  /* What is left of the hour. Green until the last sixth, where the number
+     stops being background information and starts deciding whether the shop
+     can still confirm anything this afternoon. */
+  .bar {
+    height: 0.35rem;
+    border-radius: 0.2rem;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    overflow: hidden;
+    margin: 0.5rem 0 0.25rem;
+  }
+
+  .fill {
+    height: 100%;
+    background: #2f9e6e;
+    transition: width 0.4s ease;
+  }
+
+  .fill.low {
+    background: #c98a12;
+  }
+
   .airtime,
   .mismatch {
     margin: 0; padding: 10px 12px; font-size: 0.84rem; line-height: 1.5;

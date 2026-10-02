@@ -10,6 +10,7 @@
  *
  * The date is pinned with `?today=`, so this is the same test every morning.
  */
+import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 
 const MONDAY = "2026-09-07";
@@ -467,4 +468,55 @@ test("a booking in English: ask, approve, and the times in English", async ({ co
 
   await salon.close();
   await guest.close();
+});
+
+test("the salon gets its own copy of an appointment, without the customer's token", async ({
+  context,
+}) => {
+  // A named gate of #38, and the domain has been able to write this the whole
+  // time — `icsFor` takes role: "salon" and notes the customer's handle.
+  // Nothing called it, so the shop could not get its own day out of the page.
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+  await salon.page.getByTestId("mode-ask").click();
+
+  const guest = await open(context, { room: id, role: "customer" });
+  await ready(guest.page);
+  await expect(guest.page.getByTestId("book")).toHaveText(/anfragen/, { timeout: 20_000 });
+  await bookSlot(guest.page, { time: "14:00", handle: "Anna" });
+  await expect(salon.page.getByTestId("pending")).toContainText("Anna", { timeout: 20_000 });
+  await salon.page.getByTestId("confirm").click();
+
+  const save = salon.page.getByTestId("salon-ics").first();
+  await expect(save).toBeVisible({ timeout: 20_000 });
+  const file = await Promise.all([salon.page.waitForEvent("download"), save.click()]).then(
+    ([d]) => d,
+  );
+  const ics = await readFile(await file.path(), "utf8");
+
+  expect(ics).toContain("BEGIN:VCALENDAR");
+  // The salon's copy says who is coming…
+  expect(ics).toContain("Anna");
+  // …and carries no cancellation link. Whoever holds that token can cancel the
+  // booking, and a file the salon might forward is the last place it belongs.
+  expect(ics).not.toContain("URL:");
+
+  await salon.page.close();
+  await guest.page.close();
+});
+
+test("the hour has a bar, not only a wall at the end of it", async ({ context }) => {
+  // The page already stopped offering what cannot happen. The half that was
+  // missing is the one somebody reads *before* the afternoon runs out.
+  const id = nextRoom();
+  const salon = await open(context, { room: id, role: "salon" });
+  await ready(salon.page);
+
+  await expect(salon.page.getByTestId("airtime-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(salon.page.getByTestId("airtime-left")).toContainText("%");
+  await expect(salon.page.getByTestId("airtime-left")).toContainText("EU_868");
+  await expect(salon.page.getByTestId("airtime-blocked")).toHaveCount(0);
+
+  await salon.page.close();
 });
