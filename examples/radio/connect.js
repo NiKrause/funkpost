@@ -29,6 +29,7 @@ import {
   describeMeshtasticError,
 } from "@le-space/funkpost";
 import { serialiseGattOperations } from "@le-space/funkpost/links/gatt-queue";
+import { measureGattOverlap } from "@le-space/funkpost/links/gatt-probe";
 import { createBroadcastChannelLink } from "./fake-bc-link.js";
 
 /** The Meshtastic BLE service, which is how the chooser knows what to offer. */
@@ -75,7 +76,77 @@ export function applyGattQueue({ search = globalThis.location?.search ?? "", tar
   return undoGattQueue;
 }
 
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp, onGattQueue }) {
+/**
+ * What a page cannot see on a phone: the console.
+ *
+ * An exception in a config handler or a rejecting promise tears a connection
+ * down with nothing on screen to act on, and mesh-todo's own comment for this
+ * is the whole argument — *"on a phone the console is invisible"*. It lived
+ * there, so the two demos most likely to be used away from a desk were the two
+ * without it (#191).
+ *
+ * Not inside `connectCourier`: the exception worth catching can happen while
+ * the page is still coming up, long before anything connects. A page calls
+ * this once, with its own log, because where a line goes is the only part of
+ * this a page knows.
+ *
+ * @param {(type: string, message: string) => void} report
+ * @param {Object} [options]
+ * @param {EventTarget} [options.target] what to listen on; the window by
+ *   default, and an injectable one so this is testable without a browser
+ * @returns {() => void} stop watching
+ */
+export function watchWindowErrors(report, { target = globalThis } = {}) {
+  const onError = (event) => {
+    const cause = event?.reason ?? event?.error ?? event?.message ?? event;
+    report(event?.type ?? "error", describeMeshtasticError(cause) ?? String(cause?.message ?? cause));
+  };
+  target?.addEventListener?.("error", onError);
+  target?.addEventListener?.("unhandledrejection", onError);
+  return () => {
+    target?.removeEventListener?.("error", onError);
+    target?.removeEventListener?.("unhandledrejection", onError);
+  };
+}
+
+/**
+ * `?gatt=1`: say which Bluetooth operations overlap.
+ *
+ * The diagnostic that turned "the link keeps dropping" into a measurement
+ * (#153), and the one wanted the first time a *new* app shows the same
+ * symptom — so keeping it in the app that no longer needs it was exactly
+ * backwards.
+ *
+ * Applied **after** the queue, deliberately: the probe has to wrap the queue
+ * so the overlapping *calls* are still reported while the failures underneath
+ * them disappear. Patched the other way round it reports nothing and looks
+ * like everything is fine.
+ *
+ * @returns {(() => void) | null} how to stop it, or null if it was already on
+ *   or not asked for
+ */
+let undoGattProbe = null;
+
+export function stopGattQueue() {
+  undoGattQueue?.();
+}
+
+export function stopGattProbe() {
+  undoGattProbe?.();
+}
+
+export function applyGattProbe(report, { search = globalThis.location?.search ?? "", target = null } = {}) {
+  if (undoGattProbe) return null;
+  if (new URLSearchParams(search).get("gatt") !== "1") return null;
+  const stop = measureGattOverlap(report, { target });
+  undoGattProbe = () => {
+    stop();
+    undoGattProbe = null;
+  };
+  return undoGattProbe;
+}
+
+export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp, onGattQueue, onGattProbe }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
     // preset only changes the airtime *estimates* (and with them the ARQ's
@@ -102,6 +173,8 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
   // subscribe for notifications, and a `startNotifications` that loses the
   // race is a device that transmits and never hears an answer.
   if (applyGattQueue() && onGattQueue) onGattQueue();
+  // After the queue, never before it — see applyGattProbe.
+  if (onGattProbe) applyGattProbe(onGattProbe);
 
   const [{ TransportWebBluetooth }, { MeshDevice }] = await Promise.all([
     import("@meshtastic/transport-web-bluetooth"),

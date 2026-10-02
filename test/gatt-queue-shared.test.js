@@ -15,7 +15,14 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyGattQueue, connectCourier } from "@le-space/funkpost-radio";
+import {
+  applyGattQueue,
+  applyGattProbe,
+  connectCourier,
+  stopGattProbe,
+  stopGattQueue,
+  watchWindowErrors,
+} from "@le-space/funkpost-radio";
 
 /** A stand-in for the browser's characteristic prototype. */
 function stubPrototype() {
@@ -96,7 +103,105 @@ test("connecting a radio applies it, without the page asking", async () => {
   assert.notEqual(proto.startNotifications, original, "the queue was applied on the way");
   assert.ok(told, "and the page is told, so a field log can show it");
 
+  // A page keeps the queue for its lifetime; a test file is several pages.
+  stopGattQueue();
   delete globalThis.BluetoothRemoteGATTCharacteristic;
+  if (hadNavigator) Object.defineProperty(globalThis, "navigator", hadNavigator);
+  else delete globalThis.navigator;
+});
+
+test("the probe wraps the queue, not the other way round", () => {
+  // The order is the whole point and it is easy to get backwards: with the
+  // probe underneath, it reports already-serialised calls — no overlaps, and
+  // a diagnostic that looks like everything is fine.
+  const proto = stubPrototype();
+  const original = proto.readValue;
+
+  const stopQueue = applyGattQueue({ target: proto });
+  const queued = proto.readValue;
+  const stopProbe = applyGattProbe(() => {}, { target: proto, search: "?gatt=1" });
+  assert.ok(stopProbe, "the probe applied");
+  assert.notEqual(proto.readValue, queued, "and it is the outermost wrapper now");
+
+  stopProbe();
+  assert.equal(proto.readValue, queued, "stopping it leaves the queue in place");
+  stopQueue();
+  assert.equal(proto.readValue, original);
+});
+
+test("no ?gatt=1, no probe", () => {
+  const proto = stubPrototype();
+  const original = proto.readValue;
+  assert.equal(applyGattProbe(() => {}, { target: proto, search: "" }), null);
+  assert.equal(proto.readValue, original, "a diagnostic nobody asked for patches nothing");
+});
+
+test("window errors reach the page's own log", () => {
+  // On a phone the console is invisible, so this is the only way an exception
+  // in a handler becomes something the operator can act on.
+  const target = new EventTarget();
+  const seen = [];
+  const stop = watchWindowErrors((type, message) => seen.push(`${type}: ${message}`), { target });
+
+  // Node has no ErrorEvent; what the handler actually reads is the shape.
+  const failure = new Event("error");
+  failure.message = "a polyfill fell over";
+  target.dispatchEvent(failure);
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /^error: /);
+
+  stop();
+  const after = new Event("error");
+  after.message = "after the page went";
+  target.dispatchEvent(after);
+  assert.equal(seen.length, 1, "and it stops when the page does");
+});
+
+test("connecting applies them in the order the probe depends on", async () => {
+  // The composition is tested above; this is the call site, which is where
+  // getting it backwards would actually happen.
+  const proto = stubPrototype();
+  const original = proto.readValue;
+  globalThis.BluetoothRemoteGATTCharacteristic = { prototype: proto };
+  const hadLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: { search: "?gatt=1" },
+  });
+
+  const sentinel = new Error("no chooser in a test");
+  const hadNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      bluetooth: {
+        requestDevice: () => {
+          throw sentinel;
+        },
+      },
+    },
+  });
+
+  const lines = [];
+  await assert.rejects(
+    connectCourier({
+      mode: { kind: "ble" },
+      onGattQueue: () => lines.push("queue"),
+      onGattProbe: (line) => lines.push(line),
+    }),
+    (e) => e === sentinel,
+  );
+
+  assert.deepEqual(lines, ["queue"], "the queue announced itself; the probe has nothing to say yet");
+  assert.notEqual(proto.readValue, original, "both are on");
+  // Unwinding in the order they were applied puts the browser back exactly.
+  stopGattProbe();
+  stopGattQueue();
+  assert.equal(proto.readValue, original, "and the probe was the outer one");
+
+  delete globalThis.BluetoothRemoteGATTCharacteristic;
+  if (hadLocation) Object.defineProperty(globalThis, "location", hadLocation);
+  else delete globalThis.location;
   if (hadNavigator) Object.defineProperty(globalThis, "navigator", hadNavigator);
   else delete globalThis.navigator;
 });

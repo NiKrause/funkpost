@@ -16,6 +16,7 @@
     downloadFile,
   } from "./stack.js";
   import { preferredChannelIndex, DEFAULT_PREFERRED_CHANNEL } from "@le-space/funkpost";
+  import { watchWindowErrors } from "@le-space/funkpost-radio";
   import { DEFAULT_SHOP, serviceById } from "./domain/slots.js";
 import { wallAt } from "./domain/time.js";
   import { CONFIRMED, PENDING, DECLINED, CANCELLED, SUPERSEDED } from "./domain/arbitration.js";
@@ -203,6 +204,8 @@ import { wallAt } from "./domain/time.js";
     /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
   const wakeLockSupported = "wakeLock" in navigator;
   let keepAwake = $state(false);
+  /** Stops writing window errors into the radio strip when the page goes. */
+  let stopWindowErrors = null;
   let wakeSentinel = null;
 
   async function acquireWakeLock() {
@@ -354,6 +357,13 @@ import { wallAt } from "./domain/time.js";
 
   onMount(async () => {
     loadMine();
+    // On a phone the console is invisible, and an exception in a handler or a
+    // rejecting promise tears the connection down with nothing on screen to
+    // act on. mesh-todo had this; the two demos most likely to be used away
+    // from a desk did not (#191).
+    stopWindowErrors = watchWindowErrors((type, message) =>
+      pushLog(w().log.windowError(type, message)),
+    );
     // Put back what this device already knew, before touching the radio: a
     // reload should not cost airtime asking for a book we already have.
     stack = await createStack({
@@ -386,6 +396,7 @@ import { wallAt } from "./domain/time.js";
     document.addEventListener("visibilitychange", reacquireOnReturn);
     return () => {
       clearInterval(ticker);
+      stopWindowErrors?.();
       document.removeEventListener("visibilitychange", reacquireOnReturn);
     };
   });
@@ -443,6 +454,7 @@ import { wallAt } from "./domain/time.js";
           if (info?.myNodeNum) myNode = `!${info.myNodeNum.toString(16).padStart(8, "0")}`;
         },
         onError: (message) => pushLog(`! ${message}`),
+        onGattProbe: (line) => pushLog(line),
         onReconnecting: (n) => pushLog(w().log.reconnecting(n)),
         onReconnected: (how) =>
           pushLog(how === "reattached" ? w().log.reattached : w().log.reconnected),

@@ -15,8 +15,7 @@
   import { WORDS } from "./words.js";
   import { FIELD_LOG_TOPIC } from "./pubsub-topics.js";
   import { createFieldLogBuffer } from "./field-log-buffer.js";
-  import { measureGattOverlap } from "@le-space/funkpost/links/gatt-probe";
-  import { applyGattQueue } from "@le-space/funkpost-radio";
+  import { applyGattQueue, watchWindowErrors } from "@le-space/funkpost-radio";
   import {
     createDatabaseStack,
     joinOverInternet,
@@ -117,8 +116,8 @@
   // The heartbeat: does another device keeping this list answer on the air?
   let heartbeat = null;
   let heartbeatStarting = false;
-  /** Set only under ?gatt=1; restores the browser's own methods on teardown. */
-  let stopGattProbe = null;
+  /** Stops writing window errors into the log when the page goes. */
+  let stopWindowErrors = null;
   /** On unless ?gattq=0; restores the browser's own methods on teardown. */
   let stopGattQueue = null;
 
@@ -782,10 +781,11 @@
     // On a phone the console is invisible; surface anything that would
     // otherwise tear the connection down silently — an exception in a
     // config handler, a rejecting promise, a polyfill edge case.
-    const onWinError = (e) =>
-      pushLog(w().log.windowError(e.type, describeError(e.reason ?? e.error ?? e.message ?? e)));
-    window.addEventListener("error", onWinError);
-    window.addEventListener("unhandledrejection", onWinError);
+    // Shared, so the demos that are *more* likely to be used away from a desk
+    // have it too — it lived here and they did not (#191).
+    stopWindowErrors = watchWindowErrors((type, message) =>
+      pushLog(w().log.windowError(type, message)),
+    );
     // The pointer path is the only thing here that wants the internet, so the
     // buttons say plainly when there is none.
     const onOnline = () => (online = navigator.onLine);
@@ -821,10 +821,9 @@
     stopGattQueue = applyGattQueue();
     if (stopGattQueue) pushLog(w().log.gattQueueOn);
 
-    if (params.get("gatt") === "1") {
-      stopGattProbe = measureGattOverlap((line) => pushLog(line));
-      pushLog(w().log.gattProbeOn);
-    }
+    // Applied by the shared connector now, at connect time — which is still
+    // after the queue above, the order the probe depends on.
+    if (params.get("gatt") === "1") pushLog(w().log.gattProbeOn);
 
     if (params.get("probe") === "meshtastic-core") {
       try {
@@ -926,7 +925,7 @@
       heartbeat?.stop();
       document.removeEventListener("visibilitychange", reacquireOnReturn);
       // Patched browser methods must not outlive the page that patched them.
-      stopGattProbe?.();
+      stopWindowErrors?.();
       stopGattQueue?.();
     };
   });
@@ -963,6 +962,7 @@
           );
         },
         onError: (msg) => pushLog(`! ${msg}`),
+        onGattProbe: (line) => pushLog(line),
         onStatus: (name) => pushLog(w().log.nodeStatus(name)),
         onReconnecting: (n) => {
           reconnecting = true;
