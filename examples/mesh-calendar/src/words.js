@@ -63,6 +63,8 @@ export const WORDS = {
     searchingHint:
       "Der Link hat den Termin mitgebracht — er wird jetzt über Funk geholt. Diese Seite kam von einem Webserver; alles Weitere läuft über das Mesh.",
     yourAppointments: "Deine Termine",
+    budgetTitle: "verbleibendes Sendezeit-Budget dieser Stunde",
+    airtimeLeft: (percent, region) => `${percent} % der Sendezeit dieser Stunde übrig (${region})`,
     ics: "Termin.ics",
     cancel: "Absagen",
     dayPlan: "Tagesplan",
@@ -170,6 +172,8 @@ export const WORDS = {
     searchingHint:
       "The link brought the appointment with it — it is being fetched over the radio now. This page came from a web server; everything else runs over the mesh.",
     yourAppointments: "Your appointments",
+    budgetTitle: "airtime budget left this hour",
+    airtimeLeft: (percent, region) => `${percent} % of this hour's airtime left (${region})`,
     ics: "Appointment.ics",
     cancel: "Cancel",
     dayPlan: "Day plan",
