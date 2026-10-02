@@ -7,9 +7,14 @@
   "type": "module",
   "exports": {
     ".": "./connect.js",
-    "./fake-bc-link.js": "./fake-bc-link.js"
+    "./fake-bc-link.js": "./fake-bc-link.js",
+    "./position.js": "./position.js"
   },
-  "files": ["connect.js", "fake-bc-link.js"],
+  "files": [
+    "connect.js",
+    "fake-bc-link.js",
+    "position.js"
+  ],
   "dependencies": {
     "@le-space/funkpost": "file:../.."
   }

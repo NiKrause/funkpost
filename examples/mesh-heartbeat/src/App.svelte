@@ -67,7 +67,7 @@
     formatPosition,
     distanceMetres,
     formatDistance,
-  } from "./position.js";
+  } from "@le-space/funkpost-radio/position.js";
   import { WORDS } from "./words.js";
 
   const t = $derived(WORDS[$lang]);

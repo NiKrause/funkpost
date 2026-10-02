@@ -17,7 +17,7 @@ import {
   formatPosition,
   distanceMetres,
   formatDistance,
-} from "../examples/mesh-heartbeat/src/position.js";
+} from "../examples/radio/position.js";
 
 // Eggenfelden, where the bench is.
 const LAT = 48.40639;
