@@ -136,6 +136,17 @@ export const WORDS = {
       },
     },
 
+    // The same ride on both screens (#184). OpenStreetMap, no Google.
+    map: {
+      legend: "The ride on a map",
+      empty: "Nothing to draw yet: a point appears when a beat goes out with a place against it.",
+      station: "the device that stays",
+      here: "this device",
+      recentre: "Back to the ride",
+      offline: "No map tiles — there is no internet here. The line, the dots and the distance are drawn from numbers this device already holds.",
+      note: "Green answered at once, amber answered later, red not at all. The dashed line is the link being measured right now. Map data © OpenStreetMap contributors.",
+    },
+
     log: {
       legend: "Field log",
       beat: (n, of) => `→ beat ${n}/${of}`,
@@ -282,6 +293,16 @@ export const WORDS = {
         distance: "von hier",
         answered: "unsere Antwort",
       },
+    },
+
+    map: {
+      legend: "Die Fahrt auf der Karte",
+      empty: "Noch nichts zu zeichnen: ein Punkt erscheint, wenn ein Beat mit Ort rausgeht.",
+      station: "das Gerät, das bleibt",
+      here: "dieses Gerät",
+      recentre: "Zurück zur Fahrt",
+      offline: "Keine Kartenkacheln — hier ist kein Internet. Linie, Punkte und Entfernung werden aus Zahlen gezeichnet, die dieses Gerät schon hat.",
+      note: "Grün sofort beantwortet, gelb später, rot gar nicht. Die gestrichelte Linie ist die Verbindung, die gerade gemessen wird. Kartendaten © OpenStreetMap-Mitwirkende.",
     },
 
     log: {

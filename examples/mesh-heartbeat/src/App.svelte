@@ -57,6 +57,7 @@
   import { databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
   import { createCoverageTrack } from "./track.js";
   import { createHeardLog } from "./heard.js";
+  import RideMap from "./Map.svelte";
   import {
     decodeNodePosition,
     encodeNodePosition,
@@ -602,6 +603,47 @@
         ? { text: t.track.waiting, kind: "open" }
         : { text: t.track.silent, kind: "silent" };
 
+  /**
+   * The ride, as the map wants it: oldest first, with a colour and a label.
+   *
+   * Both roles produce the same shape out of different records — the rider
+   * from its own track, the stationary device from what reached it — because
+   * the picture is the same ride and two screens showing it is the point.
+   */
+  const mapPoints = $derived.by(() => {
+    if (role === "office") {
+      return heardRows
+        .filter((row) => row.position)
+        .map((row) => ({
+          lat: row.position.lat,
+          lon: row.position.lon,
+          at: row.at,
+          kind: row.answered ? "first" : "silent",
+          label: `${clockText(row.at)} · ${row.from ?? "?"} · ${
+            here ? formatDistance(distanceMetres(here, row.position)) : ""
+          }`,
+        }))
+        .reverse(); // heardRows is newest first; a ride is a line in time
+    }
+    return rows
+      .filter((point) => point.position)
+      .map((point) => ({
+        lat: point.position.lat,
+        lon: point.position.lon,
+        at: point.at,
+        kind: resultOf(point).kind,
+        label: `${clockText(point.at)} · ${resultOf(point).text}${
+          distanceFromOffice(point) == null
+            ? ""
+            : ` · ${formatDistance(distanceFromOffice(point))}`
+        }`,
+      }))
+      .reverse();
+  });
+
+  /** The half that does not move: the other device for a rider, itself for an office. */
+  const mapStation = $derived(role === "office" ? here : officeAt);
+
   onMount(() => {
     // The browser's fix is a fallback and starts straight away: waiting for
     // the node to prove it has no GPS would mean the first beats of a ride
@@ -830,6 +872,16 @@
         {t.where.officeNone}
       {/if}
     </p>
+  </section>
+
+  <section class="card">
+    <h2>{t.map.legend}</h2>
+    {#if mapPoints.length === 0 && !mapStation && !here}
+      <p class="dim" data-testid="map-empty">{t.map.empty}</p>
+    {:else}
+      <RideMap points={mapPoints} station={mapStation} {here} words={t.map} />
+      <p class="dim">{t.map.note}</p>
+    {/if}
   </section>
 
   {#if role === "office"}

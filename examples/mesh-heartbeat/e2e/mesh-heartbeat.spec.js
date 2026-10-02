@@ -208,3 +208,57 @@ test("a beat cut short by a channel change is dropped, not marked a silence", as
 
   await page.close();
 });
+
+test("the ride is drawn on both screens, and the link between them", async ({ context }) => {
+  // #184. The same ride on two maps: the rider draws its own track, the
+  // stationary device draws what reached it — and both draw the line that is
+  // being measured, because that is the thing a range test is about.
+  const roomId = room();
+  const office = await open(context, roomId, "role=office", OFFICE);
+  const rider = await open(context, roomId, "role=rider&every=0", OUT_THERE);
+
+  await expect(rider.getByTestId("here")).toContainText("48.41500", { timeout: 20_000 });
+  await rider.getByTestId("ask-now").click();
+  await expect(rider.getByTestId("track")).toContainText(/answered at once|sofort beantwortet/, {
+    timeout: 20_000,
+  });
+
+  // Leaflet draws circles and lines as SVG paths in its overlay pane. One
+  // beat, the station, and the dashed line between them is three.
+  const riderShapes = rider.locator('[data-testid="map"] .leaflet-overlay-pane path');
+  await expect(riderShapes).toHaveCount(3, { timeout: 10_000 });
+
+  // The office has the rider's place because it arrived on the round's first
+  // beat, so its map is the same picture from the other end.
+  const officeShapes = office.locator('[data-testid="map"] .leaflet-overlay-pane path');
+  await expect(officeShapes).toHaveCount(3, { timeout: 10_000 });
+
+  // Tiles are served locally in this suite, so the offline banner must be
+  // absent — otherwise the next test could not prove anything by its presence.
+  await expect(rider.getByTestId("map-offline")).toHaveCount(0);
+
+  await rider.close();
+  await office.close();
+});
+
+test("without tiles the ride is still drawn, and the page says why", async ({ context }) => {
+  // On a bicycle out of coverage this is the normal case, and an empty grey
+  // square with no explanation reads as a broken map rather than a missing
+  // network.
+  const roomId = room();
+  const rider = await open(context, roomId, "role=rider&every=0", OUT_THERE);
+  await rider.route("**/tile.openstreetmap.org/**", (route) => route.abort());
+
+  await rider.getByTestId("ask-now").click();
+  await expect(rider.getByTestId("map-offline")).toBeVisible({ timeout: 20_000 });
+  // Three beats of an unanswered round, the line through them, and this
+  // device — all drawn from numbers already here, with no tile server
+  // involved. The count is a floor rather than an exact number: what matters
+  // is that the ride survives the network, not how many shapes it takes.
+  const shapes = rider.locator('[data-testid="map"] .leaflet-overlay-pane path');
+  await expect
+    .poll(async () => await shapes.count(), { timeout: 20_000 })
+    .toBeGreaterThanOrEqual(3);
+
+  await rider.close();
+});
