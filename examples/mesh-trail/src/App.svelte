@@ -32,6 +32,8 @@
   import { onMount } from "svelte";
   import { creditHTML, lang } from "@le-space/funkpost-brand";
   import { connectCourier, watchWindowErrors } from "@le-space/funkpost-radio";
+  import { createChannelBook } from "@le-space/funkpost-radio/channels.js";
+  import { createWakeLock } from "@le-space/funkpost-radio/wake-lock.js";
   import {
     decodeNodePosition,
     encodeNodePosition,
@@ -45,7 +47,6 @@
   } from "@le-space/funkpost-radio/position.js";
   import {
     describeMeshtasticError,
-    preferredChannelIndex,
     DEFAULT_PREFERRED_CHANNEL,
   } from "@le-space/funkpost";
   import {
@@ -174,9 +175,6 @@
   let channels = $state([]);
   let txChannel = $state(0);
   let primaryChannel = $state(null);
-  let txChannelChosenByHand = false;
-  let preferenceApplied = false;
-  const channelMap = new Map();
 
   /** Where this device is, and what the browser says when it has none. */
   let here = $state(null);
@@ -221,7 +219,6 @@
 
   let log = $state([]);
   let keepAwake = $state(false);
-  let wakeSentinel = null;
 
   const build = __BUILD_INFO__;
 
@@ -324,7 +321,12 @@
       window.__nodeChannel = handleChannel;
       // Act on whatever the node reported while the connection was still
       // coming up, now that the switch does something.
-      applyPreferredChannel();
+      // Act on whatever the node reported while the connection was still
+      // coming up. Re-noting a channel the book already has is how it retries
+      // the preference, now that the switch does something.
+      for (const ch of channelBook.channels()) {
+        channelBook.note({ index: ch.index, role: ch.role, settings: { name: ch.name } });
+      }
       phase = "ready";
       startBeacons();
     } catch (e) {
@@ -335,45 +337,31 @@
   }
 
   /** One channel as the node reports it. Named, so a test can hand one over. */
-  async function handleChannel(channel) {
-    if (channel.role === 0) return; // DISABLED
-    const psk = channel.settings?.psk ?? new Uint8Array();
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
-    const entry = {
-      index: channel.index,
-      role: channel.role,
-      name: channel.settings?.name || "(default)",
-      fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
-    };
-    channelMap.set(entry.index, entry);
-    channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
-    if (entry.role === 1) primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
-    pushLog(w().log.nodeChannel(entry.index, entry.name, entry.fingerprint));
-    // Channels arrive one at a time and the wanted one need not be first.
-    applyPreferredChannel();
-  }
+  /** Named, so a test can hand one over. The book does the rest. */
+  const handleChannel = (channel) => channelBook.note(channel);
 
   /**
-   * Only ever moves off a channel nobody chose.
-   *
-   * This matters more here than in the other demos: two devices measuring each
-   * other must be on the same channel, and the index is per device, so a name
-   * is the only thing they can agree on without the operator comparing numbers
-   * at the kerb.
+   * The table, the fingerprints and the by-name preference live in the shared
+   * radio package — the same code four pages carried, and the one path that
+   * fails *silently* when it is wrong.
    */
-  function applyPreferredChannel() {
-    if (preferenceApplied || txChannelChosenByHand) return;
-    const index = preferredChannelIndex(channels, preferredChannel);
-    if (index == null) return;
-    preferenceApplied = true;
-    txChannel = index;
-    setTxChannelFn(index);
-    const ch = channels.find((c) => c.index === index);
-    pushLog(w().log.autoChannel(index, ch?.name, ch?.fingerprint));
-    // Another channel is another audience: what answered on the old one is no
-    // evidence about this one, and the track would be measuring two things.
-    changeChannel();
-  }
+  const channelBook = createChannelBook({
+    preferred: preferredChannel,
+    setTxChannel: (index) => setTxChannelFn(index),
+    onEvent: (event) => {
+      channels = channelBook.channels();
+      txChannel = channelBook.tx();
+      primaryChannel = channelBook.primary();
+      if (event.kind === "channel") {
+        const c = event.channel;
+        pushLog(w().log.nodeChannel(c.index, c.name, c.fingerprint));
+      }
+      if (event.kind === "preferred") {
+        pushLog(w().log.autoChannel(event.index, event.channel?.name, event.channel?.fingerprint));
+      }
+      if (event.kind === "changed") changeChannel();
+    },
+  });
 
   /**
     * A channel change invalidates everything heard so far.
@@ -653,30 +641,31 @@
 
   const ageText = (at) =>
     at == null ? "" : t.where.age(Math.max(0, Math.round((nowTick - at) / 1000)));
-  async function acquireWakeLock() {
-    try {
-      wakeSentinel = await navigator.wakeLock.request("screen");
-      wakeSentinel.addEventListener("release", () => (wakeSentinel = null));
-      pushLog(w().log.wakeOn);
-    } catch (e) {
-      keepAwake = false;
-      pushLog(w().log.wakeRefused(describeError(e)));
-    }
-  }
+  /**
+   * Shared, and it reports being *dropped* because mesh-calendar was alone in
+   * noticing that the browser takes the lock away when the page hides and
+   * never gives it back.
+   */
+  const screenLock = createWakeLock({
+    onEvent: (event) => {
+      if (event.kind === "on") pushLog(w().log.wakeOn);
+      if (event.kind === "off" || event.kind === "dropped") pushLog(w().log.wakeOff);
+      if (event.kind === "refused") {
+        keepAwake = false;
+        pushLog(w().log.wakeRefused(event.reason));
+      }
+    },
+  });
 
   async function toggleAwake() {
-    if (keepAwake) await acquireWakeLock();
-    else {
-      await wakeSentinel?.release();
-      wakeSentinel = null;
-      pushLog(w().log.wakeOff);
-    }
+    keepAwake = !keepAwake;
+    await screenLock.set(keepAwake);
   }
 
   // A lock is dropped whenever the page is hidden, and comes back only if
   // something asks again. Without this, one glance at a messenger ends it.
   const reacquireOnReturn = () => {
-    if (keepAwake && document.visibilityState === "visible" && !wakeSentinel) acquireWakeLock();
+    screenLock.reacquireIfWanted(document.visibilityState === "visible");
   };
 
   /**
@@ -710,12 +699,12 @@
     if (mode.kind === "bc" && params.get("autoconnect") !== "0") connect();
 
     const reacquireOnReturn = () => {
-      if (keepAwake && document.visibilityState === "visible") acquireWakeLock();
+      screenLock.reacquireIfWanted(document.visibilityState === "visible");
     };
     document.addEventListener("visibilitychange", reacquireOnReturn);
     return () => {
       document.removeEventListener("visibilitychange", reacquireOnReturn);
-      wakeSentinel?.release();
+      screenLock.release();
       stopWatchingBrowser?.();
       stopWindowErrors?.();
       if (tickTimer) clearInterval(tickTimer);
@@ -761,10 +750,8 @@
             data-testid="channel"
             value={txChannel}
             onchange={(e) => {
-              txChannelChosenByHand = true;
               txChannel = Number(e.currentTarget.value);
-              setTxChannelFn(txChannel);
-              const ch = channels.find((c) => c.index === txChannel);
+              const ch = channelBook.chooseByHand(txChannel);
               pushLog(w().log.handChannel(txChannel, ch?.name, ch?.fingerprint));
               changeChannel();
             }}

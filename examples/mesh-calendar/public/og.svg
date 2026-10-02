@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#0B0E15"/>
+  <circle cx="980" cy="86" r="3" fill="#EDF1F8" opacity="0.45"/><circle cx="1104" cy="190" r="2.5" fill="#EDF1F8" opacity="0.4"/><circle cx="1052" cy="520" r="2.5" fill="#EDF1F8" opacity="0.35"/><circle cx="880" cy="560" r="2" fill="#EDF1F8" opacity="0.3"/><circle cx="1150" cy="420" r="2" fill="#EDF1F8" opacity="0.3"/><circle cx="820" cy="110" r="2" fill="#EDF1F8" opacity="0.3"/>
+  <g transform="translate(96 15)"><rect x="64" y="214" width="172" height="172" rx="20" fill="none" stroke="#9A7BFF" stroke-width="20"/><path d="M 64 268 H 236" stroke="#9A7BFF" stroke-width="20"/><circle cx="150" cy="330" r="30" fill="#FF6B5B"/></g>
+  <text x="400" y="246" fill="#9A7BFF" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="30" font-weight="600" letter-spacing="2">THE EVENT PLANE</text>
+  <text x="400" y="330" fill="#EDF1F8" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="62" font-weight="700">mesh-calendar</text>
+  <text x="400" y="398" fill="#EDF1F8" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="36">A hairdresser's appointment book</text>
+  <text x="400" y="448" fill="#9AA6BC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="27">rules, not lists — three weeks of free slots in one frame</text>
+  <text x="400" y="540" fill="#6B7689" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="25">funkpost · a byte courier over LoRa® mesh radios · Le Space</text>
+</svg>

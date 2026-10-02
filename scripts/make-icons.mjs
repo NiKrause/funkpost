@@ -16,10 +16,13 @@
  *   node scripts/make-icons.mjs examples/mesh-trail
  */
 import { chromium } from "@playwright/test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const SHOTS = [
+  // The social card is not square: 1200×630 is what every scraper crops to,
+  // and a link with no picture is a link nobody clicks.
+  { from: "og.svg", to: "og.png", width: 1200, height: 630, optional: true },
   { from: "icon.svg", to: "icon-512.png", size: 512 },
   { from: "icon.svg", to: "icon-192.png", size: 192 },
   { from: "icon.svg", to: "apple-touch-icon.png", size: 180 },
@@ -36,22 +39,23 @@ const dir = resolve(app, "public");
 
 const browser = await chromium.launch();
 try {
-  for (const { from, to, size } of SHOTS) {
+  for (const { from, to, size, width = size, height = size, optional } of SHOTS) {
+    if (optional && !existsSync(resolve(dir, from))) continue;
     const svg = readFileSync(resolve(dir, from), "utf8");
     const page = await browser.newPage({
-      viewport: { width: size, height: size },
+      viewport: { width, height },
       // Device scale 1 and an explicit viewport: the PNG must be exactly the
       // size the manifest claims, and the test reads that out of the header.
       deviceScaleFactor: 1,
     });
     await page.setContent(
       `<!doctype html><meta charset="utf-8">` +
-        `<style>html,body{margin:0;padding:0;width:${size}px;height:${size}px;overflow:hidden}` +
-        `svg{display:block;width:${size}px;height:${size}px}</style>${svg}`,
+        `<style>html,body{margin:0;padding:0;width:${width}px;height:${height}px;overflow:hidden}` +
+        `svg{display:block;width:${width}px;height:${height}px}</style>${svg}`,
     );
     writeFileSync(resolve(dir, to), await page.screenshot({ omitBackground: false }));
     await page.close();
-    console.log(`${to.padEnd(24)} ${size}×${size}`);
+    console.log(`${to.padEnd(24)} ${width}×${height}`);
   }
 } finally {
   await browser.close();

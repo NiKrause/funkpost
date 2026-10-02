@@ -7,8 +7,27 @@
     <title>funkpost — demos</title>
     <meta
       name="description"
-      content="Two demos, one per data plane: a todo list and an appointment book, both replicating over a LoRa mesh with no IP path."
+      content="Four demos on one radio: a todo list, an appointment book, a range test and a walk — all over a LoRa mesh with no IP path."
     />
+    <!-- The social card. Absolute on purpose: a scraper does not run the page,
+         and several refuse to resolve a relative image. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="funkpost" />
+    <meta property="og:title" content="funkpost — four demos over a LoRa mesh" />
+    <meta
+      property="og:description"
+      content="A byte courier over LoRa® mesh radios: a todo list, an appointment book, a range test and a walk. No IP path anywhere."
+    />
+    <meta property="og:url" content="https://nikrause.github.io/funkpost/" />
+    <meta property="og:image" content="https://nikrause.github.io/funkpost/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Two cyan node rings with arcs of radio between them and a coral payload in the middle, on a dark ground: funkpost."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
     <!-- Before the first paint: the language (the address, then the last choice,
          then the browser) and a theme chosen earlier — brand.js keeps both. -->
     <script>
@@ -287,7 +306,7 @@
         <a class="demo" href="./mesh-heartbeat/">
           <span class="head">
             <h2>mesh-heartbeat</h2>
-            <span class="plane">no database</span>
+            <span class="plane">beats</span>
             <span class="pill"><span data-lang="en">a measurement</span><span data-lang="de">eine Messung</span></span>
           </span>
           <p data-lang="en">
@@ -325,7 +344,7 @@
         <a class="demo" href="./mesh-trail/">
           <span class="head">
             <h2>mesh-trail</h2>
-            <span class="plane">no database</span>
+            <span class="plane">positions</span>
             <span class="pill"><span data-lang="en">a walk</span><span data-lang="de">ein Spaziergang</span></span>
           </span>
           <p data-lang="en">

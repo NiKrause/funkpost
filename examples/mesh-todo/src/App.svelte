@@ -16,6 +16,8 @@
   import { FIELD_LOG_TOPIC } from "./pubsub-topics.js";
   import { createFieldLogBuffer } from "./field-log-buffer.js";
   import { applyGattQueue, watchWindowErrors } from "@le-space/funkpost-radio";
+  import { createChannelBook } from "@le-space/funkpost-radio/channels.js";
+  import { createWakeLock } from "@le-space/funkpost-radio/wake-lock.js";
   import {
     createDatabaseStack,
     joinOverInternet,
@@ -39,7 +41,6 @@
   } from "./stack.js";
   import {
     describeMeshtasticError,
-    preferredChannelIndex,
     DEFAULT_PREFERRED_CHANNEL,
   } from "@le-space/funkpost";
 
@@ -255,7 +256,6 @@
   let txChannel = $state(0);
   let myNode = $state("");
   let setTxChannelFn = () => {};
-  const channelMap = new Map();
 
   // Which channel to pick on its own, if the node has it. Index 0 is a poor
   // default for meeting somebody: the index is per-device, so the same channel
@@ -264,48 +264,51 @@
   const preferredChannel = params.has("channel")
     ? params.get("channel")
     : DEFAULT_PREFERRED_CHANNEL;
-  let txChannelChosenByHand = false;
-  let preferenceApplied = false;
 
   /**
    * Only ever moves off a channel nobody chose. Called once the connection is
    * up and again whenever a channel arrives — the node reports them one at a
    * time, and the one we want may not be first.
    */
-  function applyPreferredChannel() {
-    if (preferenceApplied || txChannelChosenByHand) return;
-    const index = preferredChannelIndex(channels, preferredChannel);
-    if (index == null) return;
-    preferenceApplied = true;
-    txChannel = index;
-    setTxChannelFn(index);
-    restartHeartbeat();
-    const ch = channels.find((c) => c.index === index);
-    pushLog(w().log.autoChannel(index, ch?.name, ch?.fingerprint));
-  }
+  /**
+   * The table, the fingerprints and the by-name preference live in the shared
+   * radio package now — this page's copy was 82–91 % the same as the others',
+   * and it is the one path that fails *silently* when it is wrong.
+   *
+   * Restarting the heartbeat on a change stays here: that is this page's own
+   * reaction to a different audience, not something a channel table should
+   * know about.
+   */
+  const channelBook = createChannelBook({
+    preferred: preferredChannel,
+    setTxChannel: (index) => setTxChannelFn(index),
+    onEvent: (event) => {
+      channels = channelBook.channels();
+      txChannel = channelBook.tx();
+      primaryChannel = channelBook.primary();
+      if (event.kind === "channel") {
+        const c = event.channel;
+        pushLog(w().log.nodeChannel(c.index, c.name, c.fingerprint, c.role === 1));
+      }
+      if (event.kind === "preferred") {
+        pushLog(w().log.autoChannel(event.index, event.channel?.name, event.channel?.fingerprint));
+      }
+      if (event.kind === "changed") {
+        // Another channel is another audience: the apps that answered on the
+        // old one are no evidence about this one. This used to happen only
+        // when somebody chose by hand; moving automatically happens before any
+        // peer is known, so it was a no-op there rather than a difference —
+        // but one place is better than two.
+        sync?.forgetPeers?.();
+        company = { peers: [], lastHeardAgoMs: null };
+        restartHeartbeat();
+      }
+    },
+  });
 
   /** One channel as the node reports it. Named, so a test can hand one over. */
-  async function handleChannel(channel) {
-    if (channel.role === 0) return; // DISABLED
-    const psk = channel.settings?.psk ?? new Uint8Array();
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
-    const entry = {
-      index: channel.index,
-      role: channel.role,
-      name: channel.settings?.name || "(default)",
-      fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
-    };
-    channelMap.set(entry.index, entry);
-    channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
-    if (entry.role === 1) {
-      primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
-    }
-    pushLog(w().log.nodeChannel(entry.index, entry.name, entry.fingerprint, entry.role === 1));
-    // Channels arrive one at a time and the wanted one need not be first.
-    // Before the connection resolves this is a no-op, so the call after it is
-    // the one that lands in the common case.
-    applyPreferredChannel();
-  }
+  /** Named, so a test can hand one over. The book does the rest. */
+  const handleChannel = (channel) => channelBook.note(channel);
 
   // Screen Wake Lock: phones auto-lock, and Web Bluetooth pauses with the
   // screen — the bench's quiet killer. Desktop screens do not take the radio
@@ -321,34 +324,30 @@
     /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
   const wakeLockSupported = "wakeLock" in navigator;
   let keepAwake = $state(false);
-  let wakeSentinel = null;
 
-  async function acquireWakeLock() {
-    try {
-      wakeSentinel = await navigator.wakeLock.request("screen");
-      wakeSentinel.addEventListener("release", () => {
-        wakeSentinel = null;
-        if (keepAwake) pushLog(w().log.wakeReleased);
-      });
-      pushLog(w().log.wakeOn);
-    } catch (e) {
-      keepAwake = false;
-      pushLog(w().log.wakeRefused(e.message));
-    }
-  }
+  /**
+   * Shared. The `dropped` event is this page's and mesh-calendar's noticing,
+   * kept rather than lost: the browser takes the lock away when the page hides
+   * and never gives it back.
+   */
+  const screenLock = createWakeLock({
+    onEvent: (event) => {
+      if (event.kind === "on") pushLog(w().log.wakeOn);
+      if (event.kind === "off") pushLog(w().log.wakeOff);
+      if (event.kind === "dropped") pushLog(w().log.wakeReleased);
+      if (event.kind === "refused") {
+        keepAwake = false;
+        pushLog(w().log.wakeRefused(event.reason));
+      }
+    },
+  });
 
   async function toggleAwake() {
-    if (keepAwake) {
-      await acquireWakeLock();
-    } else {
-      await wakeSentinel?.release();
-      wakeSentinel = null;
-      pushLog(w().log.wakeOff);
-    }
+    await screenLock.set(keepAwake);
   }
 
   const reacquireOnReturn = () => {
-    if (keepAwake && document.visibilityState === "visible" && !wakeSentinel) acquireWakeLock();
+    screenLock.reacquireIfWanted(document.visibilityState === "visible");
   };
   let showNeighbours = $state(false);
   let nowTick = $state(Date.now());
@@ -991,9 +990,12 @@
       // and channel selection is a path that fails *silently* when it is wrong
       // — so it is worth exercising rather than reasoning about.
       window.__nodeChannel = handleChannel;
-      // Now that the switch actually does something, act on whatever the node
-      // already told us while it was still connecting.
-      applyPreferredChannel();
+      // Act on whatever the node reported while the connection was still
+      // coming up. Re-noting a channel the book already has is how it retries
+      // the preference, now that the switch does something.
+      for (const ch of channelBook.channels()) {
+        channelBook.note({ index: ch.index, role: ch.role, settings: { name: ch.name } });
+      }
       budget = courier.budget();
       watchInvites(courier, (addr) => {
         if (db) return;
@@ -1531,16 +1533,11 @@
             <select
               bind:value={txChannel}
               onchange={() => {
-                // A hand-made choice is final: nothing may move the selector
-                // afterwards, or a late-arriving channel would silently undo it.
-                txChannelChosenByHand = true;
-                setTxChannelFn(txChannel);
-                // Another channel is another audience: the apps that answered
-                // on the old one are no evidence about this one.
-                sync?.forgetPeers?.();
-                company = { peers: [], lastHeardAgoMs: null };
-                restartHeartbeat();
-                const ch = channels.find((c) => c.index === txChannel);
+                // A hand-made choice is final: the book stops applying the
+                // preference from here on, or a late-arriving channel would
+                // silently undo it. Forgetting the old audience happens in the
+                // book's `changed` event, which this raises.
+                const ch = channelBook.chooseByHand(txChannel);
                 pushLog(w().log.handChannel(txChannel, ch?.name, ch?.fingerprint));
               }}
             >

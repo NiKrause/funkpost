@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#0B0E15"/>
+  <circle cx="980" cy="86" r="3" fill="#EDF1F8" opacity="0.45"/><circle cx="1104" cy="190" r="2.5" fill="#EDF1F8" opacity="0.4"/><circle cx="1052" cy="520" r="2.5" fill="#EDF1F8" opacity="0.35"/><circle cx="880" cy="560" r="2" fill="#EDF1F8" opacity="0.3"/><circle cx="1150" cy="420" r="2" fill="#EDF1F8" opacity="0.3"/><circle cx="820" cy="110" r="2" fill="#EDF1F8" opacity="0.3"/>
+  <g transform="translate(96 15)"><path d="M 150 206 A 94 94 0 0 1 244 300" fill="none" stroke="#58C7F3" stroke-width="14" opacity="0.5"/><circle cx="150" cy="300" r="56" fill="none" stroke="#58C7F3" stroke-width="18"/><path d="M 150 216 V 236 M 150 364 V 384 M 66 300 H 86 M 214 300 H 234" stroke="#58C7F3" stroke-width="18" stroke-linecap="round"/><circle cx="150" cy="300" r="26" fill="#FF6B5B"/></g>
+  <text x="400" y="246" fill="#58C7F3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="30" font-weight="600" letter-spacing="2">A RANGE TEST</text>
+  <text x="400" y="330" fill="#EDF1F8" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="62" font-weight="700">mesh-heartbeat</text>
+  <text x="400" y="398" fill="#EDF1F8" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="36">How far does the mesh reach?</text>
+  <text x="400" y="448" fill="#9AA6BC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="27">one device stays and answers, one travels and asks</text>
+  <text x="400" y="540" fill="#6B7689" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="25">funkpost · a byte courier over LoRa® mesh radios · Le Space</text>
+</svg>
