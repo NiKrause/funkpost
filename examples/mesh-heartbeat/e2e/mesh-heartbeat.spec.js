@@ -4,6 +4,7 @@
  * and a track that says where each beat went out from and what came back.
  */
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { open, room } from "./devices.js";
 
 // The office, and a spot about 1.2 km away — far enough that a wrong scale
@@ -263,6 +264,39 @@ test("without tiles the ride is still drawn, and the page says why", async ({ co
   await rider.close();
 });
 
+test("the ride can be taken off the device", async ({ context }) => {
+  // #180, #191: until now a run lived on the screen and in a screenshot, so a
+  // flat battery was the end of the evening's only measurement.
+  const roomId = room();
+  const office = await open(context, roomId, "role=office", OFFICE);
+  const rider = await open(context, roomId, "role=rider&every=0", OUT_THERE);
+  await expect(rider.getByTestId("here")).toContainText("48.41500", { timeout: 20_000 });
+  await rider.getByTestId("ask-now").click();
+  await expect(rider.getByTestId("track")).toContainText(/answered at once|sofort beantwortet/, {
+    timeout: 20_000,
+  });
+
+  const download = await Promise.all([
+    rider.waitForEvent("download"),
+    rider.getByTestId("save-ride").click(),
+  ]).then(([d]) => d);
+  expect(download.suggestedFilename()).toMatch(/^mesh-heartbeat-rider-.*\.csv$/);
+
+  const csv = await readFile(await download.path(), "utf8");
+  const lines = csv.trim().split("\n");
+  expect(lines[0]).toContain("metres_from_station");
+  expect(lines[1]).toContain("48.415"); // the place the beat went out from
+  expect(lines[1]).toContain("answered");
+
+  // The other half writes its own file, of what reached it.
+  const heard = await Promise.all([
+    office.waitForEvent("download"),
+    office.getByTestId("save-ride").click(),
+  ]).then(([d]) => d);
+  expect(heard.suggestedFilename()).toMatch(/^mesh-heartbeat-office-.*\.csv$/);
+
+  await rider.close();
+  await office.close();
 test("the hour's allowance is on screen, because this page spends it unattended", async ({
   context,
 }) => {

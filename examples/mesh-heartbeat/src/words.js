@@ -105,6 +105,7 @@ export const WORDS = {
       silent: "no answer",
       waiting: "waiting…",
       clear: "Clear the track",
+      save: "Save as a file",
       confirmClear: "Clear every recorded beat? This cannot be undone.",
       summary: ({ sent, reached, firstBeat, located }) =>
         `${sent} ${plural(sent, "beat", "beats")} · ${reached} answered · ${firstBeat} at once · ${located} with a place`,
@@ -130,6 +131,7 @@ export const WORDS = {
       yes: "answered",
       no: "not answered",
       clear: "Clear what was heard",
+      save: "Save as a file",
       note: "A place arrives on the first beat of each round, so the beats in between have none rather than repeating the last one. The device that stays announces its own position once.",
       columns: {
         time: "time",
@@ -172,6 +174,7 @@ export const WORDS = {
       notAsked: "✗ this round could not go out — not recorded as a silence",
       started: (role) => `heartbeat started · ${role}`,
       stopped: "heartbeat stopped",
+      saved: "ride saved as a file",
       region: (name) => `node region ${name}`,
       nodeStatus: (name) => `node ${name}`,
       nodeChannel: (index, name, print) => `channel ${index} »${name}« ⌗${print}`,
@@ -277,6 +280,7 @@ export const WORDS = {
       silent: "keine Antwort",
       waiting: "wartet…",
       clear: "Fahrt löschen",
+      save: "Als Datei sichern",
       confirmClear: "Alle festgehaltenen Beats löschen? Das lässt sich nicht rückgängig machen.",
       summary: ({ sent, reached, firstBeat, located }) =>
         `${sent} ${plural(sent, "Beat", "Beats")} · ${reached} beantwortet · ${firstBeat} sofort · ${located} mit Ort`,
@@ -300,6 +304,7 @@ export const WORDS = {
       yes: "beantwortet",
       no: "nicht beantwortet",
       clear: "Empfangenes löschen",
+      save: "Als Datei sichern",
       note: "Ein Ort kommt auf dem ersten Beat jeder Runde, die Beats dazwischen haben keinen — statt den letzten zu wiederholen. Das stehende Gerät sagt einmal, wo es selbst steht.",
       columns: {
         time: "Zeit",
@@ -339,6 +344,7 @@ export const WORDS = {
       notAsked: "✗ diese Runde konnte nicht raus — nicht als Schweigen gewertet",
       started: (role) => `Heartbeat gestartet · ${role}`,
       stopped: "Heartbeat gestoppt",
+      saved: "Fahrt als Datei gesichert",
       region: (name) => `Knotenregion ${name}`,
       nodeStatus: (name) => `Knoten ${name}`,
       nodeChannel: (index, name, print) => `Kanal ${index} »${name}« ⌗${print}`,
