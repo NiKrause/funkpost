@@ -155,6 +155,15 @@ export const WORDS = {
       note: "Green answered at once, amber answered later, red not at all. The dashed line is the link being measured right now. Map data © OpenStreetMap contributors.",
     },
 
+    // The hour's allowance, worded as mesh-todo words it — the same number on
+    // two screens should not read as two different numbers.
+    airtime: {
+      title: "airtime budget left this hour",
+      left: (percent, region) => `${percent} % of this hour's airtime left (${region})`,
+      spent: "Airtime spent.",
+      inMinutes: (minutes) => `Nothing can go out for about ${minutes} more ${minutes === 1 ? "minute" : "minutes"}.`,
+    },
+
     log: {
       legend: "Field log",
       beat: (n, of) => `→ beat ${n}/${of}`,
@@ -162,6 +171,7 @@ export const WORDS = {
         `← ${type} from ${from}${n ? ` (beat ${n})` : ""} ${bytes ?? "?"} B`,
       echo: (to, n) => `→ echo to ${to}${n ? ` (beat ${n})` : ""}`,
       alone: "✗ no answer this round",
+      notAsked: "✗ this round could not go out — not recorded as a silence",
       started: (role) => `heartbeat started · ${role}`,
       stopped: "heartbeat stopped",
       saved: "ride saved as a file",
@@ -317,6 +327,13 @@ export const WORDS = {
       note: "Grün sofort beantwortet, gelb später, rot gar nicht. Die gestrichelte Linie ist die Verbindung, die gerade gemessen wird. Kartendaten © OpenStreetMap-Mitwirkende.",
     },
 
+    airtime: {
+      title: "verbleibendes Sendezeit-Budget dieser Stunde",
+      left: (percent, region) => `${percent} % der Sendezeit dieser Stunde übrig (${region})`,
+      spent: "Sendezeit aufgebraucht.",
+      inMinutes: (minutes) => `Für etwa ${minutes} ${minutes === 1 ? "Minute" : "Minuten"} geht nichts raus.`,
+    },
+
     log: {
       legend: "Feldprotokoll",
       beat: (n, of) => `→ Beat ${n}/${of}`,
@@ -324,6 +341,7 @@ export const WORDS = {
         `← ${type} von ${from}${n ? ` (Beat ${n})` : ""} ${bytes ?? "?"} B`,
       echo: (to, n) => `→ echo an ${to}${n ? ` (Beat ${n})` : ""}`,
       alone: "✗ keine Antwort in dieser Runde",
+      notAsked: "✗ diese Runde konnte nicht raus — nicht als Schweigen gewertet",
       started: (role) => `Heartbeat gestartet · ${role}`,
       stopped: "Heartbeat gestoppt",
       saved: "Fahrt als Datei gesichert",

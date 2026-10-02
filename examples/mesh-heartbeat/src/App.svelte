@@ -170,6 +170,26 @@
   let rows = $state([]); // the track, newest first for the screen
   let heardRows = $state([]); // what reached this device, newest first
   let heardSummary = $state({ heard: 0, answered: 0, askers: 0, echoes: 0, located: 0 });
+  /**
+   * What is left of this hour, which is law rather than preference.
+   *
+   * This page schedules itself and runs for an hour in somebody's pocket — it
+   * is the demo with the strongest claim on this number and was the one
+   * without it. mesh-todo only transmits when a person presses something, and
+   * it is the one that had the bar.
+   */
+  let budget = $state(null);
+  let blockedForMs = $state(0);
+  let budgetTimer = null;
+  /**
+   * Set when a send failed inside the round that is running.
+   *
+   * A silence is evidence only if the beat actually went out. A round that
+   * could not transmit — an exhausted hour, a node that refused — says nothing
+   * about the place it was sent from, so it is abandoned rather than written
+   * down as a red mark somebody might ride back to and puzzle over.
+   */
+  let roundFailed = false;
   let summary = $state({ sent: 0, reached: 0, firstBeat: 0, located: 0 });
   let log = $state([]);
 
@@ -240,6 +260,15 @@
   const refreshTrack = () => {
     rows = track.points().reverse();
     summary = track.summary();
+  };
+
+  const refreshBudget = () => {
+    if (!courier) return;
+    budget = courier.budget?.() ?? null;
+    // Asking costs nothing and does not spend the budget — that is what
+    // `timeUntilAffordable` is for. Priced for a beat that carries a place,
+    // because that is the biggest thing this page sends.
+    blockedForMs = courier.timeUntilAffordable?.(BEAT_BYTES + POSITION_BYTES) ?? 0;
   };
 
   const refreshHeard = () => {
@@ -319,6 +348,11 @@
       // coming up, now that the switch does something.
       applyPreferredChannel();
       phase = "ready";
+      refreshBudget();
+      // The bucket refills continuously, so the only way a screen can say
+      // "another twelve minutes" and still be right a minute later is to ask
+      // again. Five seconds is far below the resolution anyone reads it at.
+      budgetTimer = setInterval(refreshBudget, 5_000);
       startHeartbeat();
     } catch (e) {
       phase = "idle";
@@ -459,6 +493,7 @@
 
   function onBeatEvent(event) {
     if (event.kind === "beat") {
+      if (event.beat === 1) roundFailed = false;
       pingOut = { at: Date.now(), n: event.beat, of: event.of };
       roundRunning = true;
       // The position is read at the moment the beat goes out, not when the
@@ -524,13 +559,21 @@
       // a round that was answered by an earlier one — an echo slower than the
       // fifteen seconds to the next beat — and that beat is a silence of its
       // own rather than a row left waiting for an answer that will never come.
-      const stillOpen = track.unanswered();
-      if (!event.answered) pushLog(w().log.alone);
+      // A round that could not transmit is not a measurement. Abandoned, so
+      // the map does not grow a red mark for a place that was never asked.
+      const stillOpen = roundFailed && !event.answered ? track.abandon() : track.unanswered();
+      if (!event.answered) pushLog(roundFailed ? w().log.notAsked : w().log.alone);
       if (stillOpen || !event.answered) refreshTrack();
+      roundFailed = false;
+      refreshBudget();
     }
     // Logged only: `beatState.lastError` carries it on screen for as long as
     // it is still true, and the heartbeat clears that itself.
-    if (event.kind === "error") pushLog(w().log.error(describeError(event.error)));
+    if (event.kind === "error") {
+      roundFailed = true;
+      refreshBudget();
+      pushLog(w().log.error(describeError(event.error)));
+    }
   }
 
   const askNow = () => heartbeat?.beatNow();
@@ -601,6 +644,20 @@
       share: Math.round((perHour / (500 * 60)) * 100),
     };
   });
+
+  /** Null where the region has no duty cycle at all, which is not everywhere. */
+  const budgetPercent = $derived(
+    budget?.dutyCycle == null || !Number.isFinite(budget.remainingAirtimeMs)
+      ? null
+      : Math.max(
+          0,
+          Math.min(100, Math.round((budget.remainingAirtimeMs / (budget.dutyCycle * 3_600_000)) * 100)),
+        ),
+  );
+  const airtimeBlocked = $derived(blockedForMs > 0);
+  const untilFree = $derived(
+    blockedForMs <= 0 ? "" : t.airtime.inMinutes(Math.max(1, Math.ceil(blockedForMs / 60_000))),
+  );
 
   const distanceFromOffice = (point) =>
     point.position && officeAt ? distanceMetres(officeAt, point.position) : null;
@@ -686,6 +743,8 @@
       document.removeEventListener("visibilitychange", reacquireOnReturn);
       wakeSentinel?.release();
       stopWatchingBrowser?.();
+      stopWindowErrors?.();
+      if (budgetTimer) clearInterval(budgetTimer);
       heartbeat?.stop();
       radio?.close?.();
     };
@@ -750,6 +809,18 @@
             {/each}
           </select>
         </label>
+      </p>
+    {/if}
+    {#if budgetPercent != null}
+      <div class="bar" title={t.airtime.title} data-testid="airtime-bar">
+        <div class="fill" class:low={budgetPercent <= 15} style={`width:${budgetPercent}%`}></div>
+      </div>
+      <p class="dim" data-testid="airtime">
+        {#if airtimeBlocked}
+          <strong>{t.airtime.spent}</strong> {untilFree}
+        {:else}
+          {t.airtime.left(budgetPercent, budget.region)}
+        {/if}
       </p>
     {/if}
     {#if airUtil != null}
@@ -824,7 +895,7 @@
         class="primary"
         data-testid="ask-now"
         onclick={askNow}
-        disabled={phase !== "ready" || !heartbeat || roundRunning}
+        disabled={phase !== "ready" || !heartbeat || roundRunning || airtimeBlocked}
       >
         {t.send}
       </button>
@@ -1177,6 +1248,26 @@
     flex-wrap: wrap;
     gap: 1rem;
   }
+  .bar {
+    height: 0.4rem;
+    border-radius: 0.2rem;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    overflow: hidden;
+    margin: 0.6rem 0 0.3rem;
+  }
+
+  .fill {
+    height: 100%;
+    background: #34d399;
+    transition: width 0.4s ease;
+  }
+
+  /* The last sixth of an hour's allowance, where the number stops being
+     background information and starts deciding whether a ride continues. */
+  .fill.low {
+    background: #fbbf24;
+  }
+
   .lamp {
     display: flex;
     gap: 0.5rem;
