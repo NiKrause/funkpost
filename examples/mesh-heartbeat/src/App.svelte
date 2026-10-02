@@ -63,6 +63,7 @@
     decodeNodePosition,
     encodeNodePosition,
     watchBrowserPosition,
+    askForPosition,
     formatPosition,
     distanceMetres,
     formatDistance,
@@ -235,6 +236,18 @@
   /** A round is in the air, so there is nothing for the button to ask. */
   let roundRunning = $state(false);
   let stopWatchingBrowser = null;
+  /**
+   * What the browser last said when it had no position to give.
+   *
+   * Reported from the field: the map came up, nothing ever moved, and the page
+   * had nothing to say about it — through a tethered hotspot and through no
+   * internet at all. The receiver's silence was indistinguishable from the
+   * page never having asked.
+   */
+  let fixTrouble = $state(null);
+  /** Ticks so the age of the last fix is a number that visibly moves. */
+  let nowTick = $state(Date.now());
+  let tickTimer = null;
   let stopWindowErrors = null;
   const track = createCoverageTrack();
   // The stationary half's own record. It is not the ride: it is what reached
@@ -412,7 +425,19 @@
 
   // ------------------------------------------------------------- the position
 
+  /** Ask again from a click, which is where Android would rather be asked. */
+  function askAgain() {
+    askForPosition(setHere, {
+      onTrouble: ({ kind, message }) => {
+        fixTrouble = kind;
+        pushLog(w().log.noFix(kind, message));
+      },
+    });
+  }
+
   function setHere(fix) {
+    // Whatever the browser was complaining about, it has stopped being true.
+    if (fix.source === "browser") fixTrouble = null;
     // The node wins. A browser fix that arrives after one from the node is the
     // phone's opinion about a place the antenna already reported, and mixing
     // the two silently is how a track ends up with two accuracies and no note
@@ -732,7 +757,15 @@
     // the node to prove it has no GPS would mean the first beats of a ride
     // have no place against them, and those are the ones taken at the office
     // where everything still works.
-    stopWatchingBrowser = watchBrowserPosition(setHere);
+    stopWatchingBrowser = watchBrowserPosition(setHere, {
+      onTrouble: ({ kind, message }) => {
+        fixTrouble = kind;
+        pushLog(w().log.noFix(kind, message));
+      },
+    });
+    // Two seconds: slow enough to cost nothing, fast enough that "4 s ago"
+    // reads as a thing that is still happening rather than a frozen label.
+    tickTimer = setInterval(() => (nowTick = Date.now()), 2_000);
     // The fake mesh needs no permission and no chooser, so making it a button
     // press only costs a click — mesh-todo connects it on load for the same
     // reason. A real radio always waits for the gesture: Web Bluetooth
@@ -744,6 +777,7 @@
       wakeSentinel?.release();
       stopWatchingBrowser?.();
       stopWindowErrors?.();
+      if (tickTimer) clearInterval(tickTimer);
       if (budgetTimer) clearInterval(budgetTimer);
       heartbeat?.stop();
       radio?.close?.();
@@ -955,10 +989,22 @@
       {#if here}
         <span class="mono">{formatPosition(here)}</span>
         <span class="dim"> · {here.source === "node" ? t.where.node : t.where.browser}</span>
+        {#if here.accuracy != null}
+          <span class="dim"> · {t.where.accuracy(Math.round(here.accuracy))}</span>
+        {/if}
+        {#if here.at}
+          <span class="dim"> · {t.where.age(Math.max(0, Math.round((nowTick - here.at) / 1000)))}</span>
+        {/if}
       {:else}
         <span class="dim">{t.where.none} — {t.where.waiting}</span>
       {/if}
     </p>
+    {#if fixTrouble && here?.source !== "node"}
+      <p class="dim" data-testid="fix-trouble">{t.where.trouble[fixTrouble]}</p>
+      {#if fixTrouble !== "unsupported"}
+        <button class="quiet" data-testid="ask-position" onclick={askAgain}>{t.where.ask}</button>
+      {/if}
+    {/if}
     <p data-testid="office-at" class="dim">
       {#if officeAt}
         {t.where.office} <span class="mono">{formatPosition(officeAt)}</span>

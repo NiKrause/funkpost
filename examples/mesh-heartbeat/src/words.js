@@ -96,6 +96,17 @@ export const WORDS = {
       waiting: "beats are still recorded, just without a place",
       office: "The other device says it is at",
       officeNone: "the other device has not said where it is",
+      // What the browser is doing when there is no position — because an empty
+      // line is indistinguishable from a page that never asked.
+      accuracy: (metres) => `±${metres} m`,
+      age: (seconds) => (seconds < 2 ? "just now" : `${seconds} s ago`),
+      ask: "Ask for my location",
+      trouble: {
+        searching: "Looking for a fix — nothing yet. Without a SIM the receiver has no assistance data and reads the satellites' own almanac, which takes minutes and needs a view of the sky.",
+        denied: "This page is blocked from using your location. A button cannot undo that — allow it in the browser's settings for this site.",
+        unavailable: "The receiver answered with nothing. Indoors that is the normal answer: without network location only satellites are left.",
+        unsupported: "This browser offers no location here. A page served over plain HTTP cannot ask for one — it is a secure-context feature.",
+      },
     },
 
     track: {
@@ -174,6 +185,7 @@ export const WORDS = {
       notAsked: "✗ this round could not go out — not recorded as a silence",
       started: (role) => `heartbeat started · ${role}`,
       stopped: "heartbeat stopped",
+      noFix: (kind, message) => `! no position (${kind})${message ? `: ${message}` : ""}`,
       saved: "ride saved as a file",
       region: (name) => `node region ${name}`,
       nodeStatus: (name) => `node ${name}`,
@@ -271,6 +283,15 @@ export const WORDS = {
       waiting: "Beats werden trotzdem festgehalten, nur ohne Ort",
       office: "Das andere Gerät steht bei",
       officeNone: "das andere Gerät hat nicht gesagt, wo es steht",
+      accuracy: (metres) => `±${metres} m`,
+      age: (seconds) => (seconds < 2 ? "gerade eben" : `vor ${seconds} s`),
+      ask: "Nach dem Standort fragen",
+      trouble: {
+        searching: "Sucht noch — bisher nichts. Ohne SIM hat der Empfänger keine Hilfsdaten und liest den Almanach von den Satelliten selbst; das dauert Minuten und braucht freien Himmel.",
+        denied: "Dieser Seite ist der Standort gesperrt. Ein Knopf hebt das nicht auf — in den Browser-Einstellungen für diese Seite erlauben.",
+        unavailable: "Der Empfänger hat nichts geliefert. Drinnen ist das die normale Antwort: ohne Netzwerk-Ortung bleiben nur Satelliten.",
+        unsupported: "Dieser Browser bietet hier keinen Standort an. Eine Seite über einfaches HTTP darf gar nicht fragen — das geht nur über HTTPS.",
+      },
     },
 
     track: {
@@ -344,6 +365,7 @@ export const WORDS = {
       notAsked: "✗ diese Runde konnte nicht raus — nicht als Schweigen gewertet",
       started: (role) => `Heartbeat gestartet · ${role}`,
       stopped: "Heartbeat gestoppt",
+      noFix: (kind, message) => `! keine Position (${kind})${message ? `: ${message}` : ""}`,
       saved: "Fahrt als Datei gesichert",
       region: (name) => `Knotenregion ${name}`,
       nodeStatus: (name) => `Knoten ${name}`,

@@ -5,7 +5,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { open, room } from "./devices.js";
+import { open, room, refusePosition, serveTiles } from "./devices.js";
 
 // The office, and a spot about 1.2 km away — far enough that a wrong scale
 // factor would show as a wrong number rather than as a rounding difference.
@@ -316,4 +316,27 @@ test("the hour's allowance is on screen, because this page spends it unattended"
   await expect(rider.getByTestId("ask-now")).toBeEnabled();
 
   await rider.close();
+});
+
+test("a browser that gives no position says so, instead of a map that never moves", async ({
+  context,
+}) => {
+  // Reported from the field: the map came up, nothing moved, and the page had
+  // nothing to say — through a tethered hotspot and through no internet at
+  // all. The error callback was empty, so the receiver's silence and a page
+  // that never asked looked identical.
+  const roomId = room();
+  const page = await context.newPage();
+  await serveTiles(page);
+  await refusePosition(page, 1); // PERMISSION_DENIED
+  await page.goto(`/?mesh=bc&room=${roomId}&preset=SHORT_TURBO&gap=150&log=1&role=rider&every=0`);
+
+  await expect(page.getByTestId("fix-trouble")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("fix-trouble")).toContainText(/blocked|gesperrt/);
+  // And a way to ask again, because a dismissed prompt leaves no trace a page
+  // can read and reloading would lose the ride.
+  await expect(page.getByTestId("ask-position")).toBeVisible();
+  await expect(page.getByTestId("log")).toContainText(/no position \(denied\)|keine Position \(denied\)/);
+
+  await page.close();
 });

@@ -42,6 +42,27 @@ export async function serveTiles(page) {
   );
 }
 
+/**
+ * A browser that will not give a position, and says why.
+ *
+ * The case reported from the field: the map comes up and nothing ever moves.
+ * Install before `open`, since the page starts watching on mount.
+ */
+export async function refusePosition(page, code = 1) {
+  await page.addInitScript((errorCode) => {
+    const fail = (_ok, onError) =>
+      setTimeout(() => onError({ code: errorCode, message: "stubbed" }), 0);
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        watchPosition: (ok, onError) => (fail(ok, onError), 1),
+        getCurrentPosition: fail,
+        clearWatch() {},
+      },
+    });
+  }, code);
+}
+
 export async function open(context, roomId, query = "", position = null) {
   const page = await context.newPage();
   await serveTiles(page);
