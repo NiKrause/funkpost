@@ -199,12 +199,21 @@ pauses when the screen locks and nobody is watching the phone on a bicycle —
 and check the **channel fingerprint** on both devices, because a mismatch is
 silent and looks exactly like being out of range.
 
+## Taking the ride with you
+
+*Save as a file* writes a CSV, on either half. The rider's file is the track —
+time, beat, place, result, who answered, metres from the stationary device. The
+stationary device's file is what reached it: time, type, sender, beat number,
+bytes, place, and whether it answered. Same evening, two files, meant to be
+read side by side.
+
+CSV because the first thing anybody does with a ride is sort it by distance.
+There is no server involved: the browser is handed a blob and that is all.
+
 ## What it has not shown yet
 
 - **The ride itself** ([#180](https://github.com/NiKrause/funkpost/issues/180)).
   Built and deployed 2026-09-29, and that is all it proves.
-- **Export.** The track lives on the screen and in a screenshot. Nothing
-  writes a file yet.
 
 ---
 

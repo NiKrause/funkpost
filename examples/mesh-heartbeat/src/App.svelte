@@ -57,6 +57,7 @@
   import { databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
   import { createCoverageTrack } from "./track.js";
   import { createHeardLog } from "./heard.js";
+  import { rideToCsv, heardToCsv, rideFilename, downloadText } from "./ride-file.js";
   import RideMap from "./Map.svelte";
   import {
     decodeNodePosition,
@@ -560,6 +561,22 @@
     if (keepAwake && document.visibilityState === "visible" && !wakeSentinel) acquireWakeLock();
   };
 
+  /**
+   * Take the ride off the device.
+   *
+   * An hour of somebody's time and six minutes of a rationed band should not
+   * be the most perishable thing in the experiment — until now a run lived on
+   * the screen and in a screenshot, and a flat battery was the end of it.
+   */
+  function saveRide() {
+    const text =
+      role === "office"
+        ? heardToCsv(heardLog.rows().slice().reverse())
+        : rideToCsv(track.points(), { distance: distanceFromOffice });
+    downloadText(rideFilename(role), text);
+    pushLog(w().log.saved);
+  }
+
   function clearTrack() {
     if (!confirm(w().track.confirmClear)) return;
     track.clear();
@@ -937,6 +954,7 @@
           </table>
         </div>
         <p class="dim">{t.heard.note}</p>
+        <button class="quiet" data-testid="save-ride" onclick={saveRide}>{t.heard.save}</button>
         <button class="quiet" data-testid="clear-track" onclick={clearTrack}>{t.heard.clear}</button>
       {/if}
     </section>
@@ -972,6 +990,7 @@
           </tbody>
         </table>
       </div>
+      <button class="quiet" data-testid="save-ride" onclick={saveRide}>{t.track.save}</button>
       <button class="quiet" data-testid="clear-track" onclick={clearTrack}>{t.track.clear}</button>
     {/if}
   </section>
