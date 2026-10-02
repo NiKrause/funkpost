@@ -26,11 +26,15 @@ async function keepTheShell() {
   try {
     const cache = await caches.open(CACHE);
     const root = new URL(import.meta.env.BASE_URL, location.origin).href;
+    // …and the page actually open, which under /de/ is not the root. A visitor
+    // who arrived on the German address would otherwise cache every asset and
+    // not the one page they came for, and find it missing offline.
+    const here = new URL("./", location.href).href;
     const assets = performance
       .getEntriesByType("resource")
       .map((entry) => entry.name)
       .filter((url) => url.startsWith(location.origin) && /\.(js|css|webmanifest)(\?|$)/.test(url));
-    await cache.addAll([...new Set([root, ...assets])]);
+    await cache.addAll([...new Set([root, here, ...assets])]);
     // Say so, once it is actually true. A service worker becomes the page's
     // controller well before the shell is stored, so "controlled" is not the
     // same as "will open offline" — and only the second one is worth claiming.

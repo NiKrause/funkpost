@@ -115,6 +115,16 @@ function startingLang() {
     write(LANG_KEY, asked);
     return asked;
   }
+  // A language can also be an address. The demos publish a page per language
+  // because a social card is read by a scraper that cannot see a setting —
+  // and a page that announces itself as German in its own URL and then renders
+  // in English because of something stored months ago is worse than no German
+  // page at all. The path is as deliberate as `?lang=`, so it counts the same.
+  const fromPath = location.pathname.match(/\/(de|en)\/?$/)?.[1];
+  if (LANGS.includes(fromPath)) {
+    write(LANG_KEY, fromPath);
+    return fromPath;
+  }
   const saved = read(LANG_KEY);
   return LANGS.includes(saved) ? saved : browserLang();
 }

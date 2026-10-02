@@ -34,9 +34,16 @@
 const CACHE = "funkpost-mesh-todo-v2";
 
 self.addEventListener("install", (event) => {
-  // Take the shell now, so the very first reload is already covered.
+  // Take the shell now, so the very first reload is already covered. Both
+  // shells: the navigation that registers a worker is over before the worker
+  // is active, so install time is the only chance to cover the *first* reload
+  // — and somebody who arrived on the German page would otherwise find the
+  // one page they had actually visited missing from the cache.
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.add("./")).catch(() => {}),
+    caches
+      .open(CACHE)
+      .then((cache) => Promise.all([cache.add("./"), cache.add("./de/")].map((p) => p.catch(() => {}))))
+      .catch(() => {}),
   );
   self.skipWaiting();
 });
@@ -59,7 +66,13 @@ self.addEventListener("fetch", (event) => {
   // A navigation carries no fragment, so `#/b/…` arrives as a plain request
   // for the app root — which is exactly what we cached.
   const navigation = request.mode === "navigate";
-  const key = navigation ? new Request("./", { credentials: "same-origin" }) : request;
+  // The shell of *this* page, not of the worker's own directory. `new Request("./")`
+  // resolves against sw.js, so with a second page one level down — /de/ — every
+  // navigation there was keyed to the English shell: offline, a German link
+  // served an English page, and nothing anywhere said why.
+  const key = navigation
+    ? new Request(new URL("./", request.url), { credentials: "same-origin" })
+    : request;
 
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {

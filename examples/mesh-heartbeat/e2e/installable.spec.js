@@ -14,6 +14,7 @@
  * the cache afterwards rather than merely promised.
  */
 import { test, expect } from "@playwright/test";
+import { WORDS } from "../src/words.js";
 
 test("the worker registers and the shell is really cached", async ({ page }) => {
   await page.goto("/");
@@ -59,4 +60,40 @@ test("everything the manifest names is actually served", async ({ page, request 
 
   const touch = await request.get("/apple-touch-icon.png");
   expect(touch.status(), "iOS ignores the manifest and reads this").toBe(200);
+});
+
+/**
+ * The German address, which exists because a scraper cannot be told a language.
+ *
+ * `test/installable.test.js` checks what the generator writes into `/de/`. This
+ * checks the two things a file cannot show: that the page boots in German from
+ * the address alone — no query, no stored choice — and that what it then caches
+ * is the page somebody actually opened.
+ */
+test("the German address opens in German and caches itself", async ({ page, request }) => {
+  await page.goto("/de/");
+
+  // From the path alone. A reader who was sent this link has no `?lang=de` and
+  // nothing in storage, and the bootstrap runs before the first paint.
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await expect(page.getByText(WORDS.de.role.legend)).toBeVisible();
+
+  await expect(page.locator("html")).toHaveAttribute("data-offline-ready", "true", {
+    timeout: 30_000,
+  });
+  const paths = await page.evaluate(async () => {
+    const cache = await caches.open((await caches.keys())[0]);
+    return (await cache.keys()).map((r) => new URL(r.url).pathname);
+  });
+  // The page it came for, not only the root one level up — which is what was
+  // cached before, leaving a German reader with an English shell offline.
+  expect(paths).toContain("/de/");
+
+  // And its own manifest, so installing from here installs the German app.
+  const manifest = await (await request.get("/de/manifest.webmanifest")).json();
+  expect(manifest.description).toMatch(/[äöüß]/);
+  for (const icon of manifest.icons) {
+    const at = new URL(icon.src, "http://localhost/de/").pathname;
+    expect((await request.get(at)).status(), `${icon.src} → ${at}`).toBe(200);
+  }
 });

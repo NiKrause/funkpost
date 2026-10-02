@@ -10,6 +10,12 @@ name: Deploy the demos to GitHub Pages
 #   https://nikrause.github.io/funkpost/mesh-trail/     mesh-trail     (everyone on one map)
 #   https://nikrause.github.io/funkpost/termine/        → mesh-calendar
 #
+# …and every page a second time under /de/, because a social card is read by a
+# scraper that will not run the page: the only way a shared link previews in
+# German is for German to have an address of its own. The German pages are
+# generated at build time by scripts/make-german-pages.mjs, which is why that
+# directory is not in paths-ignore below.
+#
 # /termine/ was mesh-calendar's home and was documented as a ONE-WAY DOOR:
 # every .ics ever downloaded carries a change/cancel link pointing at it, and a
 # calendar entry from last spring must still lead somewhere. Renaming the
@@ -38,7 +44,6 @@ on:
       - "docs/**"
       - "**/*.md"
       - "test/**"
-      - "scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -82,9 +87,15 @@ jobs:
       # Assemble the site rather than nesting one demo inside another's build
       # output: each demo owns its directory, and the index owns the root.
       - run: |
-          mkdir -p site/mesh-todo site/mesh-calendar site/mesh-heartbeat site/mesh-trail site/termine site/brand
+          mkdir -p site/mesh-todo site/mesh-calendar site/mesh-heartbeat site/mesh-trail site/termine site/brand site/de
           cp examples/landing/index.html site/index.html
           cp examples/landing/og.png site/og.png
+          # The demos' German pages come along inside their dist directories —
+          # each build lists de/index.html as a second input. The landing page
+          # is copied rather than bundled, so its twin is generated here.
+          node scripts/make-german-pages.mjs examples/landing
+          cp examples/landing/de/index.html site/de/index.html
+          cp examples/landing/og-de.png site/og-de.png
           # The Le Space pill and credit line for the plain pages here, which
           # have no bundler: brand.js as written, and uqr's one-file ESM build
           # beside it for the page QR. The demos bundle their own copy.

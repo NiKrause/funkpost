@@ -7,7 +7,7 @@
   "license": "GPL-3.0-only",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node ../../scripts/make-german-pages.mjs . && vite build",
     "preview": "vite preview",
     "test": "node --test --test-force-exit test/*.test.js",
     "test:e2e": "playwright test"
