@@ -299,6 +299,25 @@ test("the ride can be taken off the device", async ({ context }) => {
   await office.close();
 });
 
+test("the hour's allowance is on screen, because this page spends it unattended", async ({
+  context,
+}) => {
+  // The demo that transmits on a schedule, in a pocket, for an hour, was the
+  // one without any reading of what the law allows. mesh-todo, which only
+  // transmits when somebody presses something, had the bar.
+  const roomId = room();
+  const rider = await open(context, roomId, "role=rider&every=0", OFFICE);
+
+  await expect(rider.getByTestId("airtime-bar")).toBeVisible();
+  // Nothing has gone out yet, so the hour is whole. EU 868, from the courier's
+  // own policy rather than a constant on the page.
+  await expect(rider.getByTestId("airtime")).toContainText(/100 %/);
+  await expect(rider.getByTestId("airtime")).toContainText("EU_868");
+  await expect(rider.getByTestId("ask-now")).toBeEnabled();
+
+  await rider.close();
+});
+
 test("a browser that gives no position says so, instead of a map that never moves", async ({
   context,
 }) => {
