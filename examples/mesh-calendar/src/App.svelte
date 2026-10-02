@@ -204,6 +204,8 @@ import { wallAt } from "./domain/time.js";
     /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
   const wakeLockSupported = "wakeLock" in navigator;
   let keepAwake = $state(false);
+  /** Stops writing window errors into the radio strip when the page goes. */
+  let stopWindowErrors = null;
   let wakeSentinel = null;
 
   async function acquireWakeLock() {
@@ -394,6 +396,7 @@ import { wallAt } from "./domain/time.js";
     document.addEventListener("visibilitychange", reacquireOnReturn);
     return () => {
       clearInterval(ticker);
+      stopWindowErrors?.();
       document.removeEventListener("visibilitychange", reacquireOnReturn);
     };
   });
