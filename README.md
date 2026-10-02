@@ -58,7 +58,7 @@ The announcement page for all of it, written for humans:
 
 ## Try it now
 
-All three are live at
+All four are live at
 **[nikrause.github.io/funkpost](https://nikrause.github.io/funkpost/)**, which
 is a menu, and every push to main redeploys them:
 
@@ -67,6 +67,7 @@ is a menu, and every push to main redeploys them:
 | **[…/mesh-todo/](https://nikrause.github.io/funkpost/mesh-todo/)** | `mesh-todo` | a todo list over LoRa — the **database** plane |
 | **[…/mesh-calendar/](https://nikrause.github.io/funkpost/mesh-calendar/)** | `mesh-calendar` | a hairdresser's appointment book — the **event** plane |
 | **[…/mesh-heartbeat/](https://nikrause.github.io/funkpost/mesh-heartbeat/)** | `mesh-heartbeat` | how far does the mesh reach? — **no database at all** |
+| **[…/mesh-trail/](https://nikrause.github.io/funkpost/mesh-trail/)** | `mesh-trail` | everyone on one map — **no database at all** |
 
 Open any of them twice with `?mesh=bc` and two browser tabs play the two
 devices (the booking demo wants `&role=salon` in one and `&role=customer` in
@@ -167,6 +168,7 @@ what is built and what is not:
 | **[The event plane's provider](docs/yjs-provider.md)** | the Yjs half of it: tiny, loss-tolerant updates — and reusable outside this project |
 | **[mesh-calendar](docs/mesh-calendar.md)** | the event plane's demo — a shop's appointment book: rules not lists, who got the slot, and how to run its tests in a browser you can watch |
 | **[mesh-heartbeat](docs/mesh-heartbeat.md)** | the range test — what a round costs, what it refuses to measure, and what happens when two parties share a channel |
+| **[mesh-trail](docs/mesh-trail.md)** | everyone on one map — where the group size becomes a parameter, and what that does to the interval |
 | **[The signalling plane](docs/signalling.md)** | designed, not built — LoRa carries the handshake, not the connection |
 | **[Channels](docs/channels.md)** | getting two devices onto one channel — `npm run channel`, and why a mismatch is silent |
 | **[Bench etiquette](docs/bench-etiquette.md)** | developing on a shared, legally rationed medium without ruining it for the neighbours |
