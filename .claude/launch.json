@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mesh-heartbeat",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "-w", "@le-space/mesh-heartbeat-example"],
+      "port": 5173
+    }
+  ]
+}

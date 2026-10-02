@@ -47,7 +47,7 @@
 <script>
   import { onMount } from "svelte";
   import { creditHTML, lang } from "@le-space/funkpost-brand";
-  import { connectCourier } from "@le-space/funkpost-radio";
+  import { connectCourier, watchWindowErrors } from "@le-space/funkpost-radio";
   import {
     describeMeshtasticError,
     preferredChannelIndex,
@@ -213,6 +213,7 @@
   /** A round is in the air, so there is nothing for the button to ask. */
   let roundRunning = $state(false);
   let stopWatchingBrowser = null;
+  let stopWindowErrors = null;
   const track = createCoverageTrack();
   // The stationary half's own record. It is not the ride: it is what reached
   // this device and what it sent back, which is the other half of every
@@ -302,6 +303,7 @@
           pushLog(w().log.gaveUp);
         },
         onError: (message) => pushLog(w().log.error(message)),
+        onGattProbe: (line) => pushLog(line),
       });
       courier = radio.courier;
       linkKind = radio.kind;
@@ -603,6 +605,13 @@
         : { text: t.track.silent, kind: "silent" };
 
   onMount(() => {
+    // On a phone the console is invisible, and an exception in a handler or a
+    // rejecting promise tears the connection down with nothing on screen to
+    // act on. mesh-todo had this; the two demos most likely to be used away
+    // from a desk did not (#191).
+    stopWindowErrors = watchWindowErrors((type, message) =>
+      pushLog(w().log.windowError(type, message)),
+    );
     // The browser's fix is a fallback and starts straight away: waiting for
     // the node to prove it has no GPS would mean the first beats of a ride
     // have no place against them, and those are the ones taken at the office
