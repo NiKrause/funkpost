@@ -8,12 +8,16 @@
   "exports": {
     ".": "./connect.js",
     "./fake-bc-link.js": "./fake-bc-link.js",
-    "./position.js": "./position.js"
+    "./position.js": "./position.js",
+    "./channels.js": "./channels.js",
+    "./wake-lock.js": "./wake-lock.js"
   },
   "files": [
+    "channels.js",
     "connect.js",
     "fake-bc-link.js",
-    "position.js"
+    "position.js",
+    "wake-lock.js"
   ],
   "dependencies": {
     "@le-space/funkpost": "file:../.."

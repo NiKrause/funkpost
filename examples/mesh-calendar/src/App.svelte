@@ -15,8 +15,10 @@
     todayISO,
     downloadFile,
   } from "./stack.js";
-  import { preferredChannelIndex, DEFAULT_PREFERRED_CHANNEL } from "@le-space/funkpost";
+  import { DEFAULT_PREFERRED_CHANNEL } from "@le-space/funkpost";
   import { watchWindowErrors } from "@le-space/funkpost-radio";
+  import { createChannelBook } from "@le-space/funkpost-radio/channels.js";
+  import { createWakeLock } from "@le-space/funkpost-radio/wake-lock.js";
   import { DEFAULT_SHOP, serviceById } from "./domain/slots.js";
 import { wallAt } from "./domain/time.js";
   import { CONFIRMED, PENDING, DECLINED, CANCELLED, SUPERSEDED } from "./domain/arbitration.js";
@@ -139,7 +141,6 @@ import { wallAt } from "./domain/time.js";
   let txChannel = $state(0);
   let myNode = $state("");
   let setTxChannelFn = () => {};
-  const channelMap = new Map();
 
   // Which channel to pick on its own, if the node has it. Index 0 is a poor
   // default for meeting somebody: the index is per-device, so the same channel
@@ -148,45 +149,32 @@ import { wallAt } from "./domain/time.js";
   const preferredChannel = params.has("channel")
     ? params.get("channel")
     : DEFAULT_PREFERRED_CHANNEL;
-  let txChannelChosenByHand = false;
-  let preferenceApplied = false;
-
   /**
-   * Only ever moves off a channel nobody chose. Called once the connection is
-   * up and again whenever a channel arrives — the node reports them one at a
-   * time, and the one we want may not be first.
+   * The table, the fingerprints and the by-name preference now live in the
+   * shared radio package: four pages carried this between 82 % and 100 %
+   * identically, and it is the path that fails *silently* when it is wrong.
    */
-  function applyPreferredChannel() {
-    if (preferenceApplied || txChannelChosenByHand) return;
-    const index = preferredChannelIndex(channels, preferredChannel);
-    if (index == null) return;
-    preferenceApplied = true;
-    txChannel = index;
-    setTxChannelFn(index);
-    const ch = channels.find((c) => c.index === index);
-    pushLog(w().log.autoChannel(index, ch?.name, ch?.fingerprint));
-  }
+  const channelBook = createChannelBook({
+    preferred: preferredChannel,
+    defaultName: WORDS[lang.get()].defaultChannel,
+    setTxChannel: (index) => setTxChannelFn(index),
+    onEvent: (event) => {
+      channels = channelBook.channels();
+      txChannel = channelBook.tx();
+      primaryChannel = channelBook.primary();
+      if (event.kind === "channel") {
+        const c = event.channel;
+        pushLog(w().log.channel(c.index, c.name, c.fingerprint, c.role === 1));
+      }
+      if (event.kind === "preferred") {
+        pushLog(w().log.autoChannel(event.index, event.channel?.name, event.channel?.fingerprint));
+      }
+    },
+  });
 
   /** One channel as the node reports it. Named, so a test can hand one over. */
-  async function handleChannel(channel) {
-    if (channel.role === 0) return; // DISABLED
-    const psk = channel.settings?.psk ?? new Uint8Array();
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", psk));
-    const entry = {
-      index: channel.index,
-      role: channel.role,
-      name: channel.settings?.name || w().defaultChannel,
-      fingerprint: [...digest.slice(0, 2)].map((b) => b.toString(16).padStart(2, "0")).join(""),
-    };
-    channelMap.set(entry.index, entry);
-    channels = [...channelMap.values()].sort((a, b) => a.index - b.index);
-    if (entry.role === 1) primaryChannel = { name: entry.name, fingerprint: entry.fingerprint };
-    pushLog(w().log.channel(entry.index, entry.name, entry.fingerprint, entry.role === 1));
-    // Channels arrive one at a time and the wanted one need not be first.
-    // Before the connection resolves this is a no-op, so the call after it is
-    // the one that lands in the common case.
-    applyPreferredChannel();
-  }
+  /** Named, so a test can hand one over. The book does the rest. */
+  const handleChannel = (channel) => channelBook.note(channel);
 
   // What the node hears, before it decides whether it can read it. A packet on
   // a channel whose key this node does not hold is dropped inside the client
@@ -206,33 +194,30 @@ import { wallAt } from "./domain/time.js";
   let keepAwake = $state(false);
   /** Stops writing window errors into the radio strip when the page goes. */
   let stopWindowErrors = null;
-  let wakeSentinel = null;
-
-  async function acquireWakeLock() {
-    try {
-      wakeSentinel = await navigator.wakeLock.request("screen");
-      wakeSentinel.addEventListener("release", () => {
-        wakeSentinel = null;
-        if (keepAwake) pushLog(w().log.wakeReleased);
-      });
-      pushLog(w().log.wakeOn);
-    } catch (e) {
-      keepAwake = false;
-      pushLog(w().log.wakeRefused(e.message));
-    }
-  }
+  /**
+   * Shared too, and this page is why it reports being *dropped*: it was alone
+   * in noticing that the browser takes the lock away when the page hides and
+   * never gives it back. That went into the shared one rather than being lost
+   * to it.
+   */
+  const screenLock = createWakeLock({
+    onEvent: (event) => {
+      if (event.kind === "on") pushLog(w().log.wakeOn);
+      if (event.kind === "off") pushLog(w().log.wakeOff);
+      if (event.kind === "dropped") pushLog(w().log.wakeReleased);
+      if (event.kind === "refused") {
+        keepAwake = false;
+        pushLog(w().log.wakeRefused(event.reason));
+      }
+    },
+  });
 
   async function toggleAwake() {
-    if (keepAwake) await acquireWakeLock();
-    else {
-      await wakeSentinel?.release();
-      wakeSentinel = null;
-      pushLog(w().log.wakeOff);
-    }
+    await screenLock.set(keepAwake);
   }
 
   const reacquireOnReturn = () => {
-    if (keepAwake && document.visibilityState === "visible" && !wakeSentinel) acquireWakeLock();
+    screenLock.reacquireIfWanted(document.visibilityState === "visible");
   };
 
   /** Grey: no radio. Amber: radio up, nobody heard. Green: somebody is there. */
@@ -474,8 +459,9 @@ import { wallAt } from "./domain/time.js";
       window.__nodeChannel = handleChannel;
       setTxChannelFn = live.setTxChannel ?? (() => {});
       // Now that the switch actually does something, act on whatever the node
-      // already told us while it was still connecting.
-      applyPreferredChannel();
+      // already told us while it was still connecting. Re-noting a channel the
+      // book already has is how it retries the preference.
+      for (const ch of channelBook.channels()) channelBook.note({ ...ch, settings: { name: ch.name } });
 
       if (role === "salon") {
         const saved = localStorage.getItem(`salon:${room}`);
@@ -651,11 +637,10 @@ import { wallAt } from "./domain/time.js";
           <select
             bind:value={txChannel}
             onchange={() => {
-              // A hand-made choice is final: nothing may move the selector
-              // afterwards, or a late-arriving channel would silently undo it.
-              txChannelChosenByHand = true;
-              setTxChannelFn(txChannel);
-              const ch = channels.find((c) => c.index === txChannel);
+              // A hand-made choice is final: the book stops applying the
+              // preference from here on, or a late-arriving channel would
+              // silently undo it.
+              const ch = channelBook.chooseByHand(txChannel);
               pushLog(w().log.handChannel(txChannel, ch?.name, ch?.fingerprint));
             }}
           >
