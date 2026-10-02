@@ -78,3 +78,38 @@ describe("the demos can be installed", () => {
     });
   }
 });
+
+describe("a link to these pages in a chat", () => {
+  /**
+   * A page with no Open Graph tags is a bare URL wherever somebody pastes it:
+   * no title, no description, no picture. All five had none, which is a thing
+   * nothing else would notice and nobody would report.
+   */
+  const PAGES = [
+    ...APPS.map((app) => ({ app, html: at(`../examples/${app}/index.html`), dir: `../examples/${app}/public`, path: `${app}/` })),
+    { app: "landing", html: at("../examples/landing/index.html"), dir: "../examples/landing", path: "" },
+  ];
+
+  for (const { app, html, dir, path } of PAGES) {
+    test(`${app} says what it is, with a picture`, () => {
+      const page = readFileSync(html, "utf8");
+      for (const tag of ["og:title", "og:description", "og:url", "og:image", "twitter:card"]) {
+        assert.match(page, new RegExp(`property="${tag}"|name="${tag}"`), `${app} is missing ${tag}`);
+      }
+
+      // Absolute, because a scraper does not run the page and several refuse
+      // to resolve a relative image — and pointing at the right deploy path,
+      // because an og:image that 404s is the same as having none.
+      const image = page.match(/property="og:image" content="([^"]+)"/)[1];
+      assert.equal(image, `https://nikrause.github.io/funkpost/${path}og.png`, `${app}'s card URL`);
+
+      const url = page.match(/property="og:url" content="([^"]+)"/)[1];
+      assert.equal(url, `https://nikrause.github.io/funkpost/${path}`, `${app}'s own URL`);
+
+      // And the file it names is really shipped, at the size it claims.
+      const file = at(`${dir}/og.png`);
+      assert.ok(existsSync(file), `${app} names og.png and does not ship it`);
+      assert.deepEqual(pngSize(file), { width: 1200, height: 630 }, `${app}'s card`);
+    });
+  }
+});

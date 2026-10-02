@@ -84,6 +84,7 @@ jobs:
       - run: |
           mkdir -p site/mesh-todo site/mesh-calendar site/mesh-heartbeat site/mesh-trail site/termine site/brand
           cp examples/landing/index.html site/index.html
+          cp examples/landing/og.png site/og.png
           # The Le Space pill and credit line for the plain pages here, which
           # have no bundler: brand.js as written, and uqr's one-file ESM build
           # beside it for the page QR. The demos bundle their own copy.
