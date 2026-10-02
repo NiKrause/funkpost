@@ -101,12 +101,49 @@ until *Where this is* shows a place with an accuracy **before** setting off,
 and compare the channel fingerprint on every device — a mismatch is silent and
 looks exactly like being out of range.
 
+## Which way, when the map will not load
+
+Pick somebody and the page says **how far, which way, and how old that
+position is**. An arrow that points, with the compass point beside it for
+anybody holding a real compass or reading it aloud.
+
+The age is not decoration. A bearing to a ten-minute-old position in a wood
+points at somewhere nobody is, and the number is the only thing that says so —
+past five minutes the page says it in words.
+
+## How I am
+
+Four states, one byte, and the reason a schedule is not enough: **fine ·
+stopping here · come to me · help**. Said immediately as well as kept, because
+the point of pressing *come to me* is that it does not wait two minutes.
+
+Sticky rather than one-shot: "I am stopping here" stays true until it is not,
+and pressing the same button again clears it. `ok` is the default and costs
+nothing on the wire.
+
+## Fox hunt
+
+One device is the fox and says where it is rarely; everyone else goes looking.
+On the wire that is a **role**, a separate field from the state — "I am
+stopping here" and "I am the one being hunted" are different kinds of fact, and
+one device can be both. A walker is the absence of the field, so the game costs
+nothing to the people not playing it; the fox pays its own three bytes.
+
+While a hunt is on, the compass points at the fox without anybody choosing.
+
+## Everything is optional
+
+The map, the trails, the list, the compass, the check-in, the hunt — each can
+be switched off, and the choice is kept on the device. A walk and a bench want
+different screens, and in a wood a page that fits on one screen is a page
+somebody reads.
+
+With trails off the map keeps only the newest place per device: where everybody
+is, without where they have been.
+
 ## What it has not shown yet
 
 - **A walk.** Everything here has run in a browser over a fake mesh.
-- **Bearing and distance to one person**, for when the tiles will not load.
-- **A check-in button** outside the schedule: *ok · wait · come · help*.
-- **A fox hunt**: one device beacons rarely, the rest go looking.
 
 ---
 

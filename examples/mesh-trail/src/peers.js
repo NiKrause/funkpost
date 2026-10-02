@@ -36,6 +36,7 @@ export function createPeers({ trailLimit = TRAIL_LIMIT, now = Date.now } = {}) {
     points: [],
     lastAt: null,
     state: "ok",
+    role: "walker",
     accuracy: null,
   });
 
@@ -54,11 +55,12 @@ export function createPeers({ trailLimit = TRAIL_LIMIT, now = Date.now } = {}) {
      * fills the trail with one dot drawn five hundred times, and the map draws
      * a line of length zero over and over.
      */
-    heard({ from, pos, accuracy = null, state = "ok", at = now() }) {
+    heard({ from, pos, accuracy = null, state = "ok", role = "walker", at = now() }) {
       const entry = peer(from);
       const last = entry.points.at(-1);
       entry.lastAt = at;
       entry.state = state;
+      entry.role = role;
       entry.accuracy = accuracy;
       if (!last || last.lat !== pos.lat || last.lon !== pos.lon) {
         entry.points.push({ lat: pos.lat, lon: pos.lon, at, accuracy, state });
@@ -111,12 +113,20 @@ export function createPeers({ trailLimit = TRAIL_LIMIT, now = Date.now } = {}) {
       peers.clear();
     },
 
+    /** The fox, if one has been heard. A hunt has exactly one worth following. */
+    fox() {
+      return this.list().find((p) => p.role === "fox") ?? null;
+    },
+
     summary() {
       const all = [...peers.values()];
       return {
         heard: all.length,
         shown: all.filter((p) => p.shown).length,
         moving: all.filter((p) => p.points.length > 1).length,
+        // Anyone who is not simply walking: a check-in or a game role is the
+        // thing somebody wants to see without reading every row.
+        flagged: all.filter((p) => p.state !== "ok" || p.role !== "walker").length,
       };
     },
   };

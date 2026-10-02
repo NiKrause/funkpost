@@ -111,3 +111,99 @@ test("a browser with no position still draws everyone else", async ({ context })
   await bruno.close();
   await blind.close();
 });
+
+test("a check-in is said at once, not at the next tick", async ({ context }) => {
+  // The whole reason a schedule is not enough: pressing "come to me" that
+  // waits two minutes is a button nobody presses.
+  const roomId = room();
+  const anna = await open(context, roomId, "every=0", CLEARING);
+  const bruno = await open(context, roomId, "every=0", RIDGE);
+  await expect(bruno.getByTestId("here")).toContainText("48.41500", { timeout: 20_000 });
+  await startSending(bruno);
+
+  await bruno.getByTestId("check-in").getByRole("button", { name: /Come to me|Kommt zu mir/ }).click();
+  await expect(anna.getByTestId("people")).toContainText(/Come to me|Kommt zu mir/, {
+    timeout: 20_000,
+  });
+  await expect(bruno.getByTestId("my-state")).toContainText(/Come to me|Kommt zu mir/);
+
+  // The same button unsays it.
+  await bruno.getByTestId("check-in").getByRole("button", { name: /Come to me|Kommt zu mir/ }).click();
+  await expect(bruno.getByTestId("my-state")).toContainText(/Fine|Alles gut/);
+
+  await anna.close();
+  await bruno.close();
+});
+
+test("the compass says how far, which way, and how old that is", async ({ context }) => {
+  // The feature that still works when the tiles will not load, which in a wood
+  // is the normal case.
+  const roomId = room();
+  const anna = await open(context, roomId, "every=0", CLEARING);
+  const bruno = await open(context, roomId, "every=0", RIDGE);
+  await expect(bruno.getByTestId("here")).toContainText("48.41500", { timeout: 20_000 });
+  await startSending(bruno);
+  await bruno.getByTestId("say-now").click();
+  await expect(anna.getByTestId("people")).toBeVisible({ timeout: 20_000 });
+
+  // Nobody followed yet.
+  await expect(anna.getByTestId("compass-none")).toBeVisible();
+  const id = await anna.locator("[data-peer]").first().getAttribute("data-peer");
+  await anna.getByTestId(`follow-${id}`).click();
+
+  // North-east of the clearing, about 1.2 km.
+  await expect(anna.getByTestId("compass")).toContainText("NE");
+  await expect(anna.getByTestId("compass")).toContainText(/1\.\d\d km/);
+  await expect(anna.getByTestId("compass-age")).toContainText(/ago|vor|just now|gerade/);
+
+  await anna.close();
+  await bruno.close();
+});
+
+test("the fox is who the compass points at, without anyone choosing", async ({ context }) => {
+  const roomId = room();
+  const anna = await open(context, roomId, "every=0", CLEARING);
+  const fox = await open(context, roomId, "every=0", RIDGE);
+  await expect(fox.getByTestId("here")).toContainText("48.41500", { timeout: 20_000 });
+
+  // The game is off by default: it is a game, not a feature of walking.
+  await expect(anna.getByTestId("fox")).toHaveCount(0);
+  await anna.getByTestId("show-hunt").check();
+  await fox.getByTestId("show-hunt").check();
+  await expect(anna.getByTestId("fox")).toContainText(/No fox|Kein Fuchs/);
+
+  await fox.getByTestId("i-am-fox").check();
+  await startSending(fox);
+  await fox.getByTestId("say-now").click();
+
+  await expect(anna.getByTestId("fox")).toContainText(/the fox is|der Fuchs ist/, {
+    timeout: 20_000,
+  });
+  // Nobody pressed follow, and the compass is already pointing at the fox.
+  await expect(anna.getByTestId("compass")).toContainText(/1\.\d\d km/);
+
+  await anna.close();
+  await fox.close();
+});
+
+test("every part of the page can be switched off, and stays off", async ({ context }) => {
+  const roomId = room();
+  const anna = await open(context, roomId, "every=0", CLEARING);
+  await expect(anna.getByTestId("map")).toBeVisible();
+
+  await anna.getByTestId("show-map").uncheck();
+  await anna.getByTestId("show-people").uncheck();
+  await expect(anna.getByTestId("map")).toHaveCount(0);
+  await expect(anna.getByTestId("people-summary")).toHaveCount(0);
+
+  // A walk is long and a reload happens; the layout is not something to set up
+  // twice.
+  await anna.reload();
+  await expect(anna.getByTestId("radio-status")).toHaveAttribute("data-phase", "ready", {
+    timeout: 30_000,
+  });
+  await expect(anna.getByTestId("map")).toHaveCount(0);
+  await expect(anna.getByTestId("show-map")).not.toBeChecked();
+
+  await anna.close();
+});
