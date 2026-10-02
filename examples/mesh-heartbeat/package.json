@@ -17,7 +17,8 @@
     "@le-space/funkpost-radio": "*",
     "@le-space/orbitdb-storage-bridge": "^0.15.0",
     "@meshtastic/core": "^2.6.7",
-    "@meshtastic/transport-web-bluetooth": "^0.1.5"
+    "@meshtastic/transport-web-bluetooth": "^0.1.5",
+    "leaflet": "^1.9.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

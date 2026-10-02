@@ -155,6 +155,28 @@ a second channel still costs you the airtime — and no longer answers your
 beats. Two parties who *want* to measure together should stay on one channel
 and pin partners; two who do not should still coordinate the hour.
 
+## The map
+
+Both devices draw the same ride ([#184](https://github.com/NiKrause/funkpost/issues/184)):
+the places where a beat went out, coloured by what came back, the line through
+them in the order they happened, the device that does not move as a ring, and
+a dashed line between the two — the link being measured, right now.
+
+The rider draws it from its own track; the stationary device draws it from what
+reached it, which it has because a rider says where it is on the first beat of
+each round. Same picture, two sources, and that is the point: **a silence is
+only readable with both.**
+
+OpenStreetMap raster tiles, with the attribution the licence asks for. Leaflet
+rather than MapLibre — 43 KB gzipped against roughly 200 to draw a line and
+some dots — and it arrives through a dynamic import, so the shell a device
+downloads before it asks for a map is unchanged.
+
+**Tiles need the internet and the ride does not.** Out of coverage the tiles do
+not come and the vectors still do: line, dots and distance are drawn from
+numbers the device already holds. The page says so, because an empty square
+with no explanation reads as a broken map rather than a missing network.
+
 ## Running one
 
 **In a browser first.** `?mesh=bc` replaces the radio with a
@@ -181,9 +203,6 @@ silent and looks exactly like being out of range.
 
 - **The ride itself** ([#180](https://github.com/NiKrause/funkpost/issues/180)).
   Built and deployed 2026-09-29, and that is all it proves.
-- **The map** ([#184](https://github.com/NiKrause/funkpost/issues/184)). The
-  track is a table; the same rows on OpenStreetMap tiles are the picture
-  anybody would actually look at.
 - **Export.** The track lives on the screen and in a screenshot. Nothing
   writes a file yet.
 
