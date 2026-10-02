@@ -297,6 +297,8 @@ test("the ride can be taken off the device", async ({ context }) => {
 
   await rider.close();
   await office.close();
+});
+
 test("the hour's allowance is on screen, because this page spends it unattended", async ({
   context,
 }) => {
