@@ -27,7 +27,7 @@ function pngSize(path) {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-const APPS = ["mesh-todo", "mesh-calendar", "mesh-heartbeat"];
+const APPS = ["mesh-todo", "mesh-calendar", "mesh-heartbeat", "mesh-trail"];
 
 describe("the demos can be installed", () => {
   for (const app of APPS) {

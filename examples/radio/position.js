@@ -200,3 +200,28 @@ export function distanceMetres(a, b) {
 /** Metres under a kilometre, kilometres above it — what a rider reads at a glance. */
 export const formatDistance = (m) =>
   m == null ? "" : m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m < 10_000 ? 2 : 1)} km`;
+
+/**
+ * Which way from a to b, in degrees clockwise from north.
+ *
+ * For the arrow on a trail — two fixes are a direction — and for walking
+ * towards somebody when the map tiles will not load, which in a wood is the
+ * normal case rather than the exception.
+ */
+export function bearingDegrees(a, b) {
+  if (!a || !b) return null;
+  const toRad = Math.PI / 180;
+  const φ1 = a.lat * toRad;
+  const φ2 = b.lat * toRad;
+  const Δλ = (b.lon - a.lon) * toRad;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) / toRad + 360) % 360;
+}
+
+/** North, north-east, … — a word somebody can act on without a compass rose. */
+export function compassPoint(degrees) {
+  if (degrees == null) return "";
+  const points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  return points[Math.round(degrees / 45) % 8];
+}

@@ -4,20 +4,46 @@
     {
       "name": "mesh-heartbeat",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "-w", "@le-space/mesh-heartbeat-example"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "-w",
+        "@le-space/mesh-heartbeat-example"
+      ],
       "port": 5173
     },
     {
       "name": "mesh-todo",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "-w", "@le-space/mesh-todo-example"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "-w",
+        "@le-space/mesh-todo-example"
+      ],
       "port": 5174
     },
     {
       "name": "mesh-calendar",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "-w", "@le-space/mesh-calendar-example"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "-w",
+        "@le-space/mesh-calendar-example"
+      ],
       "port": 5175
+    },
+    {
+      "name": "mesh-trail",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "-w",
+        "@le-space/mesh-trail-example"
+      ],
+      "port": 5176
     }
   ]
 }

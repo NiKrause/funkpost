@@ -17,7 +17,9 @@ import {
   formatPosition,
   distanceMetres,
   formatDistance,
-} from "../examples/mesh-heartbeat/src/position.js";
+  bearingDegrees,
+  compassPoint,
+} from "../examples/radio/position.js";
 
 // Eggenfelden, where the bench is.
 const LAT = 48.40639;
@@ -246,5 +248,29 @@ describe("what the browser is doing when there is no position", () => {
       onTrouble: (t) => trouble.push(t),
     });
     assert.equal(trouble[0].kind, "denied");
+  });
+});
+
+describe("which way from here", () => {
+  const HERE = { lat: 48.40639, lon: 12.76167 };
+
+  test("north is zero and east is ninety, clockwise like a compass", () => {
+    assert.equal(Math.round(bearingDegrees(HERE, { lat: 48.42, lon: HERE.lon })), 0);
+    assert.equal(Math.round(bearingDegrees(HERE, { lat: HERE.lat, lon: 12.79 })), 90);
+    assert.equal(Math.round(bearingDegrees(HERE, { lat: 48.39, lon: HERE.lon })), 180);
+    assert.equal(Math.round(bearingDegrees(HERE, { lat: HERE.lat, lon: 12.73 })), 270);
+  });
+
+  test("a word somebody can act on without a compass rose", () => {
+    assert.equal(compassPoint(0), "N");
+    assert.equal(compassPoint(44), "NE");
+    assert.equal(compassPoint(315), "NW");
+    assert.equal(compassPoint(359), "N", "and it wraps");
+    assert.equal(compassPoint(null), "");
+  });
+
+  test("nowhere to nowhere is not a direction", () => {
+    assert.equal(bearingDegrees(null, HERE), null);
+    assert.equal(bearingDegrees(HERE, null), null);
   });
 });
