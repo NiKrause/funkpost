@@ -13,6 +13,7 @@ import {
   decodeNodePosition,
   encodeNodePosition,
   watchBrowserPosition,
+  askForPosition,
   formatPosition,
   distanceMetres,
   formatDistance,
@@ -84,18 +85,27 @@ describe("the browser fallback", () => {
       clearWatch: (id) => (cleared = id),
     };
     const stop = watchBrowserPosition((p) => seen.push(p), { geolocation: geo });
-    assert.deepEqual(seen, [{ lat: LAT, lon: LON, at: 7, source: "browser" }]);
+    // `accuracy` rides along now: a browser that cannot say how good a fix is
+    // says null rather than leaving the field out, so a reader never has to
+    // guess whether it was unknown or simply not passed on.
+    assert.deepEqual(seen, [{ lat: LAT, lon: LON, at: 7, accuracy: null, source: "browser" }]);
     stop();
     assert.equal(cleared, 99);
   });
 
-  test("no geolocation at all is not an error", () => {
-    // A desktop without it, or a refused permission. The ride still records
-    // answered and unanswered; it simply cannot be put on a map.
-    const stop = watchBrowserPosition(() => {
-      throw new Error("must not be called");
-    }, { geolocation: null });
+  test("no geolocation at all does not throw — but it is no longer silent", () => {
+    // A desktop without it, or a page served over plain HTTP. The ride still
+    // records answered and unanswered; it simply cannot be put on a map, and
+    // now it says which of the two is happening.
+    const trouble = [];
+    const stop = watchBrowserPosition(
+      () => {
+        throw new Error("must not be called");
+      },
+      { geolocation: null, onTrouble: (t) => trouble.push(t) },
+    );
     assert.equal(typeof stop, "function");
+    assert.deepEqual(trouble, [{ kind: "unsupported", message: "" }]);
     stop();
   });
 });
@@ -171,5 +181,70 @@ describe("how far apart two fixes are", () => {
     assert.equal(formatDistance(1234), "1.23 km");
     assert.equal(formatDistance(44_500), "44.5 km");
     assert.equal(formatDistance(null), "");
+  });
+});
+
+describe("what the browser is doing when there is no position", () => {
+  /** A geolocation that answers however a test tells it to. */
+  const fakeGeo = (behaviour) => ({
+    watchPosition(ok, fail) {
+      behaviour(ok, fail);
+      return 7;
+    },
+    getCurrentPosition(ok, fail) {
+      behaviour(ok, fail);
+    },
+    clearWatch() {},
+  });
+
+  test("a fix carries how good it is, which is the difference between GPS and a guess", () => {
+    const seen = [];
+    watchBrowserPosition((fix) => seen.push(fix), {
+      geolocation: fakeGeo((ok) =>
+        ok({ coords: { latitude: 48.4, longitude: 12.7, accuracy: 8.5 }, timestamp: 5 }),
+      ),
+    });
+    assert.equal(seen[0].accuracy, 8.5);
+    assert.equal(seen[0].source, "browser");
+  });
+
+  test("every reason the browser can give is passed on, named", () => {
+    for (const [code, kind] of [
+      [1, "denied"],
+      [2, "unavailable"],
+      [3, "searching"],
+    ]) {
+      const trouble = [];
+      watchBrowserPosition(() => {}, {
+        geolocation: fakeGeo((ok, fail) => fail({ code, message: "x" })),
+        onTrouble: (t) => trouble.push(t),
+      });
+      assert.deepEqual(trouble, [{ kind, message: "x" }], `code ${code}`);
+    }
+  });
+
+  test("no Geolocation API at all is itself an answer", () => {
+    // A page served over plain HTTP has none: it is a secure-context feature,
+    // and silently recording beats without places is the wrong way to say so.
+    const trouble = [];
+    const stop = watchBrowserPosition(() => {}, { geolocation: null, onTrouble: (t) => trouble.push(t) });
+    assert.deepEqual(trouble, [{ kind: "unsupported", message: "" }]);
+    assert.doesNotThrow(stop);
+  });
+
+  test("asking again from a click reports the same way", () => {
+    const seen = [];
+    const trouble = [];
+    askForPosition((fix) => seen.push(fix), {
+      geolocation: fakeGeo((ok) =>
+        ok({ coords: { latitude: 1, longitude: 2, accuracy: 3 }, timestamp: 4 }),
+      ),
+    });
+    assert.equal(seen[0].lat, 1);
+    askForPosition(() => {}, {
+      geolocation: fakeGeo((ok, fail) => fail({ code: 1, message: "blocked" })),
+      onTrouble: (t) => trouble.push(t),
+    });
+    assert.equal(trouble[0].kind, "denied");
   });
 });

@@ -55,23 +55,102 @@ export function decodeNodePosition(packet, { at = Date.now() } = {}) {
  *
  * Returns an unsubscribe, like everything else that watches here.
  */
-export function watchBrowserPosition(onPosition, { geolocation = null } = {}) {
+/**
+ * How long to wait before saying "still looking" rather than nothing.
+ *
+ * Not a deadline: `watchPosition` keeps the watch alive after a timeout, so
+ * this only buys the page something to show. It has to be generous — a phone
+ * with no SIM has no assistance data, so the receiver reads the satellites'
+ * own almanac and a cold fix is minutes rather than seconds.
+ */
+const SEARCHING_AFTER_MS = 20_000;
+
+/**
+ * The browser's own position, and — this is the part that was missing — what
+ * it is doing when there is none.
+ *
+ * The error callback used to be empty, with a comment arguing that a refused
+ * permission is not worth interrupting a ride for. That was right about not
+ * interrupting and wrong about staying silent: reported from the field, the
+ * page sat there with no position and no reason, through a tethered hotspot
+ * and through no internet at all, and the one thing a rider could not find out
+ * was whether anything was being asked of the receiver at all.
+ *
+ * So: `onTrouble` gets told, in the browser's own vocabulary.
+ *
+ * - `unsupported` — no Geolocation API here. On a page served over plain HTTP
+ *   that is the whole story: it is a secure-context feature.
+ * - `denied` (code 1) — the site is blocked. A gesture will not undo this; the
+ *   browser's own site settings will.
+ * - `unavailable` (code 2) — asked and nothing came back. Indoors without
+ *   network location, this is the normal answer.
+ * - `searching` (code 3) — the timeout above, which is a progress report
+ *   rather than a failure. The watch continues.
+ *
+ * @param {(fix: Object) => void} onPosition
+ * @param {Object} [options]
+ * @param {Object} [options.geolocation] injectable, so this is testable
+ * @param {(trouble: {kind: string, message: string}) => void} [options.onTrouble]
+ * @returns {() => void} stop watching
+ */
+export function watchBrowserPosition(
+  onPosition,
+  { geolocation = null, onTrouble = () => {}, timeoutMs = SEARCHING_AFTER_MS } = {},
+) {
   const geo = geolocation ?? globalThis.navigator?.geolocation ?? null;
-  if (!geo) return () => {};
+  if (!geo) {
+    onTrouble({ kind: "unsupported", message: "" });
+    return () => {};
+  }
   const id = geo.watchPosition(
     (fix) =>
       onPosition({
         lat: fix.coords.latitude,
         lon: fix.coords.longitude,
         at: fix.timestamp,
+        // Metres, and the honest difference between a satellite fix and a
+        // guess from a Wi-Fi network: one is single digits, the other is
+        // hundreds. A rider measuring range needs to know which arrived.
+        accuracy: Number.isFinite(fix.coords?.accuracy) ? fix.coords.accuracy : null,
         source: "browser",
       }),
-    // A refused permission is not an error worth interrupting a ride for: the
-    // track simply records beats without a place, and says so.
-    () => {},
-    { enableHighAccuracy: true, maximumAge: 15_000 },
+    (error) => {
+      const kind =
+        error?.code === 1 ? "denied" : error?.code === 2 ? "unavailable" : "searching";
+      onTrouble({ kind, message: error?.message ?? "" });
+    },
+    { enableHighAccuracy: true, maximumAge: 15_000, timeout: timeoutMs },
   );
   return () => geo.clearWatch(id);
+}
+
+/**
+ * Ask once, from a click.
+ *
+ * Android is markedly more willing to show the permission prompt inside a
+ * gesture than at page load, and a prompt that was dismissed rather than
+ * answered leaves no trace a page can read — so there has to be a way to ask
+ * again that does not mean reloading and losing the ride.
+ */
+export function askForPosition(onPosition, { geolocation = null, onTrouble = () => {} } = {}) {
+  const geo = geolocation ?? globalThis.navigator?.geolocation ?? null;
+  if (!geo) return onTrouble({ kind: "unsupported", message: "" });
+  geo.getCurrentPosition(
+    (fix) =>
+      onPosition({
+        lat: fix.coords.latitude,
+        lon: fix.coords.longitude,
+        at: fix.timestamp,
+        accuracy: Number.isFinite(fix.coords?.accuracy) ? fix.coords.accuracy : null,
+        source: "browser",
+      }),
+    (error) => {
+      const kind =
+        error?.code === 1 ? "denied" : error?.code === 2 ? "unavailable" : "searching";
+      onTrouble({ kind, message: error?.message ?? "" });
+    },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 60_000 },
+  );
 }
 
 /** Six decimals is about a tenth of a metre — more than a bicycle deserves. */
