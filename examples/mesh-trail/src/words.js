@@ -108,6 +108,45 @@ export const WORDS = {
       note: "Each device has its own colour; the brighter end of a trail is the newer one. Map data © OpenStreetMap contributors.",
     },
 
+    // A check-in, a game, a compass — and the switches that hide any of them.
+    checkIn: {
+      legend: "How I am",
+      why: "Said at once, not at the next tick — that is the point of pressing it. Press it again to go back to fine.",
+      states: { ok: "Fine", wait: "Stopping here", come: "Come to me", help: "Help" },
+      mine: (state) => `This device says: ${state}`,
+    },
+
+    compass: {
+      legend: "Which way",
+      none: "Pick somebody in the list, and this says how far and which way.",
+      noPlace: "This device has no position yet, so it cannot work out a direction.",
+      line: (name, point, metres) => `${name} · ${point} · ${metres}`,
+      age: (text) => `that position is ${text}`,
+      stale: "Old enough to be somewhere else by now.",
+      follow: "Follow",
+      stop: "Stop following",
+    },
+
+    hunt: {
+      legend: "Fox hunt",
+      why: "One device is the fox and says where it is rarely; everyone else goes looking. The compass above points at the fox while a hunt is on.",
+      iAmFox: "I am the fox",
+      foxHeard: (name) => `the fox is ${name}`,
+      noFox: "No fox heard yet.",
+      slower: "A fox on a long interval is the game; a fox every minute is a walk with extra steps.",
+    },
+
+    show: {
+      legend: "What this page shows",
+      why: "A walk and a bench want different screens. Kept on this device.",
+      map: "The map",
+      trails: "Trails, not just where everyone is now",
+      people: "Who is out there",
+      compass: "Which way",
+      checkIn: "How I am",
+      hunt: "Fox hunt",
+    },
+
     log: {
       legend: "Field log",
       sent: (bytes) => `→ my position (${bytes} B)`,
@@ -128,6 +167,9 @@ export const WORDS = {
       noFix: (kind, message) => `! no position (${kind})${message ? `: ${message}` : ""}`,
       broadcastOn: "sending my position from now on",
       broadcastOff: "no longer sending my position",
+      checkIn: (state) => `· I am ${state}`,
+      foxOn: "· I am the fox",
+      foxOff: "· no longer the fox",
       windowError: (type, message) => `! window ${type}: ${message}`,
       gattQueueOn: "one Bluetooth operation at a time",
       error: (message) => `error: ${message}`,
@@ -235,6 +277,44 @@ export const WORDS = {
       note: "Jedes Gerät hat seine Farbe; das hellere Ende einer Spur ist das neuere. Kartendaten © OpenStreetMap-Mitwirkende.",
     },
 
+    checkIn: {
+      legend: "Wie es mir geht",
+      why: "Wird sofort gesagt, nicht erst beim nächsten Takt — genau dafür drückt man es. Nochmal drücken heißt wieder alles gut.",
+      states: { ok: "Alles gut", wait: "Bleibe hier", come: "Kommt zu mir", help: "Hilfe" },
+      mine: (state) => `Dieses Gerät sagt: ${state}`,
+    },
+
+    compass: {
+      legend: "Wohin",
+      none: "Jemanden in der Liste auswählen, dann steht hier, wie weit und in welche Richtung.",
+      noPlace: "Dieses Gerät hat noch keine Position, kann also keine Richtung ausrechnen.",
+      line: (name, point, metres) => `${name} · ${point} · ${metres}`,
+      age: (text) => `diese Position ist ${text}`,
+      stale: "Alt genug, um inzwischen woanders zu sein.",
+      follow: "Folgen",
+      stop: "Nicht mehr folgen",
+    },
+
+    hunt: {
+      legend: "Fuchsjagd",
+      why: "Ein Gerät ist der Fuchs und sagt selten, wo es ist; alle anderen suchen. Der Kompass oben zeigt während einer Jagd auf den Fuchs.",
+      iAmFox: "Ich bin der Fuchs",
+      foxHeard: (name) => `der Fuchs ist ${name}`,
+      noFox: "Noch kein Fuchs gehört.",
+      slower: "Ein Fuchs mit langem Takt ist das Spiel; ein Fuchs im Minutentakt ist ein Spaziergang mit Zusatzschritten.",
+    },
+
+    show: {
+      legend: "Was diese Seite zeigt",
+      why: "Ein Spaziergang und eine Werkbank wollen verschiedene Bildschirme. Bleibt auf diesem Gerät.",
+      map: "Die Karte",
+      trails: "Spuren, nicht nur der aktuelle Ort",
+      people: "Wer da draußen ist",
+      compass: "Wohin",
+      checkIn: "Wie es mir geht",
+      hunt: "Fuchsjagd",
+    },
+
     log: {
       legend: "Feldlog",
       sent: (bytes) => `→ meine Position (${bytes} B)`,
@@ -255,6 +335,9 @@ export const WORDS = {
       noFix: (kind, message) => `! keine Position (${kind})${message ? `: ${message}` : ""}`,
       broadcastOn: "sendet ab jetzt die eigene Position",
       broadcastOff: "sendet die eigene Position nicht mehr",
+      checkIn: (state) => `· ich bin ${state}`,
+      foxOn: "· ich bin der Fuchs",
+      foxOff: "· nicht mehr der Fuchs",
       windowError: (type, message) => `! Fenster ${type}: ${message}`,
       gattQueueOn: "immer nur eine Bluetooth-Operation gleichzeitig",
       error: (message) => `Fehler: ${message}`,

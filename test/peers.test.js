@@ -100,6 +100,26 @@ describe("the people on the map", () => {
     );
   });
 
+  test("a check-in and a game role are different facts about the same person", () => {
+    const peers = createPeers();
+    peers.heard({ from: "aaaa", pos: A, state: "help", role: "fox", at: 1 });
+    const [peer] = peers.list();
+    assert.equal(peer.state, "help");
+    assert.equal(peer.role, "fox");
+    assert.equal(peers.summary().flagged, 1, "and either one is worth seeing without reading rows");
+  });
+
+  test("the fox is the one worth following, and there is one", () => {
+    const peers = createPeers();
+    peers.heard({ from: "aaaa", pos: A, at: 1 });
+    assert.equal(peers.fox(), null, "a walk is not a hunt");
+    peers.heard({ from: "bbbb", pos: B, role: "fox", at: 2 });
+    assert.equal(peers.fox().id, "bbbb");
+    // A fox that stops being one stops being followed.
+    peers.heard({ from: "bbbb", pos: A, role: "walker", at: 3 });
+    assert.equal(peers.fox(), null);
+  });
+
   test("the list hands out copies, so a screen cannot edit the record", () => {
     const peers = createPeers();
     peers.heard({ from: "aaaa", pos: A, at: 1 });

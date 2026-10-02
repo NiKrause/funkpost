@@ -48,7 +48,13 @@
     preferredChannelIndex,
     DEFAULT_PREFERRED_CHANNEL,
   } from "@le-space/funkpost";
-  import { encodeBeacon, decodeBeacon, sameGroup, groupAirtime } from "@le-space/funkpost/beacon";
+  import {
+    encodeBeacon,
+    decodeBeacon,
+    sameGroup,
+    groupAirtime,
+    STATES,
+  } from "@le-space/funkpost/beacon";
   import { databaseTag } from "@le-space/orbitdb-storage-bridge/courier-sync";
   import { createPeers } from "./peers.js";
   import TrailMap from "./TrailMap.svelte";
@@ -186,6 +192,28 @@
   let everyMin = $state(Number(params.get("every") ?? 2));
   let beaconTimer = null;
   let lastSentAt = $state(null);
+
+  /**
+   * How this device is, which a schedule cannot say.
+   *
+   * Sticky rather than one-shot: "I am stopping here" stays true until it is
+   * not, and a walk where somebody has to keep pressing a button to remain
+   * stopped is a walk nobody presses the button on. `ok` is the default and
+   * costs nothing on the wire.
+   */
+  let myState = $state("ok");
+  /** The hunted one, in a game. Absent for everyone else, including on the air. */
+  let amFox = $state(false);
+  /** Whose bearing the compass is showing, or the fox when there is a hunt. */
+  let following = $state("");
+
+  /**
+   * What this page shows. Everything optional, because a walk and a bench want
+   * different screens — and in a wood, a page that fits on one screen is a page
+   * somebody reads.
+   */
+  const SHOW_KEY = "mesh-trail:show:v1";
+  let show = $state({ map: true, trails: true, people: true, compass: true, checkIn: true, hunt: false });
 
   const peers = createPeers();
   let peerRows = $state([]);
@@ -415,7 +443,13 @@
       if (from === myName) return;
       const fix = decodeNodePosition({ latitudeI: message.pos[0], longitudeI: message.pos[1] });
       if (!fix) return;
-      peers.heard({ from, pos: fix, accuracy: message.accuracy, state: message.state });
+      peers.heard({
+        from,
+        pos: fix,
+        accuracy: message.accuracy,
+        state: message.state,
+        role: message.role,
+      });
       refreshPeers();
       pushLog(w().log.heard(from, bytes.length));
     });
@@ -455,6 +489,8 @@
       from: myId,
       pos,
       accuracy: here.accuracy ?? null,
+      state: myState,
+      role: amFox ? "fox" : null,
     });
     lastSentAt = Date.now();
     courier.send(bytes).then(
@@ -468,6 +504,42 @@
     broadcasting = !broadcasting;
     pushLog(broadcasting ? w().log.broadcastOn : w().log.broadcastOff);
     scheduleBeacons();
+  }
+
+  /**
+   * A check-in, which is the reason a schedule is not enough.
+   *
+   * Said immediately as well as kept: the whole point of pressing *come here*
+   * is that it does not wait two minutes. Pressing the state this device is
+   * already in clears it back to ok, so the same button both says and unsays.
+   */
+  function checkIn(state) {
+    myState = myState === state ? "ok" : state;
+    pushLog(w().log.checkIn(myState));
+    if (broadcasting) sayWhereIAm();
+  }
+
+  function toggleFox() {
+    amFox = !amFox;
+    pushLog(amFox ? w().log.foxOn : w().log.foxOff);
+    if (broadcasting) sayWhereIAm();
+  }
+
+  function saveShown() {
+    try {
+      localStorage.setItem(SHOW_KEY, JSON.stringify(show));
+    } catch {
+      /* a browser that refuses storage simply forgets the layout */
+    }
+  }
+
+  function loadShown() {
+    try {
+      const kept = JSON.parse(localStorage.getItem(SHOW_KEY) ?? "null");
+      if (kept && typeof kept === "object") show = { ...show, ...kept };
+    } catch {
+      /* as above */
+    }
   }
 
   function chooseInterval(minutes) {
@@ -527,8 +599,12 @@
         id: p.id,
         name: p.name || p.id,
         colour: TRAIL_COLOURS[index % TRAIL_COLOURS.length],
-        points: p.points,
+        // With trails off the map keeps only the newest place: where
+        // everybody is, without where they have been. On a small screen that
+        // is sometimes the whole question.
+        points: show.trails ? p.points : p.points.slice(-1),
         state: p.state,
+        role: p.role,
       })),
   );
 
@@ -538,6 +614,32 @@
   };
 
   const lastPoint = (peer) => peer.points.at(-1) ?? null;
+
+  /** The fox when there is a hunt, otherwise whoever was picked. */
+  const followed = $derived.by(() => {
+    const hunted = show.hunt ? peerRows.find((p) => p.role === "fox") : null;
+    return hunted ?? peerRows.find((p) => p.id === following) ?? null;
+  });
+
+  /**
+   * Where to walk, when the map will not load.
+   *
+   * The age is not decoration: a bearing to a ten-minute-old position in a
+   * wood points at somewhere nobody is, and the number is the only thing that
+   * says so.
+   */
+  const compass = $derived.by(() => {
+    const peer = followed;
+    const point = peer && lastPoint(peer);
+    if (!peer || !point || !here) return null;
+    return {
+      id: peer.id,
+      name: peer.name || peer.id,
+      degrees: bearingDegrees(here, point),
+      metres: distanceMetres(here, point),
+      at: point.at,
+    };
+  });
 
   const headingOf = (peer) => {
     if (peer.points.length < 2) return null;
@@ -592,6 +694,7 @@
       pushLog(w().log.windowError(type, message)),
     );
     loadPreferences();
+    loadShown();
     refreshPeers();
     // The browser's fix starts straight away and says what it is doing when
     // there is none — on a walk, "still searching" and "blocked" are different
@@ -757,6 +860,100 @@
   {/if}
 
   <section class="card">
+    <h2>{t.show.legend}</h2>
+    <fieldset class="switches" data-testid="switches">
+      <legend class="sr-only">{t.show.legend}</legend>
+      {#each ["map", "trails", "people", "compass", "checkIn", "hunt"] as key (key)}
+        <label>
+          <input
+            type="checkbox"
+            checked={show[key]}
+            data-testid={`show-${key}`}
+            onchange={(e) => {
+              show = { ...show, [key]: e.currentTarget.checked };
+              saveShown();
+            }}
+          />
+          {t.show[key]}
+        </label>
+      {/each}
+    </fieldset>
+    <p class="dim">{t.show.why}</p>
+  </section>
+
+  {#if show.checkIn}
+    <section class="card">
+      <h2>{t.checkIn.legend}</h2>
+      <p class="states" data-testid="check-in">
+        {#each STATES as state (state)}
+          <button
+            class={myState === state ? "primary" : "quiet"}
+            data-state={state}
+            aria-pressed={myState === state}
+            onclick={() => checkIn(state)}
+          >
+            {t.checkIn.states[state]}
+          </button>
+        {/each}
+      </p>
+      <p class="dim" data-testid="my-state">{t.checkIn.mine(t.checkIn.states[myState])}</p>
+      <p class="dim">{t.checkIn.why}</p>
+    </section>
+  {/if}
+
+  {#if show.hunt}
+    <section class="card">
+      <h2>{t.hunt.legend}</h2>
+      <p>
+        <label>
+          <input type="checkbox" checked={amFox} onchange={toggleFox} data-testid="i-am-fox" />
+          {t.hunt.iAmFox}
+        </label>
+      </p>
+      <p class="dim" data-testid="fox">
+        {#if peerRows.find((p) => p.role === "fox")}
+          {t.hunt.foxHeard(
+            peerRows.find((p) => p.role === "fox").name ||
+              peerRows.find((p) => p.role === "fox").id,
+          )}
+        {:else}
+          {t.hunt.noFox}
+        {/if}
+      </p>
+      <p class="dim">{t.hunt.why}</p>
+      <p class="dim">{t.hunt.slower}</p>
+    </section>
+  {/if}
+
+  {#if show.compass}
+    <section class="card">
+      <h2>{t.compass.legend}</h2>
+      {#if compass}
+        <p class="compass" data-testid="compass">
+          <span class="needle" style={`transform:rotate(${compass.degrees}deg)`} aria-hidden="true"
+            >↑</span
+          >
+          <span class="mono"
+            >{t.compass.line(
+              compass.name,
+              compassPoint(compass.degrees),
+              formatDistance(compass.metres),
+            )}</span
+          >
+        </p>
+        <p class="dim" data-testid="compass-age">
+          {t.compass.age(ageText(compass.at))}
+          {#if nowTick - compass.at > 5 * 60_000}<strong> {t.compass.stale}</strong>{/if}
+        </p>
+      {:else if !here}
+        <p class="dim" data-testid="compass-none">{t.compass.noPlace}</p>
+      {:else}
+        <p class="dim" data-testid="compass-none">{t.compass.none}</p>
+      {/if}
+    </section>
+  {/if}
+
+  <section class="card">
     <h2>{t.where.legend}</h2>
     <p data-testid="here">
       {#if here}
@@ -778,7 +975,8 @@
     {/if}
   </section>
 
-  <section class="card">
+  {#if show.map}
+    <section class="card">
     <h2>{t.map.legend}</h2>
     {#if trails.length === 0 && !here}
       <p class="dim" data-testid="map-empty">{t.map.empty}</p>
@@ -786,9 +984,11 @@
       <TrailMap {trails} {here} words={t.map} />
       <p class="dim">{t.map.note}</p>
     {/if}
-  </section>
+    </section>
+  {/if}
 
-  <section class="card">
+  {#if show.people}
+    <section class="card">
     <h2>{t.people.legend}</h2>
     <p class="dim mono" data-testid="people-summary">{t.people.summary(peerSummary)}</p>
     {#if peerRows.length === 0}
@@ -809,6 +1009,8 @@
               <small class="dim mono">{peer.id}</small>
             </span>
             <span class="facts dim mono">
+              {#if peer.role === "fox"}<strong class="badge">🦊</strong>{/if}
+              {#if peer.state !== "ok"}<strong class="badge">{t.checkIn.states[peer.state]}</strong>{/if}
               {t.people.lastHeard(ageText(peer.lastAt))}
               {#if distanceOf(peer) != null}
                 · {formatDistance(distanceOf(peer))}
@@ -825,13 +1027,23 @@
               />
               {t.people.show}
             </label>
+            {#if show.compass}
+              <button
+                class="quiet"
+                data-testid={`follow-${peer.id}`}
+                onclick={() => (following = following === peer.id ? "" : peer.id)}
+              >
+                {following === peer.id ? t.compass.stop : t.compass.follow}
+              </button>
+            {/if}
             <button class="quiet" onclick={() => forgetPeer(peer.id)}>{t.people.forget}</button>
           </li>
         {/each}
       </ul>
       <p class="dim">{t.people.nameWhy}</p>
     {/if}
-  </section>
+    </section>
+  {/if}
 
   {#if showLog}
     <section class="card">
@@ -1037,6 +1249,46 @@
   /* Who is out there. One row per device, and the swatch is the only thing
      tying a name in this list to a trail on the map — so it is the first
      thing in the row and the same colour the map drew. */
+  .switches,
+  .states {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    border: 0;
+    padding: 0;
+    margin: 0.4rem 0 0.3rem;
+    align-items: center;
+  }
+
+  .states button {
+    flex: 1 1 auto;
+  }
+
+  .compass {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    font-size: 1.05rem;
+  }
+
+  /* An arrow that points, rather than a word that has to be converted into
+     one while walking. The compass point stays beside it for anybody holding
+     a real compass, or reading this aloud. */
+  .needle {
+    display: inline-block;
+    font-size: 2rem;
+    line-height: 1;
+    transition: transform 0.4s ease;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0 0.3rem;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    margin-right: 0.3rem;
+  }
+
   .people {
     list-style: none;
     margin: 0.6rem 0 0;

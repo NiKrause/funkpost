@@ -4,7 +4,14 @@
  */
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { encodeBeacon, decodeBeacon, sameGroup, groupAirtime, STATES } from "../lib/beacon.js";
+import {
+  encodeBeacon,
+  decodeBeacon,
+  sameGroup,
+  groupAirtime,
+  STATES,
+  ROLES,
+} from "../lib/beacon.js";
 import { encodeHeartbeat, decodeHeartbeat } from "../lib/heartbeat.js";
 
 const TAG = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
@@ -62,6 +69,31 @@ describe("a beacon on the wire", () => {
     // The Gulf of Guinea, which is what a receiver with no fix reports.
     assert.throws(() => encodeBeacon({ tag: TAG, from: ME, pos: [0, 0] }), /without a place/);
     assert.throws(() => encodeBeacon({ tag: TAG, from: ME, pos: [1.5, 2] }), /without a place/);
+  });
+
+  test("being the fox is a role, not a mood — a device can be both", () => {
+    // Separate fields on purpose: "I am stopping here" and "I am the one being
+    // hunted" are different kinds of fact.
+    const hunted = decodeBeacon(
+      encodeBeacon({ tag: TAG, from: ME, pos: PLACE, role: "fox", state: "help" }),
+    );
+    assert.equal(hunted.role, "fox");
+    assert.equal(hunted.state, "help");
+    assert.ok(ROLES.includes(hunted.role));
+  });
+
+  test("a game costs nothing to the people not playing it", () => {
+    const plain = encodeBeacon({ tag: TAG, from: ME, pos: PLACE, accuracy: 8 });
+    const walker = encodeBeacon({ tag: TAG, from: ME, pos: PLACE, accuracy: 8, role: "walker" });
+    assert.equal(walker.length, plain.length, "walker is the absence of the field");
+    assert.equal(decodeBeacon(plain).role, "walker", "and the absence reads as walker");
+    // The fox pays for itself, which is the right way round: one device in a
+    // group carries the three bytes that make the game legible.
+    assert.equal(encodeBeacon({ tag: TAG, from: ME, pos: PLACE, accuracy: 8, role: "fox" }).length, 52);
+  });
+
+  test("a role nobody here knows is not a reason to drop a position", () => {
+    assert.throws(() => encodeBeacon({ tag: TAG, from: ME, pos: PLACE, role: "badger" }), /not a role/);
   });
 
   test("the two protocols on one channel do not read each other's post", () => {
