@@ -2,6 +2,12 @@
 /**
  * What mesh-heartbeat says, in both languages.
  *
+ * Written for somebody who arrived here and nowhere else. The intro used to
+ * open "two nodes and no list", which is only a sentence if you already know
+ * the demo next door carries a todo list — and the people this page is for do
+ * not. A page that measures a radio has to explain itself without the
+ * neighbours.
+ *
  * German without address, as on lora.le-space.de: no du, no Sie. Protocol
  * names — beat, echo — stay as the wire spells them, in both languages, so a
  * log line and a field note can be compared without translating either.
@@ -13,7 +19,7 @@ export const WORDS = {
     title: "mesh-heartbeat — how far does the mesh reach?",
     tagline: "one device stays · one travels · every beat recorded with where it went out",
     intro:
-      "Two Meshtastic nodes and no list. One stays put and answers; the other goes for a ride and asks. What comes back is not <em>the mesh works</em> but a place with an answer or a silence against it — and, when it answered, on which beat.",
+      "Two Meshtastic nodes and nothing else: no database, nothing to replicate, nothing to keep in step. One stays put and answers; the other goes for a ride and asks. What comes back is not <em>the mesh works</em> but a place with an answer or a silence against it — and, when it answered, on which beat.",
 
     role: {
       legend: "What this device does",
@@ -180,7 +186,7 @@ export const WORDS = {
     title: "mesh-heartbeat — wie weit reicht das Mesh?",
     tagline: "ein Gerät bleibt · eines fährt · jeder Beat mit dem Ort festgehalten",
     intro:
-      "Zwei Meshtastic-Knoten und keine Liste. Einer bleibt stehen und antwortet, der andere fährt und fragt. Zurück kommt nicht <em>das Mesh funktioniert</em>, sondern ein Ort mit einer Antwort oder einem Schweigen daneben — und wenn geantwortet wurde, auf welchem Beat.",
+      "Zwei Meshtastic-Knoten und sonst nichts: keine Datenbank, nichts zu replizieren, nichts abzugleichen. Einer bleibt stehen und antwortet, der andere fährt und fragt. Zurück kommt nicht <em>das Mesh funktioniert</em>, sondern ein Ort mit einer Antwort oder einem Schweigen daneben — und wenn geantwortet wurde, auf welchem Beat.",
 
     role: {
       legend: "Was dieses Gerät tut",
