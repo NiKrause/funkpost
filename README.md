@@ -69,6 +69,10 @@ is a menu, and every push to main redeploys them:
 | **[…/mesh-heartbeat/](https://nikrause.github.io/funkpost/mesh-heartbeat/)** | `mesh-heartbeat` | how far does the mesh reach? — **no database at all** |
 | **[…/mesh-trail/](https://nikrause.github.io/funkpost/mesh-trail/)** | `mesh-trail` | everyone on one map — **no database at all** |
 
+Each has a German address as well — append `de/` — because the preview a chat
+app draws for a pasted link is fetched by a scraper and cached per URL, so it
+cannot be told which language the reader picked.
+
 Open any of them twice with `?mesh=bc` and two browser tabs play the two
 devices (the booking demo wants `&role=salon` in one and `&role=customer` in
 the other; the range test `&role=office` and `&role=rider`). With a Meshtastic

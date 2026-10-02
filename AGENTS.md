@@ -199,15 +199,60 @@ Importing a channel also **reboots the node and often resets the region to
 - **Distances do not pin a scale factor.** Both ends scale with the same
   constant, so an error cancels itself over the wire. The scale rests on
   raw-integer cases in `test/position.test.js`.
+- **Never hand a whole document to `assert.match`.** Node 22's test runner
+  stalls while it formats the failure — a 3.6 KB page is enough — so the
+  regression reports itself as a hung CI job instead of a red test. Read the
+  needle out and compare *that*, which is also the only way the message says
+  anything. Reproduced: a short-string failure right before it reports fine.
+- **Two demos must not preview-serve on the same port.** `reuseExistingServer`
+  is on locally, so a leftover server from one suite silently has the next one
+  testing the wrong app. One port each: 4173, 4174, 4175, 4176.
 - **The lockfile must be generated with the npm that CI runs** — Node 22's npm
   10. An npm 11 lockfile fails `npm ci`: `npx npm@10 install`.
+
+## 9. A shared link cannot be told a language
+
+A social card is read by a **scraper**, not a browser. It never runs the page,
+so the language somebody switched on is invisible to it; it has no
+`localStorage`, sends no useful `Accept-Language`, and caches what it finds
+**per URL**. One address therefore has exactly one preview, in one language,
+for everybody who pastes it anywhere.
+
+The only fix is a second address. Every page here exists twice —
+`/mesh-trail/` and `/mesh-trail/de/` — and the German one is *generated* from
+the English one at build time by `scripts/make-german-pages.mjs`, so a
+correction to one head cannot silently leave the other behind. It is
+git-ignored and listed as a second Vite input.
+
+Three traps, each of which looks like something else when it bites:
+
+- **A reference written for the page one level up 404s one level down.** Vite
+  copies `public/` verbatim and rewrites nothing. The generator turns `./x`
+  into `../x` — and then *asserts* that nothing relative survived, because the
+  landing page reaches `brand.js` from an import map and a module script,
+  neither of which has an `href`, and a missing pill looks like a plain page
+  rather than an error.
+- **The manifest is the exception**, and must stay `./manifest.webmanifest`.
+  `start_url: "./"` has to mean *this* page, or installing from German installs
+  the English app.
+- **`new Request("./")` in a service worker resolves against `sw.js`**, not
+  against the page. Every navigation under `/de/` was keyed to the English
+  shell, so offline a German link served an English page and nothing said why.
+  The key is `new URL("./", request.url)`. The install step takes **both**
+  shells and the page caches the address it was opened at, because the
+  navigation that registers a worker is over before the worker can see it.
+
+**Ask before you build:** will the page you are adding exist in both languages?
+If it carries an `og:image`, it needs a German card and an entry in `GERMAN`;
+if it is copied rather than bundled, like the landing page, the deploy has to
+generate its twin.
 
 ---
 
 ## Before you ask for a review, check
 
 1. If you fixed something about the radio, the link or the browser — is it in
-   `lib/` or the shared connector, and does `grep` show all three demos getting
+   `lib/` or the shared connector, and does `grep` show all four demos getting
    it? (§0)
 2. Does the page treat a reported disconnection as a report rather than a
    verdict? (§2)
@@ -215,5 +260,7 @@ Importing a channel also **reboots the node and often resets the region to
    about it? (§4)
 4. How many bytes, how often, and what is that an hour? (§5)
 5. Did you break every new assertion to see it fail? (§8)
-6. Conversation in German if that is how it started; **issues, PRs, commits,
+6. If you added a page, or changed what one says about itself — does it exist
+   in both languages, with a card of its own? (§9)
+7. Conversation in German if that is how it started; **issues, PRs, commits,
    code and docs in English.**

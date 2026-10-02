@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#0B0E15"/>
+  <circle cx="980" cy="86" r="3" fill="#EDF1F8" opacity="0.45"/><circle cx="1104" cy="190" r="2.5" fill="#EDF1F8" opacity="0.4"/><circle cx="1052" cy="520" r="2.5" fill="#EDF1F8" opacity="0.35"/><circle cx="880" cy="560" r="2" fill="#EDF1F8" opacity="0.3"/><circle cx="1150" cy="420" r="2" fill="#EDF1F8" opacity="0.3"/><circle cx="820" cy="110" r="2" fill="#EDF1F8" opacity="0.3"/>
+  <g transform="translate(96 15)"><path d="M 72 380 C 110 336 112 304 142 282 C 176 256 184 226 222 208" fill="none" stroke="#58C7F3" stroke-width="18" stroke-linecap="round" opacity="0.85"/><circle cx="72" cy="380" r="12" fill="#58C7F3" opacity="0.35"/><circle cx="142" cy="282" r="13" fill="#58C7F3" opacity="0.6"/><circle cx="222" cy="208" r="28" fill="#FF6B5B"/><path d="M 206 396 C 192 358 202 330 224 310" fill="none" stroke="#9A7BFF" stroke-width="13" stroke-linecap="round" opacity="0.6"/><circle cx="224" cy="310" r="15" fill="#9A7BFF"/></g>
+  <text x="400" y="246" fill="#58C7F3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="30" font-weight="600" letter-spacing="2">EIN SPAZIERGANG MIT FUNKGERÄTEN</text>
+  <text x="400" y="330" fill="#EDF1F8" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="62" font-weight="700">mesh-trail</text>
+  <text x="400" y="398" fill="#EDF1F8" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="36">Alle auf einer Karte</text>
+  <text x="400" y="448" fill="#9AA6BC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="27">jedes Gerät sagt, wo es ist; jedes andere zeichnet die Spur</text>
+  <text x="400" y="540" fill="#6B7689" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="25">funkpost · ein Byte-Kurier über LoRa®-Mesh-Funk · Le Space</text>
+</svg>

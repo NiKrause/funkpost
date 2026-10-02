@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#0B0E15"/>
+  <circle cx="980" cy="86" r="3" fill="#EDF1F8" opacity="0.45"/><circle cx="1104" cy="190" r="2.5" fill="#EDF1F8" opacity="0.4"/><circle cx="1052" cy="520" r="2.5" fill="#EDF1F8" opacity="0.35"/><circle cx="880" cy="560" r="2" fill="#EDF1F8" opacity="0.3"/><circle cx="1150" cy="420" r="2" fill="#EDF1F8" opacity="0.3"/><circle cx="820" cy="110" r="2" fill="#EDF1F8" opacity="0.3"/>
+  <g transform="translate(96 15)"><circle cx="150" cy="300" r="86" fill="none" stroke="#58C7F3" stroke-width="22"/><path d="M 108 300 L 140 334 L 196 268" fill="none" stroke="#FF6B5B" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <text x="400" y="246" fill="#58C7F3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="30" font-weight="600" letter-spacing="2">DIE DATENBANK-EBENE</text>
+  <text x="400" y="330" fill="#EDF1F8" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="62" font-weight="700">mesh-todo</text>
+  <text x="400" y="398" fill="#EDF1F8" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="36">Eine Todo-Liste über LoRa</text>
+  <text x="400" y="448" fill="#9AA6BC" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="27">signierte Einträge, ein prüfbares Log — und nirgends ein IP-Weg</text>
+  <text x="400" y="540" fill="#6B7689" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="25">funkpost · ein Byte-Kurier über LoRa®-Mesh-Funk · Le Space</text>
+</svg>

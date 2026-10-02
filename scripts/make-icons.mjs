@@ -22,7 +22,8 @@ import { resolve } from "node:path";
 const SHOTS = [
   // The social card is not square: 1200×630 is what every scraper crops to,
   // and a link with no picture is a link nobody clicks.
-  { from: "og.svg", to: "og.png", width: 1200, height: 630, optional: true },
+  { from: "og.svg", to: "og.png", width: 1200, height: 630 },
+  { from: "og-de.svg", to: "og-de.png", width: 1200, height: 630 },
   { from: "icon.svg", to: "icon-512.png", size: 512 },
   { from: "icon.svg", to: "icon-192.png", size: 192 },
   { from: "icon.svg", to: "apple-touch-icon.png", size: 180 },
@@ -35,12 +36,27 @@ if (!app) {
   console.error("usage: node scripts/make-icons.mjs examples/<demo>");
   process.exit(1);
 }
-const dir = resolve(app, "public");
+// The demos keep their art in public/; the landing page is copied rather
+// than bundled and keeps its own beside index.html. Without this the landing
+// card was the one image in the repository nobody could regenerate.
+/** How close to the edge a line may come. A scraper may crop a few pixels. */
+const MARGIN = 60;
+
+const dir = existsSync(resolve(app, "public")) ? resolve(app, "public") : resolve(app);
 
 const browser = await chromium.launch();
 try {
-  for (const { from, to, size, width = size, height = size, optional } of SHOTS) {
-    if (optional && !existsSync(resolve(dir, from))) continue;
+  const skipped = [];
+  const clipped = [];
+  for (const { from, to, size, width = size, height = size } of SHOTS) {
+    // A source that is not there is not an error: the landing page has a card
+    // and no app icons, because it is a page rather than an app. What a
+    // *manifest* names and the build does not ship is caught where it matters,
+    // by test/installable.test.js reading the PNG headers.
+    if (!existsSync(resolve(dir, from))) {
+      skipped.push(from);
+      continue;
+    }
     const svg = readFileSync(resolve(dir, from), "utf8");
     const page = await browser.newPage({
       viewport: { width, height },
@@ -54,8 +70,30 @@ try {
         `svg{display:block;width:${width}px;height:${height}px}</style>${svg}`,
     );
     writeFileSync(resolve(dir, to), await page.screenshot({ omitBackground: false }));
+
+    // A card whose text runs off the canvas: the browser clips it, the PNG
+    // looks finished, and the first person to see the missing half is whoever
+    // the link was shared with. The landing card had shipped like that in
+    // English, and the German line ran 267px past the edge. Measured in the
+    // browser that drew it, since no rule of thumb survives a long German
+    // compound. MARGIN, not zero, because scrapers crop a few pixels.
+    const spills = await page.evaluate(
+      (margin) =>
+        [...document.querySelectorAll("text")]
+          .map((t) => ({ right: Math.round(t.getBBox().x + t.getBBox().width), text: t.textContent }))
+          .filter((b) => b.right > window.innerWidth - margin),
+      MARGIN,
+    );
+    for (const { right, text } of spills) clipped.push(`${from}: "${text}" ends at ${right} of ${width}`);
+
     await page.close();
     console.log(`${to.padEnd(24)} ${width}×${height}`);
+  }
+  if (skipped.length) console.log(`no ${[...new Set(skipped)].join(", ")} here`);
+  if (clipped.length) {
+    console.error(`\n${clipped.length} line(s) past the edge:`);
+    for (const line of clipped) console.error(`  ${line}`);
+    process.exitCode = 1;
   }
 } finally {
   await browser.close();

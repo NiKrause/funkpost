@@ -19,6 +19,17 @@ export default defineConfig({
       builtAt: `${new Date().toISOString().slice(0, 16)}Z`,
     }),
   },
+  build: {
+    // Two pages, because a social card is read by a scraper that has no idea
+    // what language anybody switched on — so German needs an address of its
+    // own. `de/index.html` is generated from this one by the prebuild step.
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        de: fileURLToPath(new URL("./de/index.html", import.meta.url)),
+      },
+    },
+  },
   // GitHub Pages serves the demo under /funkpost/; local dev stays at /.
   base: process.env.PAGES_BASE ?? "/",
   // @orbitdb/core imports node's `events`, @meshtastic/core's logger pulls
