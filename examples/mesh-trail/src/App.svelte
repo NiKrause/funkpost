@@ -37,6 +37,8 @@
   import {
     decodeNodePosition,
     preferFix,
+    freshPosition,
+    fixAgeMs,
     encodeNodePosition,
     watchBrowserPosition,
     askForPosition,
@@ -191,6 +193,8 @@
   let everyMin = $state(Number(params.get("every") ?? 2));
   let beaconTimer = null;
   let lastSentAt = $state(null);
+  /** Seconds of age that held the last beacon back, or null when none did. */
+  let heldBack = $state(null);
 
   /**
    * How this device is, which a schedule cannot say.
@@ -398,7 +402,7 @@
     if (best === here) return;
     const moved = !here || here.lat !== best.lat || here.lon !== best.lon;
     here = best;
-    if (moved) pushLog(w().log.position(best.source, formatPosition(best)));
+    if (moved) pushLog(w().log.position(best.source, formatPosition(best), best.accuracy));
   }
 
   // -------------------------------------------------------------- the beacons
@@ -444,6 +448,17 @@
     scheduleBeacons();
   }
 
+  /**
+   * How old a place may be and still be worth saying.
+   *
+   * The beacon carries no time, so whatever goes out is read as current by
+   * everyone who hears it. One interval is the honest ceiling: a fix older
+   * than the gap between two beacons has already been superseded by a beacon
+   * that never happened. Two minutes when nothing is on a timer and the button
+   * is the only sender.
+   */
+  const staleAfterMs = $derived(everyMin > 0 ? everyMin * 60_000 : 120_000);
+
   function restartBeacons() {
     tag = null;
     if (beaconTimer) clearInterval(beaconTimer);
@@ -468,8 +483,26 @@
    * somebody has already walked away from — and in a group a retry multiplies
    * traffic by the number of listeners.
    */
-  function sayWhereIAm() {
-    if (!courier || !tag || !here) return;
+  async function sayWhereIAm() {
+    if (!courier || !tag) return;
+    // Ask before saying. `watchPosition` reports changes, not time, so a
+    // phone that has been still — or a page that was in the background — holds
+    // a fix from minutes ago, and the beacon has no field to admit that in.
+    const asked = await freshPosition();
+    if (asked) setHere(asked);
+    if (!here) return;
+
+    const age = fixAgeMs(here);
+    if (age > staleAfterMs) {
+      // Saying nothing is the honest option: a stale place broadcast as a
+      // current one puts the other walker's compass on a bearing to where
+      // this device used to be.
+      heldBack = Math.round(age / 1000);
+      pushLog(w().log.heldBack(heldBack));
+      return;
+    }
+    heldBack = null;
+
     const pos = encodeNodePosition(here);
     if (!pos) return;
     const bytes = encodeBeacon({
@@ -950,10 +983,19 @@
           <span class="dim"> · {t.where.accuracy(Math.round(here.accuracy))}</span>
         {/if}
         {#if here.at}<span class="dim"> · {ageText(here.at)}</span>{/if}
+        <!-- The compass has said "stale" past five minutes since it was
+             built; this readout only counted upwards, and a number climbing
+             past 160 reads as a clock rather than as a problem. -->
+        {#if nowTick - here.at > staleAfterMs}
+          <strong data-testid="here-stale"> {t.where.stale}</strong>
+        {/if}
       {:else}
         <span class="dim">{t.where.none} — {t.where.waiting}</span>
       {/if}
     </p>
+    {#if heldBack != null}
+      <p class="warn" data-testid="held-back">{t.where.held(heldBack)}</p>
+    {/if}
     {#if fixTrouble && here?.source !== "node"}
       <p class="dim" data-testid="fix-trouble">{t.where.trouble[fixTrouble]}</p>
       {#if fixTrouble !== "unsupported"}

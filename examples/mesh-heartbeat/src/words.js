@@ -200,7 +200,8 @@ export const WORDS = {
       wakeRefused: (why) => `the screen lock was refused: ${why}`,
       gattQueueOn: "one Bluetooth operation at a time",
       windowError: (type, message) => `! window ${type}: ${message}`,
-      position: (source, text) => `position (${source}) ${text}`,
+      position: (source, text, accuracy) =>
+        `position (${source}) ${text}${Number.isFinite(accuracy) ? ` ±${Math.round(accuracy)} m` : ""}`,
       officePosition: (text) => `the other device is at ${text}`,
       error: (message) => `error: ${message}`,
     },
@@ -380,7 +381,8 @@ export const WORDS = {
       wakeRefused: (why) => `die Bildschirmsperre wurde verweigert: ${why}`,
       gattQueueOn: "immer nur eine Bluetooth-Operation gleichzeitig",
       windowError: (type, message) => `! Fenster ${type}: ${message}`,
-      position: (source, text) => `Position (${source}) ${text}`,
+      position: (source, text, accuracy) =>
+        `Position (${source}) ${text}${Number.isFinite(accuracy) ? ` ±${Math.round(accuracy)} m` : ""}`,
       officePosition: (text) => `das andere Gerät steht bei ${text}`,
       error: (message) => `Fehler: ${message}`,
     },

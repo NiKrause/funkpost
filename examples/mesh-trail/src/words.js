@@ -69,6 +69,9 @@ export const WORDS = {
       waiting: "the others are still drawn; this device simply is not on the map",
       accuracy: (metres) => `±${metres} m`,
       age: (seconds) => (seconds < 2 ? "just now" : `${seconds} s ago`),
+      stale: "out of date",
+      held: (seconds) =>
+        `Nothing has gone out: this fix is ${seconds} s old, and a beacon carries no time — the others would draw it as current. The phone reports a position when it changes, so standing still is quiet.`,
       ask: "Ask for my location",
       trouble: {
         searching:
@@ -163,7 +166,9 @@ export const WORDS = {
       wakeOn: "screen kept awake",
       wakeOff: "screen may sleep again",
       wakeRefused: (why) => `the screen lock was refused: ${why}`,
-      position: (source, text) => `position (${source}) ${text}`,
+      position: (source, text, accuracy) =>
+        `position (${source}) ${text}${Number.isFinite(accuracy) ? ` ±${Math.round(accuracy)} m` : ""}`,
+      heldBack: (seconds) => `nothing said — the fix is ${seconds} s old`,
       noFix: (kind, message) => `! no position (${kind})${message ? `: ${message}` : ""}`,
       broadcastOn: "sending my position from now on",
       broadcastOff: "no longer sending my position",
@@ -238,6 +243,9 @@ export const WORDS = {
       waiting: "die anderen werden trotzdem gezeichnet, nur dieses Gerät steht nicht auf der Karte",
       accuracy: (metres) => `±${metres} m`,
       age: (seconds) => (seconds < 2 ? "gerade eben" : `vor ${seconds} s`),
+      stale: "veraltet",
+      held: (seconds) =>
+        `Es ging nichts raus: Dieser Fix ist ${seconds} s alt, und ein Beacon trägt keine Zeit — die anderen würden ihn als aktuell einzeichnen. Das Telefon meldet eine Position, wenn sie sich ändert, Stillstehen ist also still.`,
       ask: "Nach dem Standort fragen",
       trouble: {
         searching:
@@ -331,7 +339,9 @@ export const WORDS = {
       wakeOn: "Bildschirm wird wachgehalten",
       wakeOff: "Bildschirm darf wieder schlafen",
       wakeRefused: (why) => `die Bildschirmsperre wurde verweigert: ${why}`,
-      position: (source, text) => `Position (${source}) ${text}`,
+      position: (source, text, accuracy) =>
+        `Position (${source}) ${text}${Number.isFinite(accuracy) ? ` ±${Math.round(accuracy)} m` : ""}`,
+      heldBack: (seconds) => `nichts gesagt — der Fix ist ${seconds} s alt`,
       noFix: (kind, message) => `! keine Position (${kind})${message ? `: ${message}` : ""}`,
       broadcastOn: "sendet ab jetzt die eigene Position",
       broadcastOff: "sendet die eigene Position nicht mehr",

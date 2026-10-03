@@ -63,6 +63,7 @@
   import {
     decodeNodePosition,
     preferFix,
+    fixAgeMs,
     encodeNodePosition,
     watchBrowserPosition,
     askForPosition,
@@ -433,7 +434,7 @@
     if (best === here) return;
     const moved = !here || here.lat !== best.lat || here.lon !== best.lon;
     here = best;
-    if (moved) pushLog(w().log.position(best.source, formatPosition(best)));
+    if (moved) pushLog(w().log.position(best.source, formatPosition(best), best.accuracy));
   }
 
   // ------------------------------------------------------------ the heartbeat
@@ -442,6 +443,16 @@
   const roundEveryMs = $derived(
     role === "office" ? null : everyMin > 0 ? everyMin * 60_000 : null,
   );
+
+  /**
+   * How old a place may be and still be worth putting in a beat.
+   *
+   * One round, because a fix older than the gap between two rounds has already
+   * been superseded by a round that said nothing about it. Two minutes when
+   * nothing is on a timer.
+   */
+  const staleAfterMs = $derived(roundEveryMs ?? 120_000);
+
 
   async function startHeartbeat() {
     if (!courier || heartbeat) return;
@@ -462,7 +473,12 @@
         // Both devices say where they are; the rhythm above is the difference.
         // A rider's position changes, which is why it repeats it once a round
         // rather than once ever — and why it is not on every beat.
-        position: () => encodeNodePosition(here),
+        // The library pulls a position when it wants one, so the freshness
+        // check has to live here. A beat carries no time either: a place from
+        // three rounds ago, sent as current, puts a point on the map where
+        // this device used to be and files the answer against the wrong spot.
+        // `pos` is optional in the protocol, so saying nothing is allowed.
+        position: () => (fixAgeMs(here) > staleAfterMs ? null : encodeNodePosition(here)),
         // `lastError` is set when a send fails and cleared on the next one
         // that does not — so reading it here gives a transient message rather
         // than a banner that outlives the fault it describes.
