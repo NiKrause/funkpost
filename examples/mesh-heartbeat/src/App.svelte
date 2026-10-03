@@ -62,6 +62,7 @@
   import RideMap from "./Map.svelte";
   import {
     decodeNodePosition,
+    preferFix,
     encodeNodePosition,
     watchBrowserPosition,
     askForPosition,
@@ -426,14 +427,13 @@
   function setHere(fix) {
     // Whatever the browser was complaining about, it has stopped being true.
     if (fix.source === "browser") fixTrouble = null;
-    // The node wins. A browser fix that arrives after one from the node is the
-    // phone's opinion about a place the antenna already reported, and mixing
-    // the two silently is how a track ends up with two accuracies and no note
-    // of which is which.
-    if (here?.source === "node" && fix.source === "browser") return;
-    const moved = !here || here.lat !== fix.lat || here.lon !== fix.lon;
-    here = fix;
-    if (moved) pushLog(w().log.position(fix.source, formatPosition(fix)));
+    // Which instrument to believe is one decision, made in one place, because
+    // both map demos had the same wrong answer baked into them separately.
+    const best = preferFix(here, fix);
+    if (best === here) return;
+    const moved = !here || here.lat !== best.lat || here.lon !== best.lon;
+    here = best;
+    if (moved) pushLog(w().log.position(best.source, formatPosition(best)));
   }
 
   // ------------------------------------------------------------ the heartbeat

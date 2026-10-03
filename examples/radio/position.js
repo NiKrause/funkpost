@@ -23,6 +23,25 @@
 const SCALE = 1e-7;
 
 /**
+ * `Position.LocSource`, straight from the protocol: 0 unset, 1 typed in by
+ * hand, 2 the node's own GPS, 3 a receiver wired to it.
+ *
+ * This matters more than it looks. A node with no GPS still reports a
+ * position, because the Meshtastic app writes the phone's into it — so
+ * "the node has a position" is not the same claim as "the node knows where
+ * it is", and only the second one should outrank a phone that is walking.
+ */
+const LOC_INTERNAL = 2;
+const LOC_EXTERNAL = 3;
+
+/**
+ * Past this many metres a browser fix is a guess from a Wi-Fi network or an IP
+ * address rather than from the sky. A phone with a satellite lock reports
+ * single or low double digits; a desktop reports thousands.
+ */
+export const VAGUE_METRES = 100;
+
+/**
  * Read a node's position packet, or decide it has no fix.
  *
  * `null` rather than a throw, and `null` rather than zeros: a node that has not
@@ -47,7 +66,48 @@ export function decodeNodePosition(packet, { at = Date.now() } = {}) {
     // with a plausible age is worth more than one that claims to be now.
     at: Number.isFinite(p.time) && p.time > 0 ? p.time * 1000 : at,
     source: "node",
+    // Did it see a satellite, or is it repeating a place somebody typed in?
+    gps: p.locationSource === LOC_INTERNAL || p.locationSource === LOC_EXTERNAL,
   };
+}
+
+/**
+ * Which of two fixes to believe, when they disagree about where "here" is.
+ *
+ * Both demos used to let the node win outright, and a walk in the woods found
+ * what that costs: connect a node with no GPS and the map stops following the
+ * phone for good. The node had a position — the Meshtastic app had written the
+ * phone's into it earlier — and one such packet locked the browser out of a
+ * map it had been drawing correctly a second before.
+ *
+ * So the question is not which source but which instrument:
+ *
+ * - A node that has seen a satellite wins. It is what the mesh knows about,
+ *   and its fix is the one every peer is told about.
+ * - A node repeating a typed-in place loses to a phone that is walking…
+ * - …unless the phone is guessing too. A desktop's fix comes from an IP
+ *   address and runs to kilometres, and then the typed-in place is the more
+ *   accurate of the two — which is exactly the stationary device in
+ *   mesh-heartbeat, sitting at a position somebody entered on purpose.
+ *
+ * @returns the fix to keep, which is `held` itself when nothing better arrived
+ */
+export function preferFix(held, next) {
+  if (!held) return next ?? null;
+  if (!next) return held;
+  // Newer from the same instrument is simply newer.
+  if (held.source === next.source) return next;
+
+  // mesh-heartbeat also files a partner's position, under "peer". It never
+  // reaches here, but a shared rule should not quietly treat one of those as
+  // the node's own.
+  if (held.source !== "node" && next.source !== "node") return next;
+
+  const node = held.source === "node" ? held : next;
+  const browser = held.source === "node" ? next : held;
+  if (node.gps) return node;
+  const guessing = !Number.isFinite(browser.accuracy) || browser.accuracy > VAGUE_METRES;
+  return guessing ? node : browser;
 }
 
 /**
