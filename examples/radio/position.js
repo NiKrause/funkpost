@@ -35,11 +35,22 @@ const LOC_INTERNAL = 2;
 const LOC_EXTERNAL = 3;
 
 /**
- * Past this many metres a browser fix is a guess from a Wi-Fi network or an IP
- * address rather than from the sky. A phone with a satellite lock reports
- * single or low double digits; a desktop reports thousands.
+ * Past this many metres a browser fix is a guess from an IP address rather
+ * than a position.
+ *
+ * This line was 100 m first, which would have failed in the one place the bug
+ * was found. A phone under a forest canopy sees few satellites and reports
+ * tens of metres, sometimes a couple of hundred — still the walker's real
+ * position, and still far better than a place typed into a node. What it never
+ * reports is a kilometre. A desktop locating itself from its IP address does
+ * exactly that, by tens of kilometres, and that is the only case this has to
+ * catch: mesh-heartbeat's stationary device, where a position somebody entered
+ * on purpose really is the better of the two.
+ *
+ * So the line goes in the gap between the two, not in the middle of a phone's
+ * bad day.
  */
-export const VAGUE_METRES = 100;
+export const VAGUE_METRES = 1000;
 
 /**
  * Read a node's position packet, or decide it has no fix.

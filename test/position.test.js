@@ -310,6 +310,12 @@ describe("which fix to believe", () => {
   test("a typed-in place beats a browser that is guessing", () => {
     // A desktop locates itself from an IP address: kilometres, not metres.
     const vague = here({ accuracy: 5000 });
+    // And the case the first threshold would have broken: a phone under trees.
+    assert.equal(
+      preferFix(here({ accuracy: 180 }), node()).source,
+      "browser",
+      "a forest canopy is a worse view, not a worse instrument",
+    );
     assert.equal(preferFix(vague, node()).source, "node", "the office's own position");
     assert.equal(preferFix(here({ accuracy: null }), node()).source, "node", "no accuracy at all");
     assert.equal(
