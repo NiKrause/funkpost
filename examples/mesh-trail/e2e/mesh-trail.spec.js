@@ -207,3 +207,27 @@ test("every part of the page can be switched off, and stays off", async ({ conte
 
   await anna.close();
 });
+
+test("a place from minutes ago is not broadcast as if it were now", async ({ context }) => {
+  // What the second walk came back with: the readout sat at 160 seconds and
+  // climbing, because `watchPosition` reports changes rather than time. The
+  // beacon carries no time of its own, so sending that fix would have drawn
+  // this device, sharply, where it used to be.
+  const roomId = room();
+  const anna = await open(context, roomId, "every=1", { ...CLEARING, staleSeconds: 160 });
+  await expect(anna.getByTestId("here")).toContainText("48.40639", { timeout: 20_000 });
+
+  // The readout says so rather than only counting upwards.
+  await expect(anna.getByTestId("here-stale")).toBeVisible();
+
+  await startSending(anna);
+  // A check-in sends at once — and this one must not.
+  await anna
+    .getByTestId("check-in")
+    .getByRole("button", { name: /Come to me|Kommt zu mir/ })
+    .click();
+  await expect(anna.getByTestId("held-back")).toBeVisible({ timeout: 20_000 });
+  await expect(anna.getByTestId("held-back")).toContainText(/160|16[0-9]/);
+
+  await anna.close();
+});

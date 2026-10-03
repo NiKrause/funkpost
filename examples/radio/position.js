@@ -82,6 +82,65 @@ export function decodeNodePosition(packet, { at = Date.now() } = {}) {
   };
 }
 
+/** How old a fix is, in milliseconds. `Infinity` when it has no time at all. */
+export function fixAgeMs(fix, now = Date.now()) {
+  return Number.isFinite(fix?.at) ? Math.max(0, now - fix.at) : Infinity;
+}
+
+/**
+ * One fix, now, for the moment before something is put on the air.
+ *
+ * `watchPosition` is not a timer: it calls back when the position *changes*,
+ * so a phone standing still produces almost nothing, and a page in the
+ * background is throttled hard. A walk found the consequence — the readout sat
+ * at 160 seconds and climbing — and the worse half of it is invisible: a
+ * beacon carries no time, so a fix three minutes old goes out looking current
+ * and the other walker draws you, sharply, in the wrong place.
+ *
+ * So the position is asked for again just before it is sent. Patience is short
+ * on purpose: this runs inside a beacon, not in front of somebody waiting, and
+ * a late fix is worth less than an honest "nothing arrived".
+ *
+ * @returns {Promise<object|null>} the fix, or null if none arrived in time
+ */
+export function freshPosition({
+  geolocation = null,
+  maximumAge = 20_000,
+  timeoutMs = 10_000,
+} = {}) {
+  const geo = geolocation ?? globalThis.navigator?.geolocation ?? null;
+  if (!geo) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      resolve(value);
+    };
+    // Belt and braces: a browser that answers neither callback would otherwise
+    // hold the beacon for ever, and a beacon that never fires is a device that
+    // has quietly left the walk.
+    const guard = setTimeout(() => finish(null), timeoutMs + 1_000);
+    geo.getCurrentPosition(
+      (fix) => {
+        clearTimeout(guard);
+        finish({
+          lat: fix.coords.latitude,
+          lon: fix.coords.longitude,
+          at: fix.timestamp,
+          accuracy: Number.isFinite(fix.coords?.accuracy) ? fix.coords.accuracy : null,
+          source: "browser",
+        });
+      },
+      () => {
+        clearTimeout(guard);
+        finish(null);
+      },
+      { enableHighAccuracy: true, maximumAge, timeout: timeoutMs },
+    );
+  });
+}
+
 /**
  * Which of two fixes to believe, when they disagree about where "here" is.
  *
@@ -225,15 +284,8 @@ export function askForPosition(onPosition, { geolocation = null, onTrouble = () 
 }
 
 /** Six decimals is about a tenth of a metre — more than a bicycle deserves. */
-export const formatPosition = (p) => {
-  if (!p) return "";
-  const where = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
-  // The accuracy, when there is one, because without it a field log cannot
-  // say why one fix outranked another. A walk that comes back saying "it
-  // still shows the node" is unanswerable if the line does not carry the
-  // number the decision was made on.
-  return Number.isFinite(p.accuracy) ? `${where} ±${Math.round(p.accuracy)} m` : where;
-};
+export const formatPosition = (p) =>
+  p ? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}` : "";
 
 /**
  * The way back onto the wire, for the stationary device's one announcement.

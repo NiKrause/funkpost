@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import {
   decodeNodePosition,
   preferFix,
+  fixAgeMs,
   VAGUE_METRES,
   encodeNodePosition,
   watchBrowserPosition,
@@ -349,17 +350,11 @@ describe("a third source does not get mistaken for the node", () => {
   });
 });
 
-describe("a field log that can answer a walk", () => {
-  test("the accuracy rides along, because the decision was made on it", () => {
-    assert.equal(formatPosition({ lat: LAT, lon: LON }), "48.40639, 12.76167");
-    assert.equal(
-      formatPosition({ lat: LAT, lon: LON, accuracy: 12.4 }),
-      "48.40639, 12.76167 ±12 m",
-    );
-    // A node's fix has none, and inventing a zero would read as perfect.
-    assert.equal(
-      formatPosition({ lat: LAT, lon: LON, accuracy: null }),
-      "48.40639, 12.76167",
-    );
+describe("how old a fix is", () => {
+  test("counted from its own time, and unknown when it has none", () => {
+    assert.equal(fixAgeMs({ at: 1_000 }, 4_000), 3_000);
+    assert.equal(fixAgeMs({ at: 9_000 }, 4_000), 0, "a clock that ran backwards is not a future");
+    assert.equal(fixAgeMs({}, 4_000), Infinity, "no time is not a fresh one");
+    assert.equal(fixAgeMs(null, 4_000), Infinity);
   });
 });

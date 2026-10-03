@@ -66,7 +66,10 @@ export async function refusePosition(page, code = 1) {
 export async function open(context, roomId, query = "", position = null) {
   const page = await context.newPage();
   await serveTiles(page);
-  if (position) await pinTo(page, position);
+  // A position may carry `staleSeconds`, for the phone that answered once and
+  // has not moved since — which is the state a walk actually comes back in.
+  if (position?.staleSeconds) await pinToStale(page, position, position.staleSeconds);
+  else if (position) await pinTo(page, position);
   // A `gap=` in the query wins, because `URLSearchParams.get` takes the first
   // occurrence and this one would otherwise be unoverridable. A test that has
   // to act *between* two beats needs a wider gap, not a faster one.
@@ -85,6 +88,34 @@ export async function open(context, roomId, query = "", position = null) {
  * thing under test — so the stub answers exactly as a browser would, once,
  * and then stays quiet like a phone that is not moving.
  */
+/**
+ * A phone that has not moved for a while: it answers, and its fix is old.
+ *
+ * This is the state the second walk came back with — the readout sat at 160
+ * seconds and climbing, because `watchPosition` reports changes rather than
+ * time. The stub reproduces it exactly: one answer, stamped in the past.
+ */
+export async function pinToStale(page, { lat, lon }, ageSeconds) {
+  await page.addInitScript(
+    ([latitude, longitude, age]) => {
+      const answer = (onFix) =>
+        onFix({
+          coords: { latitude, longitude, accuracy: 12 },
+          timestamp: Date.now() - age * 1000,
+        });
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: {
+          watchPosition: (onFix) => (setTimeout(() => answer(onFix), 0), 1),
+          clearWatch() {},
+          getCurrentPosition: (onFix) => answer(onFix),
+        },
+      });
+    },
+    [lat, lon, ageSeconds],
+  );
+}
+
 async function pinTo(page, { lat, lon }) {
   await page.addInitScript(
     ([latitude, longitude]) => {
