@@ -225,8 +225,15 @@ export function askForPosition(onPosition, { geolocation = null, onTrouble = () 
 }
 
 /** Six decimals is about a tenth of a metre — more than a bicycle deserves. */
-export const formatPosition = (p) =>
-  p ? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}` : "";
+export const formatPosition = (p) => {
+  if (!p) return "";
+  const where = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
+  // The accuracy, when there is one, because without it a field log cannot
+  // say why one fix outranked another. A walk that comes back saying "it
+  // still shows the node" is unanswerable if the line does not carry the
+  // number the decision was made on.
+  return Number.isFinite(p.accuracy) ? `${where} ±${Math.round(p.accuracy)} m` : where;
+};
 
 /**
  * The way back onto the wire, for the stationary device's one announcement.

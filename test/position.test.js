@@ -348,3 +348,18 @@ describe("a third source does not get mistaken for the node", () => {
     assert.equal(preferFix(peer, browser).source, "browser");
   });
 });
+
+describe("a field log that can answer a walk", () => {
+  test("the accuracy rides along, because the decision was made on it", () => {
+    assert.equal(formatPosition({ lat: LAT, lon: LON }), "48.40639, 12.76167");
+    assert.equal(
+      formatPosition({ lat: LAT, lon: LON, accuracy: 12.4 }),
+      "48.40639, 12.76167 ±12 m",
+    );
+    // A node's fix has none, and inventing a zero would read as perfect.
+    assert.equal(
+      formatPosition({ lat: LAT, lon: LON, accuracy: null }),
+      "48.40639, 12.76167",
+    );
+  });
+});
