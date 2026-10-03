@@ -310,6 +310,12 @@ describe("which fix to believe", () => {
   test("a typed-in place beats a browser that is guessing", () => {
     // A desktop locates itself from an IP address: kilometres, not metres.
     const vague = here({ accuracy: 5000 });
+    // And the case the first threshold would have broken: a phone under trees.
+    assert.equal(
+      preferFix(here({ accuracy: 180 }), node()).source,
+      "browser",
+      "a forest canopy is a worse view, not a worse instrument",
+    );
     assert.equal(preferFix(vague, node()).source, "node", "the office's own position");
     assert.equal(preferFix(here({ accuracy: null }), node()).source, "node", "no accuracy at all");
     assert.equal(
@@ -340,5 +346,20 @@ describe("a third source does not get mistaken for the node", () => {
     const peer = { lat: 2, lon: 2, at: 2, source: "peer" };
     assert.equal(preferFix(browser, peer).source, "peer");
     assert.equal(preferFix(peer, browser).source, "browser");
+  });
+});
+
+describe("a field log that can answer a walk", () => {
+  test("the accuracy rides along, because the decision was made on it", () => {
+    assert.equal(formatPosition({ lat: LAT, lon: LON }), "48.40639, 12.76167");
+    assert.equal(
+      formatPosition({ lat: LAT, lon: LON, accuracy: 12.4 }),
+      "48.40639, 12.76167 ±12 m",
+    );
+    // A node's fix has none, and inventing a zero would read as perfect.
+    assert.equal(
+      formatPosition({ lat: LAT, lon: LON, accuracy: null }),
+      "48.40639, 12.76167",
+    );
   });
 });
