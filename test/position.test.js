@@ -11,6 +11,8 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import {
   decodeNodePosition,
+  preferFix,
+  VAGUE_METRES,
   encodeNodePosition,
   watchBrowserPosition,
   askForPosition,
@@ -272,5 +274,71 @@ describe("which way from here", () => {
   test("nowhere to nowhere is not a direction", () => {
     assert.equal(bearingDegrees(null, HERE), null);
     assert.equal(bearingDegrees(HERE, null), null);
+  });
+});
+
+describe("which fix to believe", () => {
+  /**
+   * A walk in the woods found this one. Two phones, two nodes, neither node
+   * with a GPS: the map followed the phone perfectly until a node was
+   * connected over Bluetooth, and then it stopped, for good. The node *had* a
+   * position — the Meshtastic app writes the phone's into a GPS-less node —
+   * and the rule at the time was "the node wins", which meant one such packet
+   * locked the browser out of a map it had been drawing correctly.
+   */
+  const here = (over = {}) => ({ lat: LAT, lon: LON, at: 1, source: "browser", accuracy: 12, ...over });
+  const node = (over = {}) => ({ lat: 50, lon: 10, at: 2, source: "node", gps: false, ...over });
+
+  test("a node reports whether it saw a satellite, or is repeating a typed-in place", () => {
+    assert.equal(decodeNodePosition(packet()).gps, false, "no locationSource means no claim");
+    assert.equal(decodeNodePosition(packet({ locationSource: 1 })).gps, false, "LOC_MANUAL");
+    assert.equal(decodeNodePosition(packet({ locationSource: 2 })).gps, true, "LOC_INTERNAL");
+    assert.equal(decodeNodePosition(packet({ locationSource: 3 })).gps, true, "LOC_EXTERNAL");
+  });
+
+  test("a node with no GPS does not take the map away from a walking phone", () => {
+    assert.equal(preferFix(here(), node()).source, "browser", "the phone keeps it");
+    // …and the other order, because the node's packet often lands first.
+    assert.equal(preferFix(node(), here()).source, "browser", "the phone takes it back");
+  });
+
+  test("a node that has seen a satellite outranks the phone either way round", () => {
+    assert.equal(preferFix(here(), node({ gps: true })).source, "node");
+    assert.equal(preferFix(node({ gps: true }), here()).source, "node");
+  });
+
+  test("a typed-in place beats a browser that is guessing", () => {
+    // A desktop locates itself from an IP address: kilometres, not metres.
+    const vague = here({ accuracy: 5000 });
+    assert.equal(preferFix(vague, node()).source, "node", "the office's own position");
+    assert.equal(preferFix(here({ accuracy: null }), node()).source, "node", "no accuracy at all");
+    assert.equal(
+      preferFix(here({ accuracy: VAGUE_METRES + 1 }), node()).source,
+      "node",
+      "just past the line",
+    );
+    assert.equal(preferFix(here({ accuracy: VAGUE_METRES }), node()).source, "browser", "and on it");
+  });
+
+  test("newer from the same instrument is simply newer", () => {
+    const moved = here({ lat: 49 });
+    assert.equal(preferFix(here(), moved), moved);
+    assert.equal(preferFix(node(), node({ lat: 51 })).lat, 51);
+  });
+
+  test("the first fix of any kind is taken", () => {
+    assert.equal(preferFix(null, node()).source, "node");
+    assert.equal(preferFix(null, here()).source, "browser");
+    assert.equal(preferFix(here(), null).source, "browser");
+    assert.equal(preferFix(null, null), null);
+  });
+});
+
+describe("a third source does not get mistaken for the node", () => {
+  test("two fixes that are neither from the node: the newer one", () => {
+    const browser = { lat: 1, lon: 1, at: 1, source: "browser", accuracy: 10 };
+    const peer = { lat: 2, lon: 2, at: 2, source: "peer" };
+    assert.equal(preferFix(browser, peer).source, "peer");
+    assert.equal(preferFix(peer, browser).source, "browser");
   });
 });
