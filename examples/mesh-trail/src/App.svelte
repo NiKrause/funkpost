@@ -165,6 +165,8 @@
   let reconnecting = $state(false);
   let airUtil = $state(null);
   let myNodeNum = $state(null);
+  /** Which node this is: its four display characters and its !id. */
+  let myNode = $state(null);
 
   let radio = null;
   let courier = null;
@@ -273,6 +275,11 @@
     if (phase === "connecting" || phase === "ready") return;
     phase = "connecting";
     error = "";
+    // Forget the last one. Reconnecting to the same node fills this in again
+    // within a second; connecting to a *different* one would otherwise show
+    // the old four characters until its name arrived, which is the one moment
+    // this line exists to get right.
+    myNode = null;
     try {
       radio = await connectCourier({
         mode,
@@ -299,6 +306,8 @@
         },
         onChannel: handleChannel,
         onMyNodeInfo: (info) => (myNodeNum = info?.myNodeNum ?? info?.num ?? null),
+        // "Connected" is not an answer in a room with two radios in it.
+        onIdentity: (who) => (myNode = who),
         onNodeInfo: (node) => {
           // The node database includes this node. Its own entry is the fix we
           // want; every other entry is somebody else's position and would
@@ -821,6 +830,13 @@
         {t.radio.none}
       {/if}
       {#if reconnecting}<span class="dim"> · {t.radio.reconnecting}</span>{/if}
+      {#if myNode}
+        <!-- The four characters are what the device shows on its own screen,
+             so they are what somebody holding two nodes can tell apart. -->
+        <span class="dim"> · </span><strong data-testid="node-name">{myNode.shortName}</strong>
+        <span class="dim mono" data-testid="node-id"> {myNode.id}</span>
+        {#if myNode.longName}<span class="dim"> · {myNode.longName}</span>{/if}
+      {/if}
     </p>
     {#if error}<p class="bad" data-testid="radio-error">{error}</p>{/if}
     {#if phase === "idle" || phase === "lost"}
