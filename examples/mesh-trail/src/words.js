@@ -57,6 +57,7 @@ export const WORDS = {
     radio: {
       legend: "The radio",
       connect: "Connect a Meshtastic® node",
+      disconnect: "Let the node go",
       connecting: "connecting…",
       connected: (region) => `node connected · ${region}`,
       fake: "Fake mesh (this browser)",
@@ -193,6 +194,7 @@ export const WORDS = {
       windowError: (type, message) => `! window ${type}: ${message}`,
       gattQueueOn: "one Bluetooth operation at a time",
       error: (message) => `error: ${message}`,
+      disconnected: "node let go",
     },
 
     footer: (info) => `funkpost ${info.version} · ${info.commit} · built ${info.builtAt}`,
@@ -246,6 +248,7 @@ export const WORDS = {
     radio: {
       legend: "Der Funk",
       connect: "Meshtastic®-Knoten verbinden",
+      disconnect: "Knoten trennen",
       connecting: "verbinde…",
       connected: (region) => `Knoten verbunden · ${region}`,
       fake: "Fake-Mesh (dieser Browser)",
@@ -381,6 +384,7 @@ export const WORDS = {
       windowError: (type, message) => `! Fenster ${type}: ${message}`,
       gattQueueOn: "immer nur eine Bluetooth-Operation gleichzeitig",
       error: (message) => `Fehler: ${message}`,
+      disconnected: "Knoten getrennt",
     },
 
     footer: (info) => `funkpost ${info.version} · ${info.commit} · gebaut ${info.builtAt}`,

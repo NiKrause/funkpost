@@ -339,3 +339,57 @@ test("with no radio there is no node name, rather than an invented one", async (
   await expect(anna.getByTestId("node-id")).toHaveCount(0);
   await anna.close();
 });
+
+test("the node can be let go, and the button says so", async ({ context }) => {
+  const roomId = room();
+  // There was no way to do this without closing the page — which matters the
+  // moment somebody wants a different node, because the browser's chooser
+  // cannot hand over a radio this page is still holding.
+  const anna = await open(context, roomId, "every=0", CLEARING);
+  await expect(anna.getByTestId("radio-status")).toHaveAttribute("data-phase", "ready");
+  await expect(anna.getByTestId("connect")).toHaveCount(0, { timeout: 10_000 });
+
+  await anna.getByTestId("disconnect").click();
+  await expect(anna.getByTestId("radio-status")).toHaveAttribute("data-phase", "idle");
+  // The same place, the other way round.
+  await expect(anna.getByTestId("connect")).toBeVisible();
+  await expect(anna.getByTestId("disconnect")).toHaveCount(0);
+
+  // And the radio is really let go, not just relabelled: a device that keeps
+  // listening after "disconnected" is the version of this that looks fine.
+  const bruno = await open(context, roomId, "every=0", RIDGE);
+  await startSending(bruno);
+  await bruno
+    .getByTestId("check-in")
+    .getByRole("button", { name: /Come to me|Kommt zu mir/ })
+    .click();
+  await expect(bruno.getByTestId("my-state")).toContainText(/Come to me|Kommt zu mir/);
+  await expect(anna.getByTestId("people-empty")).toBeVisible();
+
+  // And it can be taken up again.
+  await anna.getByTestId("connect").click();
+  await expect(anna.getByTestId("radio-status")).toHaveAttribute("data-phase", "ready", {
+    timeout: 20_000,
+  });
+  await expect(anna.getByTestId("people")).toBeVisible({ timeout: 20_000 });
+
+  await anna.close();
+  await bruno.close();
+});
+
+test("a page reopens where it was left, unless the address says otherwise", async ({ context }) => {
+  const roomId = room();
+  const first = await open(context, roomId, "every=0", CLEARING);
+  await first.getByTestId("jump").getByRole("link", { name: /^(Map|Karte)$/ }).click();
+  await first.close();
+
+  // Same context, same storage: a second launch of the same app.
+  const again = await open(context, roomId, "every=0", CLEARING);
+  const landed = await again.evaluate(() => {
+    const box = document.querySelector("#map").getBoundingClientRect();
+    // Somewhere near the top of the viewport rather than far below it.
+    return box.top < 200;
+  });
+  expect(landed, "it opened at the top instead of where it was left").toBe(true);
+  await again.close();
+});

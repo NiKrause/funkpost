@@ -282,6 +282,24 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
       return managed.link.refusals;
     },
     setTxChannel: (index) => managed.setChannel(index),
-    close: () => managed.close(),
+    /**
+     * Let the node go, in that order.
+     *
+     * The supervisor stops first: it treats a dropped link as a fault to
+     * repair, and disconnecting a device it is still watching would have it
+     * reconnect to the thing somebody just let go of. Then the device itself,
+     * because `close()` only stops supervising — without this the radio stays
+     * occupied at the operating system's level and the next app that wants it
+     * finds it busy.
+     */
+    close: async () => {
+      const device = managed.device;
+      managed.close();
+      try {
+        await device?.disconnect();
+      } catch {
+        /* it is going away either way; a failure here is not news */
+      }
+    },
   };
 }
