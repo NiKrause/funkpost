@@ -362,6 +362,69 @@ test("with no radio there is no node name, rather than an invented one", async (
   await anna.close();
 });
 
+test("the node can be let go, and the button says so", async ({ context }) => {
+  const roomId = room();
+  // There was no way to do this without closing the page — which matters the
+  // moment somebody wants a different node, because the browser's chooser
+  // cannot hand over a radio this page is still holding.
+  const anna = await open(context, roomId, "every=0", CLEARING);
+  await expect(anna.getByTestId("radio-status")).toHaveAttribute("data-phase", "ready");
+  await expect(anna.getByTestId("connect")).toHaveCount(0, { timeout: 10_000 });
+
+  await anna.getByTestId("disconnect").click();
+  await expect(anna.getByTestId("radio-status")).toHaveAttribute("data-phase", "idle");
+  // The same place, the other way round.
+  await expect(anna.getByTestId("connect")).toBeVisible();
+  await expect(anna.getByTestId("disconnect")).toHaveCount(0);
+
+  // And the radio is really let go, not just relabelled: a device that keeps
+  // listening after "disconnected" is the version of this that looks fine.
+  const bruno = await open(context, roomId, "every=0", RIDGE);
+  await startSending(bruno);
+  await bruno
+    .getByTestId("check-in")
+    .getByRole("button", { name: /Come to me|Kommt zu mir/ })
+    .click();
+  await expect(bruno.getByTestId("my-state")).toContainText(/Come to me|Kommt zu mir/);
+  await expect(anna.getByTestId("people-empty")).toBeVisible();
+
+  // And it can be taken up again.
+  await anna.getByTestId("connect").click();
+  await expect(anna.getByTestId("radio-status")).toHaveAttribute("data-phase", "ready", {
+    timeout: 20_000,
+  });
+  await expect(anna.getByTestId("people")).toBeVisible({ timeout: 20_000 });
+
+  await anna.close();
+  await bruno.close();
+});
+
+test("a page reopens where it was left, unless the address says otherwise", async ({ context }) => {
+  const roomId = room();
+  const first = await open(context, roomId, "every=0", CLEARING);
+  await first.getByTestId("jump").getByRole("link", { name: /^(Map|Karte)$/ }).click();
+  await first.close();
+
+  // Same context, same storage: a second launch of the same app.
+  const again = await open(context, roomId, "every=0", CLEARING);
+  // Not "the map is near the top": `scrollIntoView` can only scroll as far as
+  // the page is long, and this page is not long enough to put its last-but-two
+  // card against the top edge. The first version of this asked for `top < 200`
+  // and passed — because the footer's Le Space mark was still rendering at
+  // 327px and padding the document. #214 shrank it to 22 and the test went red,
+  // which is the test being wrong rather than the page.
+  const where = await again.evaluate(() => {
+    const box = document.querySelector("#map").getBoundingClientRect();
+    return {
+      scrolled: Math.round(scrollY),
+      onScreen: box.top < innerHeight && box.bottom > 0,
+    };
+  });
+  expect(where.scrolled, "it opened at the top instead of where it was left").toBeGreaterThan(0);
+  expect(where.onScreen, "the map is not on screen").toBe(true);
+  await again.close();
+});
+
 test("the credit mark is the 22 px the brand guide gives it", async ({ context }) => {
   // It was 327. The mark's SVG carries only a viewBox, and the size lives on
   // `.ls-credit` — which this footer was the one not to use, so the thing

@@ -16,13 +16,32 @@
    * has run. A link to a section that is switched off simply does nothing,
    * which is why `items` may be filtered without the bar knowing.
    */
-  let { items = [], label = "" } = $props();
+  import { onMount } from "svelte";
+  import { kept, keep } from "./kept.js";
+
+  /** `remember` is a storage key; without one the bar forgets, as before. */
+  let { items = [], label = "", remember = "" } = $props();
+
+  function jumped(id) {
+    if (remember) keep(remember, id);
+  }
+
+  onMount(() => {
+    if (!remember || location.hash) return; // the address wins, as everywhere
+    const id = kept(remember, "");
+    if (!id || !items.some((item) => item.id === id)) return;
+    // Straight away. A frame of delay was in here first, on the theory that
+    // the sections do not exist yet — they do, because Svelte runs `onMount`
+    // after the tree is in the DOM, and the test passed with the delay removed.
+    // A guard whose reason is wrong is worse than none.
+    document.getElementById(id)?.scrollIntoView({ block: "start" });
+  });
 </script>
 
 {#if items.length > 1}
   <nav class="jump" aria-label={label} data-testid="jump">
     {#each items as item (item.id)}
-      <a href="#{item.id}">{item.label}</a>
+      <a href="#{item.id}" onclick={() => jumped(item.id)}>{item.label}</a>
     {/each}
   </nav>
 {/if}

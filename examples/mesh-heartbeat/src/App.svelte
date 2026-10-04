@@ -556,6 +556,31 @@
    * and leaving them lit would report a beat from a round that no longer
    * exists.
    */
+  /**
+   * Let the node go, deliberately.
+   *
+   * There was no way to do this without closing the page, which matters the
+   * moment somebody wants a *different* node: the browser's chooser cannot
+   * hand over a radio this page is still holding. It also stops the supervisor
+   * trying to repair a link nobody wants any more.
+   */
+  async function disconnect() {
+    heartbeat?.stop();
+    heartbeat = null;
+    roundRunning = false;
+    beatState = null;
+    const letting = radio;
+    radio = null;
+    courier = null;
+    phase = "idle";
+    linkKind = "";
+    region = "";
+    myNode = null;
+    setTxChannelFn = () => {};
+    pushLog(w().log.disconnected);
+    await letting?.close();
+  }
+
   function restartHeartbeat() {
     if (!heartbeat) return;
     heartbeat.stop();
@@ -860,7 +885,7 @@
   </header>
 
   <!-- The radio first: everything below it is inert without one. -->
-  <JumpBar items={jumps} label={t.jump.label} />
+  <JumpBar items={jumps} label={t.jump.label} remember="mesh-heartbeat:at:v1" />
 
   <section class="card" id="radio">
     <h2>{t.radio.legend}</h2>
@@ -890,6 +915,12 @@
     {#if phase !== "ready"}
       <button class="primary" data-testid="connect" onclick={connect} disabled={phase === "connecting"}>
         {mode.kind === "bc" ? t.radio.fake : t.radio.connect}
+      </button>
+    {:else}
+      <!-- The same place, the other way round. Quiet, not primary: letting go
+           is not what this page is for. -->
+      <button class="quiet" data-testid="disconnect" onclick={disconnect}>
+        {t.radio.disconnect}
       </button>
     {/if}
     {#if error}<p class="warn mono" data-testid="radio-error">{error}</p>{/if}

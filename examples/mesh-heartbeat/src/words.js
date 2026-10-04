@@ -59,6 +59,7 @@ export const WORDS = {
       holdStaleWhy: "Off: the device that stays put is still where it was, and silence would take it off the rider's map.",
       legend: "The radio",
       connect: "Connect a Meshtastic® node",
+      disconnect: "Let the node go",
       connecting: "connecting…",
       connected: (region) => `node connected · ${region}`,
       fake: "Fake mesh (this browser)",
@@ -219,6 +220,7 @@ export const WORDS = {
         `position (${source}) ${text}${Number.isFinite(accuracy) ? ` ±${Math.round(accuracy)} m` : ""}`,
       officePosition: (text) => `the other device is at ${text}`,
       error: (message) => `error: ${message}`,
+      disconnected: "node let go",
     },
 
     footer: (info) => `funkpost ${info.version} · ${info.commit} · built ${info.builtAt}`,
@@ -268,6 +270,7 @@ export const WORDS = {
       holdStaleWhy: "Aus: Das stehende Gerät ist weiterhin, wo es war, und Schweigen nähme es von der Karte des fahrenden.",
       legend: "Das Funkgerät",
       connect: "Meshtastic®-Knoten verbinden",
+      disconnect: "Knoten trennen",
       connecting: "verbindet…",
       connected: (region) => `Knoten verbunden · ${region}`,
       fake: "Fake-Mesh (dieser Browser)",
@@ -415,6 +418,7 @@ export const WORDS = {
         `Position (${source}) ${text}${Number.isFinite(accuracy) ? ` ±${Math.round(accuracy)} m` : ""}`,
       officePosition: (text) => `das andere Gerät steht bei ${text}`,
       error: (message) => `Fehler: ${message}`,
+      disconnected: "Knoten getrennt",
     },
 
     footer: (info) => `funkpost ${info.version} · ${info.commit} · gebaut ${info.builtAt}`,

@@ -437,6 +437,31 @@
     ].filter(Boolean),
   );
 
+
+  /**
+   * Let the node go, deliberately.
+   *
+   * There was no way to do this without closing the page, which matters the
+   * moment somebody wants a *different* node: the browser's chooser cannot
+   * hand over a radio this page is still holding. It also stops the supervisor
+   * trying to repair a link nobody wants any more.
+   */
+  async function disconnect() {
+    if (beaconTimer) clearInterval(beaconTimer);
+    beaconTimer = null;
+    tag = null;
+    const letting = radio;
+    radio = null;
+    courier = null;
+    phase = "idle";
+    linkKind = "";
+    region = "";
+    myNode = null;
+    setTxChannelFn = () => {};
+    pushLog(w().log.disconnected);
+    await letting?.close();
+  }
+
   // ------------------------------------------------------------- the position
 
   /** Ask again from a click, which is where Android would rather be asked. */
@@ -826,7 +851,7 @@
     <p>{t.intro}</p>
   </header>
 
-  <JumpBar items={jumps} label={t.jump.label} />
+  <JumpBar items={jumps} label={t.jump.label} remember="mesh-trail:at:v1" />
 
   <section class="card" id="radio">
     <h2>{t.radio.legend}</h2>
@@ -854,6 +879,12 @@
     {#if phase === "idle" || phase === "lost"}
       <button class="primary" data-testid="connect" onclick={connect}>
         {mode.kind === "bc" ? t.radio.fake : t.radio.connect}
+      </button>
+    {:else if phase === "ready"}
+      <!-- The same place, the other way round. Quiet, not primary: letting go
+           is not what this page is for. -->
+      <button class="quiet" data-testid="disconnect" onclick={disconnect}>
+        {t.radio.disconnect}
       </button>
     {/if}
     {#if channels.length > 0}
