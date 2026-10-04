@@ -34,6 +34,7 @@
   import { connectCourier, watchWindowErrors } from "@le-space/funkpost-radio";
   import { createChannelBook } from "@le-space/funkpost-radio/channels.js";
   import { createWakeLock } from "@le-space/funkpost-radio/wake-lock.js";
+  import { kept, keep, chosen } from "@le-space/funkpost-radio/kept.js";
   import JumpBar from "@le-space/funkpost-radio/JumpBar.svelte";
   import {
     decodeNodePosition,
@@ -193,7 +194,16 @@
   /** Off until somebody turns it on. Listening asks nobody's permission. */
   let broadcasting = $state(false);
   let publicAccepted = $state(false);
-  let everyMin = $state(Number(params.get("every") ?? 2));
+  // The address first, then what this device chose last time, then two
+  // minutes. A link with `every=` in it is somebody being explicit now.
+  // Declared above their first use, not beside the other key: these two are
+  // read while the state is being created, and a `const` below that point is
+  // in its dead zone — which is a blank page, not an error anyone sees.
+  const AWAKE_KEY = "mesh-trail:awake:v1";
+  const SENDING_KEY = "mesh-trail:sending:v1";
+  const EVERY_KEY = "mesh-trail:every:v1";
+
+  let everyMin = $state(chosen(params.get("every"), Number, EVERY_KEY, 2));
   let beaconTimer = null;
   let lastSentAt = $state(null);
   /** Seconds of age that held the last beacon back, or null when none did. */
@@ -555,6 +565,7 @@
   function toggleBroadcast() {
     if (!broadcasting && onPublicChannel && !publicAccepted) return;
     broadcasting = !broadcasting;
+    keep(SENDING_KEY, broadcasting);
     pushLog(broadcasting ? w().log.broadcastOn : w().log.broadcastOff);
     scheduleBeacons();
   }
@@ -597,6 +608,7 @@
 
   function chooseInterval(minutes) {
     everyMin = minutes;
+    keep(EVERY_KEY, minutes);
     scheduleBeacons();
   }
 
@@ -723,8 +735,12 @@
   });
 
   async function toggleAwake() {
-    keepAwake = !keepAwake;
-    await screenLock.set(keepAwake);
+    await screenLock.set(!keepAwake);
+    // What the lock says, not what the box was clicked to: a refused request
+    // leaves `wanted` false, and a ticked box over no lock is a lie about the
+    // screen staying on.
+    keepAwake = screenLock.wanted();
+    keep(AWAKE_KEY, keepAwake);
   }
 
   // A lock is dropped whenever the page is hidden, and comes back only if
@@ -749,6 +765,18 @@
     );
     loadPreferences();
     loadShown();
+    // Switched back on if it was on when this device was last closed. The
+    // suite still asserts that a *fresh* device sends nothing until somebody
+    // says so: the default is off, and only a choice already made here brings
+    // it back. Nothing leaves until there is a radio, so this is a wish rather
+    // than a transmission.
+    broadcasting = kept(SENDING_KEY, false);
+
+    // Asked for again rather than assumed: a lock survives a launch only if
+    // this browser still grants one, and the box follows the lock.
+    if (kept(AWAKE_KEY, false)) {
+      screenLock.set(true).then(() => (keepAwake = screenLock.wanted()));
+    }
     refreshPeers();
     // The browser's fix starts straight away and says what it is doing when
     // there is none — on a walk, "still searching" and "blocked" are different
@@ -894,6 +922,7 @@
               type="radio"
               name="every"
               checked={everyMin === min}
+              data-testid="every-{min}"
               onchange={() => chooseInterval(min)}
             />
             {min === 0 ? t.interval.off : t.interval.minutes(min)}

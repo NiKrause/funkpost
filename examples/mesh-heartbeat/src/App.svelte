@@ -50,6 +50,7 @@
   import { connectCourier, watchWindowErrors } from "@le-space/funkpost-radio";
   import { createChannelBook } from "@le-space/funkpost-radio/channels.js";
   import { createWakeLock } from "@le-space/funkpost-radio/wake-lock.js";
+  import { kept, keep, chosen } from "@le-space/funkpost-radio/kept.js";
   import JumpBar from "@le-space/funkpost-radio/JumpBar.svelte";
   import {
     describeMeshtasticError,
@@ -151,9 +152,24 @@
   let beatState = $state(null);
 
   /** What this device does: answer and stay, or ask and travel. */
-  let role = $state(params.get("role") === "office" ? "office" : "rider");
+  // Nothing was kept here at all before: role, interval, partner and the
+  // screen lock were re-chosen on every launch, which on a bench is four
+  // decisions before the first beat.
+  const ROLE_KEY = "mesh-heartbeat:role:v1";
+  const EVERY_KEY = "mesh-heartbeat:every:v1";
+  const PARTNER_KEY = "mesh-heartbeat:partner:v1";
+  const AWAKE_KEY = "mesh-heartbeat:awake:v1";
+
+  let role = $state(
+    chosen(
+      params.get("role"),
+      (asked) => (asked === "office" || asked === "rider" ? asked : undefined),
+      ROLE_KEY,
+      "rider",
+    ),
+  );
   /** Minutes between rounds; 0 is the button and nothing else. */
-  let everyMin = $state(Number(params.get("every") ?? 2));
+  let everyMin = $state(chosen(params.get("every"), Number, EVERY_KEY, 2));
 
   let here = $state(null); // { lat, lon, at, source }
   let officeAt = $state(null); // where the other device said it is
@@ -167,7 +183,7 @@
    * else is out there, which is the common case and so the default; naming the
    * partner is what makes the measurement hold when somebody is.
    */
-  let partner = $state(params.get("partner") ?? "");
+  let partner = $state(chosen(params.get("partner"), String, PARTNER_KEY, ""));
   /** Every device heard so far, so the partner can be picked rather than typed. */
   let heardIds = $state([]);
 
@@ -653,8 +669,10 @@
   });
 
   async function toggleAwake() {
-    keepAwake = !keepAwake;
-    await screenLock.set(keepAwake);
+    await screenLock.set(!keepAwake);
+    // What the lock says, not what the box was clicked to.
+    keepAwake = screenLock.wanted();
+    keep(AWAKE_KEY, keepAwake);
   }
 
   // A lock is dropped whenever the page is hidden, and comes back only if
@@ -780,6 +798,11 @@
   const mapStation = $derived(role === "office" ? here : officeAt);
 
   onMount(() => {
+    // Asked for again rather than assumed: a lock survives a launch only if
+    // this browser still grants one, and the box follows the lock.
+    if (kept(AWAKE_KEY, false)) {
+      screenLock.set(true).then(() => (keepAwake = screenLock.wanted()));
+    }
     // On a phone the console is invisible, and an exception in a handler or a
     // rejecting promise tears the connection down with nothing on screen to
     // act on. mesh-todo had this; the two demos most likely to be used away
@@ -926,6 +949,7 @@
             data-testid="role-{kind}"
             onchange={() => {
               role = kind;
+              keep(ROLE_KEY, kind);
               restartHeartbeat();
             }}
           />
@@ -951,6 +975,7 @@
                 data-testid="every-{min}"
                 onchange={() => {
                   everyMin = min;
+                  keep(EVERY_KEY, min);
                   restartHeartbeat();
                 }}
               />
@@ -1011,7 +1036,11 @@
   <section class="card" id="partner">
     <h2>{t.partner.legend}</h2>
     <label class="row">
-      <select bind:value={partner} data-testid="partner">
+      <select
+        bind:value={partner}
+        data-testid="partner"
+        onchange={() => keep(PARTNER_KEY, partner)}
+      >
         <option value="">{t.partner.anyone}</option>
         {#each heardIds as id (id)}
           <option value={id}>{id}</option>
