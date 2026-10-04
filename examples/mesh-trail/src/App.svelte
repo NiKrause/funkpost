@@ -201,6 +201,7 @@
   // in its dead zone — which is a blank page, not an error anyone sees.
   const AWAKE_KEY = "mesh-trail:awake:v1";
   const SENDING_KEY = "mesh-trail:sending:v1";
+  const HOLD_STALE_KEY = "mesh-trail:hold-stale:v1";
   const EVERY_KEY = "mesh-trail:every:v1";
 
   let everyMin = $state(chosen(params.get("every"), Number, EVERY_KEY, 2));
@@ -208,6 +209,19 @@
   let lastSentAt = $state(null);
   /** Seconds of age that held the last beacon back, or null when none did. */
   let heldBack = $state(null);
+  /**
+   * Whether an old fix is held back rather than sent. Off by default.
+   *
+   * It went in the other way round first, and the reasoning was wrong: a fix
+   * from a device that has not *moved* is still where that device is. Silence
+   * is the worse answer there — a stationary device simply vanishes from
+   * everyone's map, and nobody can tell "still there" from "gone".
+   *
+   * It stays available because the opposite case is real too: a phone whose
+   * browser has stopped answering while its owner keeps walking does send a
+   * place they have left. Whoever knows which of the two they are can say so.
+   */
+  let holdStale = $state(false);
 
   /**
    * How this device is, which a schedule cannot say.
@@ -535,10 +549,7 @@
     if (!here) return;
 
     const age = fixAgeMs(here);
-    if (age > staleAfterMs) {
-      // Saying nothing is the honest option: a stale place broadcast as a
-      // current one puts the other walker's compass on a bearing to where
-      // this device used to be.
+    if (holdStale && age > staleAfterMs) {
       heldBack = Math.round(age / 1000);
       pushLog(w().log.heldBack(heldBack));
       return;
@@ -771,6 +782,7 @@
     // it back. Nothing leaves until there is a radio, so this is a wish rather
     // than a transmission.
     broadcasting = kept(SENDING_KEY, false);
+    holdStale = kept(HOLD_STALE_KEY, false);
 
     // Asked for again rather than assumed: a lock survives a launch only if
     // this browser still grants one, and the box follows the lock.
@@ -879,6 +891,22 @@
 
   <section class="card" id="broadcast">
     <h2>{t.broadcast.legend}</h2>
+    <label class="choice">
+      <input
+        type="checkbox"
+        checked={holdStale}
+        data-testid="hold-stale"
+        onchange={(e) => {
+          holdStale = e.currentTarget.checked;
+          keep(HOLD_STALE_KEY, holdStale);
+          if (!holdStale) heldBack = null;
+        }}
+      />
+      <span>
+        {t.broadcast.holdStale}
+        <small class="dim">{t.broadcast.holdStaleWhy}</small>
+      </span>
+    </label>
     {#if onPublicChannel && !broadcasting}
       <p class="warn" data-testid="public-warning">{t.broadcast.publicWarning}</p>
       <p>

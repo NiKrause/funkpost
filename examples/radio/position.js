@@ -67,18 +67,26 @@ export function decodeNodePosition(packet, { at = Date.now() } = {}) {
   const lonI = p.longitudeI;
   if (!Number.isFinite(latI) || !Number.isFinite(lonI)) return null;
   if (latI === 0 && lonI === 0) return null; // no fix yet, not the Atlantic
+  const hasReceiver =
+    p.locationSource === LOC_INTERNAL || p.locationSource === LOC_EXTERNAL;
   const lat = latI * SCALE;
   const lon = lonI * SCALE;
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
   return {
     lat,
     lon,
-    // The node's own time when it has one; ours when it does not. A position
-    // with a plausible age is worth more than one that claims to be now.
-    at: Number.isFinite(p.time) && p.time > 0 ? p.time * 1000 : at,
+    // The node's own time, but only when the node has a receiver to set it by.
+    //
+    // A position with a plausible age is worth more than one claiming to be
+    // now — and a node without GPS has no plausible clock at all. It may be at
+    // the epoch, or at whenever it was last flashed. Trusting that makes every
+    // fix from it look days old, and a stale fix is one the sender holds back:
+    // a stationary device would simply stop saying anything, for a reason
+    // nothing on its screen could explain.
+    at: hasReceiver && Number.isFinite(p.time) && p.time > 0 ? p.time * 1000 : at,
     source: "node",
     // Did it see a satellite, or is it repeating a place somebody typed in?
-    gps: p.locationSource === LOC_INTERNAL || p.locationSource === LOC_EXTERNAL,
+    gps: hasReceiver,
   };
 }
 
@@ -173,11 +181,27 @@ export function preferFix(held, next) {
   // the node's own.
   if (held.source !== "node" && next.source !== "node") return next;
 
-  const node = held.source === "node" ? held : next;
   const browser = held.source === "node" ? next : held;
-  if (node.gps) return node;
+  // One question, not two: does the browser know where it is?
+  //
+  // The first version of this asked whether the *node* had seen a satellite
+  // and let it win if so. A second walk found the hole. Meshtastic's phone app
+  // can write the phone's own position into the node — "Position übertragen" —
+  // and the node then reports it as a position from an external receiver. The
+  // node is handing back a stale copy of the phone's own fix, the rule reads
+  // that as the better instrument, and the map stops following the walker
+  // again, through a different door.
+  //
+  // Comparing their times does not help either: a node without GPS has no
+  // reliable clock, so "which is newer" is a question across two time bases
+  // that may be days apart.
+  //
+  // So: a phone that knows where it is draws the map. The node answers only
+  // when the browser has nothing, or has a guess from an IP address — which is
+  // the stationary device in mesh-heartbeat, sitting at a position somebody
+  // entered on purpose, and the only case the node was ever needed for.
   const guessing = !Number.isFinite(browser.accuracy) || browser.accuracy > VAGUE_METRES;
-  return guessing ? node : browser;
+  return guessing ? (held.source === "node" ? held : next) : browser;
 }
 
 /**

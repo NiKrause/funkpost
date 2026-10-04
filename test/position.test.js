@@ -44,10 +44,12 @@ describe("reading a node's position", () => {
     assert.equal(p.source, "node");
   });
 
-  test("the node's own time is preferred, in milliseconds", () => {
-    const p = decodeNodePosition(packet(), { at: 1 });
+  test("the node's own time is seconds on the wire and milliseconds here", () => {
+    // Only from a node with a receiver — a clockless one is not believed at
+    // all, which the clock suite below is about.
+    const p = decodeNodePosition(packet({ locationSource: 2 }), { at: 1 });
     assert.equal(p.at, 1_790_000_000_000, "seconds on the wire, ms here");
-    const noTime = decodeNodePosition(packet({ time: 0 }), { at: 4242 });
+    const noTime = decodeNodePosition(packet({ time: 0, locationSource: 2 }), { at: 4242 });
     assert.equal(noTime.at, 4242, "ours when the node has none");
   });
 
@@ -303,9 +305,27 @@ describe("which fix to believe", () => {
     assert.equal(preferFix(node(), here()).source, "browser", "the phone takes it back");
   });
 
-  test("a node that has seen a satellite outranks the phone either way round", () => {
-    assert.equal(preferFix(here(), node({ gps: true })).source, "node");
-    assert.equal(preferFix(node({ gps: true }), here()).source, "node");
+  test("even a node with its own satellite does not take the map off a phone that has one", () => {
+    // This reversed after a second walk. Meshtastic's phone app can write the
+    // phone's own position into the node — "Position übertragen" — and the
+    // node then reports it as a fix from an external receiver. Asking which
+    // *instrument* is better read that as a satellite and handed the map back
+    // to a stale copy of the phone's own position.
+    assert.equal(preferFix(here(), node({ gps: true })).source, "browser");
+    assert.equal(preferFix(node({ gps: true }), here()).source, "browser");
+  });
+
+  test("the phone's position, handed back by the node, does not outrank the phone", () => {
+    // The field case, in the shape it arrives: LOC_EXTERNAL is 3.
+    const handedBack = decodeNodePosition(packet({ locationSource: 3 }));
+    assert.equal(handedBack.gps, true, "the protocol does call it a receiver");
+    assert.equal(preferFix(here(), handedBack).source, "browser");
+    assert.equal(preferFix(handedBack, here()).source, "browser");
+  });
+
+  test("a node is still the answer when the browser has nothing at all", () => {
+    assert.equal(preferFix(null, node({ gps: true })).source, "node");
+    assert.equal(preferFix(node({ gps: true }), null).source, "node");
   });
 
   test("a typed-in place beats a browser that is guessing", () => {
@@ -356,5 +376,26 @@ describe("how old a fix is", () => {
     assert.equal(fixAgeMs({ at: 9_000 }, 4_000), 0, "a clock that ran backwards is not a future");
     assert.equal(fixAgeMs({}, 4_000), Infinity, "no time is not a fresh one");
     assert.equal(fixAgeMs(null, 4_000), Infinity);
+  });
+});
+
+describe("a node's clock", () => {
+  test("is trusted when it has a receiver to set it by", () => {
+    const p = decodeNodePosition(packet({ locationSource: 2 }), { at: 1 });
+    assert.equal(p.at, 1_790_000_000_000, "the node's own time, in ms");
+  });
+
+  test("is not trusted when it has none, because then it is anybody's guess", () => {
+    // A node with no GPS may sit at the epoch or at whenever it was flashed.
+    // Believing it makes every fix look days old — and a stale fix is one the
+    // sender holds back, so a stationary device would go quiet for a reason
+    // nothing on its screen could explain.
+    const typed = decodeNodePosition(packet({ locationSource: 1 }), { at: 4242 });
+    assert.equal(typed.at, 4242, "our clock");
+    const unset = decodeNodePosition(packet(), { at: 4242 });
+    assert.equal(unset.at, 4242);
+    // Far in the past is the shape that silences a device.
+    const ancient = decodeNodePosition(packet({ time: 1, locationSource: 1 }), { at: 4242 });
+    assert.equal(ancient.at, 4242);
   });
 });
