@@ -385,12 +385,21 @@ test("a page reopens where it was left, unless the address says otherwise", asyn
 
   // Same context, same storage: a second launch of the same app.
   const again = await open(context, roomId, "every=0", CLEARING);
-  const landed = await again.evaluate(() => {
+  // Not "the map is near the top": `scrollIntoView` can only scroll as far as
+  // the page is long, and this page is not long enough to put its last-but-two
+  // card against the top edge. The first version of this asked for `top < 200`
+  // and passed — because the footer's Le Space mark was still rendering at
+  // 327px and padding the document. #214 shrank it to 22 and the test went red,
+  // which is the test being wrong rather than the page.
+  const where = await again.evaluate(() => {
     const box = document.querySelector("#map").getBoundingClientRect();
-    // Somewhere near the top of the viewport rather than far below it.
-    return box.top < 200;
+    return {
+      scrolled: Math.round(scrollY),
+      onScreen: box.top < innerHeight && box.bottom > 0,
+    };
   });
-  expect(landed, "it opened at the top instead of where it was left").toBe(true);
+  expect(where.scrolled, "it opened at the top instead of where it was left").toBeGreaterThan(0);
+  expect(where.onScreen, "the map is not on screen").toBe(true);
   await again.close();
 });
 
