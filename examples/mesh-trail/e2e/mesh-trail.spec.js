@@ -231,3 +231,34 @@ test("a place from minutes ago is not broadcast as if it were now", async ({ con
 
   await anna.close();
 });
+
+test("the page can be jumped through instead of scrolled", async ({ context }) => {
+  // On a phone the map is most of the way down a column of ten cards, and
+  // reaching the people list from the radio card is four flicks.
+  const roomId = room();
+  const anna = await open(context, roomId, "every=0", CLEARING);
+  const bar = anna.getByTestId("jump");
+  await expect(bar).toBeVisible();
+
+  // Short labels, because these are pills in a row that scrolls sideways: a
+  // card's own legend is a sentence and two of them fill the screen.
+  await expect(bar.getByRole("link", { name: /^(Radio|Funk)$/ })).toBeVisible();
+  await expect(bar.getByRole("link", { name: /^(People|Leute)$/ })).toBeVisible();
+
+  // A jump must not put the heading under the bar it was made from.
+  await bar.getByRole("link", { name: /^(People|Leute)$/ }).click();
+  const covered = await anna.evaluate(() => {
+    const b = document.querySelector('[data-testid="jump"]').getBoundingClientRect();
+    const h = document.querySelector("#people h2").getBoundingClientRect();
+    return h.top < b.bottom;
+  });
+  expect(covered, "the heading landed under the bar").toBe(false);
+
+  // A card that is switched off takes its pill with it: a link to a section
+  // that is not there would be a lie about the page.
+  await anna.getByTestId("show-people").uncheck();
+  await expect(bar.getByRole("link", { name: /^(People|Leute)$/ })).toHaveCount(0);
+  await expect(bar.getByRole("link", { name: /^(Radio|Funk)$/ })).toBeVisible();
+
+  await anna.close();
+});

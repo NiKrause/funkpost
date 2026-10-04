@@ -119,6 +119,18 @@ html:not([lang="de"]) [data-lang="de"] {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
+/* Not fixed on a phone. Everything in the pill is chosen once — the way up,
+   the language, the theme, a QR for moving the page to another device — and
+   none of it is worth a bar across the top of a page somebody is reading, or
+   walking with. It covered 251 of 375 pixels and sat over the jump bar.
+   Absolute leaves it at the top of the document, where it is still the first
+   thing on the page. */
+@media (max-width: 560px) {
+  .ls-pill {
+    position: absolute;
+  }
+}
+
 .ls-pill .ls-up,
 .ls-pill .ls-home,
 .ls-pill .ls-qr-btn {

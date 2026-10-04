@@ -50,6 +50,7 @@
   import { connectCourier, watchWindowErrors } from "@le-space/funkpost-radio";
   import { createChannelBook } from "@le-space/funkpost-radio/channels.js";
   import { createWakeLock } from "@le-space/funkpost-radio/wake-lock.js";
+  import JumpBar from "@le-space/funkpost-radio/JumpBar.svelte";
   import {
     describeMeshtasticError,
     DEFAULT_PREFERRED_CHANNEL,
@@ -439,6 +440,25 @@
 
   // ------------------------------------------------------------ the heartbeat
 
+  /**
+   * What the jump bar offers, in the order the cards appear. The conditions
+   * are the ones on the cards themselves — heard and track are the two arms
+   * of one choice, so exactly one of them is ever here.
+   */
+  const jumps = $derived(
+    [
+      { id: "radio", label: t.jump.radio },
+      { id: "role", label: t.jump.role },
+      { id: "partner", label: t.jump.partner },
+      { id: "where", label: t.jump.where },
+      { id: "map", label: t.jump.map },
+      role === "office"
+        ? { id: "heard", label: t.jump.heard }
+        : { id: "track", label: t.jump.track },
+      showLog && { id: "log", label: t.jump.log },
+    ].filter(Boolean),
+  );
+
   /** Minutes between rounds, or null when only the button asks. */
   const roundEveryMs = $derived(
     role === "office" ? null : everyMin > 0 ? everyMin * 60_000 : null,
@@ -798,7 +818,9 @@
   </header>
 
   <!-- The radio first: everything below it is inert without one. -->
-  <section class="card">
+  <JumpBar items={jumps} label={t.jump.label} />
+
+  <section class="card" id="radio">
     <h2>{t.radio.legend}</h2>
     <p class="status" data-testid="radio-status" data-phase={phase}>
       {#if phase === "ready"}
@@ -875,7 +897,7 @@
        and how often it does it. An office has no interval, which is why the
        second fieldset disappears rather than greying out — a control that
        cannot do anything is worse than no control. -->
-  <section class="card">
+  <section class="card" id="role">
     <fieldset data-testid="role">
       <legend>{t.role.legend}</legend>
       {#each [["rider", t.role.rider, t.role.riderWhy], ["office", t.role.office, t.role.officeWhy]] as [kind, label, why] (kind)}
@@ -970,7 +992,7 @@
   <!-- Whose answer counts. Last of the settings, because it only becomes a
        real question once something has answered — and first in importance the
        moment two parties share a channel. -->
-  <section class="card">
+  <section class="card" id="partner">
     <h2>{t.partner.legend}</h2>
     <label class="row">
       <select bind:value={partner} data-testid="partner">
@@ -986,7 +1008,7 @@
     <p class="dim small">{t.partner.hint}</p>
   </section>
 
-  <section class="card">
+  <section class="card" id="where">
     <h2>{t.where.legend}</h2>
     <p data-testid="here">
       {#if here}
@@ -1020,7 +1042,7 @@
     </p>
   </section>
 
-  <section class="card">
+  <section class="card" id="map">
     <h2>{t.map.legend}</h2>
     {#if mapPoints.length === 0 && !mapStation && !here}
       <p class="dim" data-testid="map-empty">{t.map.empty}</p>
@@ -1034,7 +1056,7 @@
     <!-- The stationary half's own record. Its "ride" is empty by definition —
          it sends no beats — and a summary line about a ride it was not on was
          the only thing this screen had to say about hours of answering. -->
-    <section class="card">
+    <section class="card" id="heard">
       <h2>{t.heard.legend}</h2>
       <p class="dim mono" data-testid="heard-summary">{t.heard.summary(heardSummary)}</p>
       {#if heardRows.length === 0}
@@ -1079,7 +1101,7 @@
       {/if}
     </section>
   {:else}
-  <section class="card">
+  <section class="card" id="track">
     <h2>{t.track.legend}</h2>
     <p class="dim mono" data-testid="track-summary">{t.track.summary(summary)}</p>
     {#if rows.length === 0}
@@ -1117,7 +1139,7 @@
   {/if}
 
   {#if showLog}
-    <section class="card">
+    <section class="card" id="log">
       <h2>{t.log.legend}</h2>
       <ol class="log mono" data-testid="log">
         {#each log as entry (entry.at + entry.line)}
@@ -1165,6 +1187,11 @@
     color: var(--ls-text-dim);
     line-height: 1.55;
   }
+  /* A jump must not put the heading under the bar it was made from. */
+  section[id] {
+    scroll-margin-top: 3.2rem;
+  }
+
   .card {
     background: var(--ls-bg-2);
     border: 1px solid var(--ls-card-border);

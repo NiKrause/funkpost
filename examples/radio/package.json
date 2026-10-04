@@ -10,9 +10,11 @@
     "./fake-bc-link.js": "./fake-bc-link.js",
     "./position.js": "./position.js",
     "./channels.js": "./channels.js",
-    "./wake-lock.js": "./wake-lock.js"
+    "./wake-lock.js": "./wake-lock.js",
+    "./JumpBar.svelte": "./JumpBar.svelte"
   },
   "files": [
+    "JumpBar.svelte",
     "channels.js",
     "connect.js",
     "fake-bc-link.js",
