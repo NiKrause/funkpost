@@ -303,9 +303,27 @@ describe("which fix to believe", () => {
     assert.equal(preferFix(node(), here()).source, "browser", "the phone takes it back");
   });
 
-  test("a node that has seen a satellite outranks the phone either way round", () => {
-    assert.equal(preferFix(here(), node({ gps: true })).source, "node");
-    assert.equal(preferFix(node({ gps: true }), here()).source, "node");
+  test("even a node with its own satellite does not take the map off a phone that has one", () => {
+    // This reversed after a second walk. Meshtastic's phone app can write the
+    // phone's own position into the node — "Position übertragen" — and the
+    // node then reports it as a fix from an external receiver. Asking which
+    // *instrument* is better read that as a satellite and handed the map back
+    // to a stale copy of the phone's own position.
+    assert.equal(preferFix(here(), node({ gps: true })).source, "browser");
+    assert.equal(preferFix(node({ gps: true }), here()).source, "browser");
+  });
+
+  test("the phone's position, handed back by the node, does not outrank the phone", () => {
+    // The field case, in the shape it arrives: LOC_EXTERNAL is 3.
+    const handedBack = decodeNodePosition(packet({ locationSource: 3 }));
+    assert.equal(handedBack.gps, true, "the protocol does call it a receiver");
+    assert.equal(preferFix(here(), handedBack).source, "browser");
+    assert.equal(preferFix(handedBack, here()).source, "browser");
+  });
+
+  test("a node is still the answer when the browser has nothing at all", () => {
+    assert.equal(preferFix(null, node({ gps: true })).source, "node");
+    assert.equal(preferFix(node({ gps: true }), null).source, "node");
   });
 
   test("a typed-in place beats a browser that is guessing", () => {

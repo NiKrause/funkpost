@@ -173,11 +173,27 @@ export function preferFix(held, next) {
   // the node's own.
   if (held.source !== "node" && next.source !== "node") return next;
 
-  const node = held.source === "node" ? held : next;
   const browser = held.source === "node" ? next : held;
-  if (node.gps) return node;
+  // One question, not two: does the browser know where it is?
+  //
+  // The first version of this asked whether the *node* had seen a satellite
+  // and let it win if so. A second walk found the hole. Meshtastic's phone app
+  // can write the phone's own position into the node — "Position übertragen" —
+  // and the node then reports it as a position from an external receiver. The
+  // node is handing back a stale copy of the phone's own fix, the rule reads
+  // that as the better instrument, and the map stops following the walker
+  // again, through a different door.
+  //
+  // Comparing their times does not help either: a node without GPS has no
+  // reliable clock, so "which is newer" is a question across two time bases
+  // that may be days apart.
+  //
+  // So: a phone that knows where it is draws the map. The node answers only
+  // when the browser has nothing, or has a guess from an IP address — which is
+  // the stationary device in mesh-heartbeat, sitting at a position somebody
+  // entered on purpose, and the only case the node was ever needed for.
   const guessing = !Number.isFinite(browser.accuracy) || browser.accuracy > VAGUE_METRES;
-  return guessing ? node : browser;
+  return guessing ? (held.source === "node" ? held : next) : browser;
 }
 
 /**
