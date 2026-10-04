@@ -393,3 +393,21 @@ test("a page reopens where it was left, unless the address says otherwise", asyn
   expect(landed, "it opened at the top instead of where it was left").toBe(true);
   await again.close();
 });
+
+test("the credit mark is the 22 px the brand guide gives it", async ({ context }) => {
+  // It was 327. The mark's SVG carries only a viewBox, and the size lives on
+  // `.ls-credit` — which this footer was the one not to use, so the thing
+  // filled the whole width of a phone.
+  const anna = await open(context, room(), "every=0", CLEARING);
+  const mark = await anna.evaluate(() => {
+    const svg = document.querySelector("footer p.ls-credit svg");
+    if (!svg) return null;
+    const box = svg.getBoundingClientRect();
+    return [Math.round(box.width), Math.round(box.height)];
+  });
+  expect(mark, "the credit line is not wearing its class").not.toBeNull();
+  // 22, not the plain mark's 20: the heart needs the two pixels to read as a
+  // heart, which is the brand guide's own reason.
+  expect(mark).toEqual([22, 22]);
+  await anna.close();
+});
