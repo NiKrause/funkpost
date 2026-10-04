@@ -67,18 +67,26 @@ export function decodeNodePosition(packet, { at = Date.now() } = {}) {
   const lonI = p.longitudeI;
   if (!Number.isFinite(latI) || !Number.isFinite(lonI)) return null;
   if (latI === 0 && lonI === 0) return null; // no fix yet, not the Atlantic
+  const hasReceiver =
+    p.locationSource === LOC_INTERNAL || p.locationSource === LOC_EXTERNAL;
   const lat = latI * SCALE;
   const lon = lonI * SCALE;
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
   return {
     lat,
     lon,
-    // The node's own time when it has one; ours when it does not. A position
-    // with a plausible age is worth more than one that claims to be now.
-    at: Number.isFinite(p.time) && p.time > 0 ? p.time * 1000 : at,
+    // The node's own time, but only when the node has a receiver to set it by.
+    //
+    // A position with a plausible age is worth more than one claiming to be
+    // now — and a node without GPS has no plausible clock at all. It may be at
+    // the epoch, or at whenever it was last flashed. Trusting that makes every
+    // fix from it look days old, and a stale fix is one the sender holds back:
+    // a stationary device would simply stop saying anything, for a reason
+    // nothing on its screen could explain.
+    at: hasReceiver && Number.isFinite(p.time) && p.time > 0 ? p.time * 1000 : at,
     source: "node",
     // Did it see a satellite, or is it repeating a place somebody typed in?
-    gps: p.locationSource === LOC_INTERNAL || p.locationSource === LOC_EXTERNAL,
+    gps: hasReceiver,
   };
 }
 

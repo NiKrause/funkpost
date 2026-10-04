@@ -44,10 +44,12 @@ describe("reading a node's position", () => {
     assert.equal(p.source, "node");
   });
 
-  test("the node's own time is preferred, in milliseconds", () => {
-    const p = decodeNodePosition(packet(), { at: 1 });
+  test("the node's own time is seconds on the wire and milliseconds here", () => {
+    // Only from a node with a receiver — a clockless one is not believed at
+    // all, which the clock suite below is about.
+    const p = decodeNodePosition(packet({ locationSource: 2 }), { at: 1 });
     assert.equal(p.at, 1_790_000_000_000, "seconds on the wire, ms here");
-    const noTime = decodeNodePosition(packet({ time: 0 }), { at: 4242 });
+    const noTime = decodeNodePosition(packet({ time: 0, locationSource: 2 }), { at: 4242 });
     assert.equal(noTime.at, 4242, "ours when the node has none");
   });
 
@@ -374,5 +376,26 @@ describe("how old a fix is", () => {
     assert.equal(fixAgeMs({ at: 9_000 }, 4_000), 0, "a clock that ran backwards is not a future");
     assert.equal(fixAgeMs({}, 4_000), Infinity, "no time is not a fresh one");
     assert.equal(fixAgeMs(null, 4_000), Infinity);
+  });
+});
+
+describe("a node's clock", () => {
+  test("is trusted when it has a receiver to set it by", () => {
+    const p = decodeNodePosition(packet({ locationSource: 2 }), { at: 1 });
+    assert.equal(p.at, 1_790_000_000_000, "the node's own time, in ms");
+  });
+
+  test("is not trusted when it has none, because then it is anybody's guess", () => {
+    // A node with no GPS may sit at the epoch or at whenever it was flashed.
+    // Believing it makes every fix look days old — and a stale fix is one the
+    // sender holds back, so a stationary device would go quiet for a reason
+    // nothing on its screen could explain.
+    const typed = decodeNodePosition(packet({ locationSource: 1 }), { at: 4242 });
+    assert.equal(typed.at, 4242, "our clock");
+    const unset = decodeNodePosition(packet(), { at: 4242 });
+    assert.equal(unset.at, 4242);
+    // Far in the past is the shape that silences a device.
+    const ancient = decodeNodePosition(packet({ time: 1, locationSource: 1 }), { at: 4242 });
+    assert.equal(ancient.at, 4242);
   });
 });
