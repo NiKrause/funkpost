@@ -1308,9 +1308,31 @@
   /* Who is out there. One row per device, and the swatch is the only thing
      tying a name in this list to a trail on the map — so it is the first
      thing in the row and the same colour the map drew. */
+  /* Written at last. A <fieldset> wants a <legend> so the group has a name a
+     screen reader can say, and both of these cards already show that name as
+     their <h2> — so the legend was marked `sr-only` and the class was never
+     defined, which printed it a second time under the heading. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .switches,
   .states {
     display: flex;
+    /* Spelled out, because `fieldset` above sets `column` and this rule did
+       not say otherwise. A wrapping row that is secretly a column puts every
+       label on its own line and `align-items: center` then centres each one
+       on its own width — which is why the switch list came out as a staircase
+       on a phone, every line starting at a different indent. */
+    flex-direction: row;
     flex-wrap: wrap;
     gap: 0.5rem 1rem;
     border: 0;
