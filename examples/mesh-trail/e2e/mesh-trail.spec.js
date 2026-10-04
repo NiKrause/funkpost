@@ -302,3 +302,14 @@ test("the switch list is a column of switches, not a staircase", async ({ contex
 
   await anna.close();
 });
+
+test("with no radio there is no node name, rather than an invented one", async ({ context }) => {
+  // The fake mesh is two tabs, not a node. "Connected" is true; "connected to
+  // C45E" would not be, and a page that prints !00000000 when it is talking to
+  // nothing is worse than one that says nothing.
+  const anna = await open(context, room(), "every=0", CLEARING);
+  await expect(anna.getByTestId("radio-status")).toHaveAttribute("data-phase", "ready");
+  await expect(anna.getByTestId("node-name")).toHaveCount(0);
+  await expect(anna.getByTestId("node-id")).toHaveCount(0);
+  await anna.close();
+});
