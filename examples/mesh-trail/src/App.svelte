@@ -198,6 +198,7 @@
   // read while the state is being created, and a `const` below that point is
   // in its dead zone — which is a blank page, not an error anyone sees.
   const AWAKE_KEY = "mesh-trail:awake:v1";
+  const SENDING_KEY = "mesh-trail:sending:v1";
   const EVERY_KEY = "mesh-trail:every:v1";
 
   let everyMin = $state(chosen(params.get("every"), Number, EVERY_KEY, 2));
@@ -555,6 +556,7 @@
   function toggleBroadcast() {
     if (!broadcasting && onPublicChannel && !publicAccepted) return;
     broadcasting = !broadcasting;
+    keep(SENDING_KEY, broadcasting);
     pushLog(broadcasting ? w().log.broadcastOn : w().log.broadcastOff);
     scheduleBeacons();
   }
@@ -754,6 +756,13 @@
     );
     loadPreferences();
     loadShown();
+    // Switched back on if it was on when this device was last closed. The
+    // suite still asserts that a *fresh* device sends nothing until somebody
+    // says so: the default is off, and only a choice already made here brings
+    // it back. Nothing leaves until there is a radio, so this is a wish rather
+    // than a transmission.
+    broadcasting = kept(SENDING_KEY, false);
+
     // Asked for again rather than assumed: a lock survives a launch only if
     // this browser still grants one, and the box follows the lock.
     if (kept(AWAKE_KEY, false)) {
