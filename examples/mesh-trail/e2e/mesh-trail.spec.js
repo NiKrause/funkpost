@@ -262,3 +262,43 @@ test("the page can be jumped through instead of scrolled", async ({ context }) =
 
   await anna.close();
 });
+
+test("the switch list is a column of switches, not a staircase", async ({ context }) => {
+  const roomId = room();
+  const anna = await open(context, roomId, "every=0", CLEARING);
+  // A phone, because that is where it showed: on a wide screen the six
+  // switches fit on one line and nothing is wrong with any of this.
+  await anna.setViewportSize({ width: 375, height: 812 });
+
+  // Where the list starts, against where it should. Counting *distinct*
+  // indents is not enough: two labels of the same width get the same centred
+  // position, and a staircase of six can still show five.
+  const { listLeft, firstLabel } = await anna.evaluate(() => {
+    const fieldset = document.querySelector("#show fieldset");
+    const style = getComputedStyle(fieldset);
+    const box = fieldset.getBoundingClientRect();
+    return {
+      listLeft: Math.round(
+        box.x + parseFloat(style.borderLeftWidth || 0) + parseFloat(style.paddingLeft || 0),
+      ),
+      firstLabel: Math.round(
+        document.querySelector("#show label").getBoundingClientRect().x,
+      ),
+    };
+  });
+  // `.switches` sets `display: flex` without a direction, and the `fieldset`
+  // rule above it says `column` — so a wrapping row was secretly a column and
+  // `align-items: center` centred every label on its own width, each at its
+  // own indent and none of them at the left.
+  expect(firstLabel, "the list does not start at its left edge").toBe(listLeft);
+
+  // And the legend that names the group for a screen reader stays out of
+  // sight: the card already shows that name as its heading.
+  const legendHidden = await anna.evaluate(() => {
+    const box = document.querySelector("#show legend").getBoundingClientRect();
+    return box.width <= 2 && box.height <= 2;
+  });
+  expect(legendHidden, "the fieldset's legend is printed under the heading").toBe(true);
+
+  await anna.close();
+});
