@@ -1128,7 +1128,12 @@
 
   <footer>
     <p class="dim mono">{t.footer(build)}</p>
-    <p class="dim">{@html creditHTML()}</p>
+    <!-- `ls-credit`, not `dim`: the 22px the brand guide gives the credit
+         mark hangs off that class, and the mark's SVG carries only a viewBox.
+         Without it the thing filled the footer's whole width. And `$lang`,
+         because the line is built once per call and has to be rebuilt when
+         somebody switches language — the other three demos do both. -->
+    <p class="ls-credit">{@html creditHTML($lang)}</p>
   </footer>
 </main>
 
