@@ -11,13 +11,15 @@
     "./position.js": "./position.js",
     "./channels.js": "./channels.js",
     "./wake-lock.js": "./wake-lock.js",
-    "./JumpBar.svelte": "./JumpBar.svelte"
+    "./JumpBar.svelte": "./JumpBar.svelte",
+    "./kept.js": "./kept.js"
   },
   "files": [
     "JumpBar.svelte",
     "channels.js",
     "connect.js",
     "fake-bc-link.js",
+    "kept.js",
     "position.js",
     "wake-lock.js"
   ],

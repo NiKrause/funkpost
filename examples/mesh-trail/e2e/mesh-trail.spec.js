@@ -302,3 +302,29 @@ test("the switch list is a column of switches, not a staircase", async ({ contex
 
   await anna.close();
 });
+
+test("an interval chosen once is still chosen next time", async ({ context }) => {
+  // The point of keeping it: a walk should not start with the same four
+  // decisions every time.
+  const roomId = room();
+  const first = await open(context, roomId, "", CLEARING);
+  await startSending(first);
+  await first.getByTestId("every-5").click();
+  await expect(first.getByTestId("every-5")).toBeChecked();
+  await first.close();
+
+  // Same context, so the same storage — a second launch of the same app on
+  // the same device.
+  const again = await open(context, roomId, "", CLEARING);
+  await startSending(again);
+  await expect(again.getByTestId("every-5")).toBeChecked();
+
+  // …and the address still wins, because a link that says `every=1` is
+  // somebody being explicit now.
+  const linked = await open(context, roomId, "every=1", CLEARING);
+  await startSending(linked);
+  await expect(linked.getByTestId("every-1")).toBeChecked();
+
+  await again.close();
+  await linked.close();
+});
