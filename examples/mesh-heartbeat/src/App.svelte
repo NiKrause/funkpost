@@ -159,6 +159,7 @@
   const EVERY_KEY = "mesh-heartbeat:every:v1";
   const PARTNER_KEY = "mesh-heartbeat:partner:v1";
   const AWAKE_KEY = "mesh-heartbeat:awake:v1";
+  const HOLD_STALE_KEY = "mesh-heartbeat:hold-stale:v1";
 
   let role = $state(
     chosen(
@@ -245,6 +246,14 @@
     /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
   const wakeLockSupported = "wakeLock" in navigator;
   let keepAwake = $state(false);
+  /**
+   * Whether an old fix is held back rather than sent. Off by default.
+   *
+   * A fix from a device that has not *moved* is still where that device is,
+   * and this one stays put on purpose. Silence would make the office vanish
+   * from the rider's map with nothing to say why.
+   */
+  let holdStale = $state(kept(HOLD_STALE_KEY, false));
 
   let courier = null;
   let radio = null;
@@ -523,7 +532,8 @@
         // three rounds ago, sent as current, puts a point on the map where
         // this device used to be and files the answer against the wrong spot.
         // `pos` is optional in the protocol, so saying nothing is allowed.
-        position: () => (fixAgeMs(here) > staleAfterMs ? null : encodeNodePosition(here)),
+        position: () =>
+          holdStale && fixAgeMs(here) > staleAfterMs ? null : encodeNodePosition(here),
         // `lastError` is set when a send fails and cleared on the next one
         // that does not — so reading it here gives a transient message rather
         // than a banner that outlives the fault it describes.
@@ -930,6 +940,18 @@
         <span>{t.radio.awake}</span>
       </label>
     {/if}
+    <label class="row">
+      <input
+        type="checkbox"
+        bind:checked={holdStale}
+        data-testid="hold-stale"
+        onchange={() => keep(HOLD_STALE_KEY, holdStale)}
+      />
+      <span>
+        {t.radio.holdStale}
+        <small class="dim">{t.radio.holdStaleWhy}</small>
+      </span>
+    </label>
   </section>
 
   <!-- Role and interval are one decision in two halves: what this device does,

@@ -55,6 +55,8 @@ export const WORDS = {
     sending: "asking…",
 
     radio: {
+      holdStale: "Say nothing when the fix is old",
+      holdStaleWhy: "Off: the device that stays put is still where it was, and silence would take it off the rider's map.",
       legend: "The radio",
       connect: "Connect a Meshtastic® node",
       connecting: "connecting…",
@@ -262,6 +264,8 @@ export const WORDS = {
     sending: "fragt…",
 
     radio: {
+      holdStale: "Nichts sagen, wenn die Position alt ist",
+      holdStaleWhy: "Aus: Das stehende Gerät ist weiterhin, wo es war, und Schweigen nähme es von der Karte des fahrenden.",
       legend: "Das Funkgerät",
       connect: "Meshtastic®-Knoten verbinden",
       connecting: "verbindet…",

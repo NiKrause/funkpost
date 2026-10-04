@@ -31,6 +31,8 @@ export const WORDS = {
       "A walk with radios. Each device says where it is on a schedule, every other device hears it and draws the trail, and the arrow is which way that person was going when they were last heard. No internet involved — the positions cross a LoRa® mesh.",
 
     broadcast: {
+      holdStale: "Say nothing when the fix is old",
+      holdStaleWhy: "Off: a place this device has not left is still true, and silence would take it off everyone's map. On: better quiet than a place already left — for a phone that keeps walking while its browser stops answering.",
       legend: "Saying where I am",
       off: "Not sending. This device listens and draws, and nobody hears it.",
       on: "Sending my position",
@@ -220,6 +222,8 @@ export const WORDS = {
       "Ein Spaziergang mit Funkgeräten. Jedes Gerät sagt im Takt, wo es ist, jedes andere hört es und zeichnet die Spur, und der Pfeil zeigt, wohin die Person unterwegs war, als sie zuletzt gehört wurde. Kein Internet beteiligt — die Positionen gehen über ein LoRa®-Mesh.",
 
     broadcast: {
+      holdStale: "Nichts sagen, wenn die Position alt ist",
+      holdStaleWhy: "Aus: Ein Ort, den dieses Gerät nicht verlassen hat, stimmt weiterhin, und Schweigen nähme es von allen Karten. An: lieber still als ein längst verlassener Ort — für ein Telefon, das weiterläuft, während sein Browser nicht mehr antwortet.",
       legend: "Sagen, wo ich bin",
       off: "Sendet nicht. Dieses Gerät hört zu und zeichnet, und niemand hört es.",
       on: "Meine Position senden",
