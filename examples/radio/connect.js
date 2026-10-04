@@ -146,7 +146,36 @@ export function applyGattProbe(report, { search = globalThis.location?.search ??
   return undoGattProbe;
 }
 
-export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp, onGattQueue, onGattProbe }) {
+/**
+ * What a node calls itself, in the two forms its owner can check.
+ *
+ * The four characters are the ones on the device's own display, so they are
+ * what somebody holding two nodes can actually tell apart. The `!id` is the
+ * node number in hex, which is what every other Meshtastic tool prints and
+ * what a short name falls back to when nobody set one.
+ *
+ * "Connected" on its own is not enough in a room with two radios in it, and
+ * mesh-todo has shown the `!id` since issue #12 while the newer demos said
+ * nothing at all.
+ *
+ * @param {number|null} num the node number from `myNodeInfo`
+ * @param {object|null} user the `user` of that node's entry, when it arrives
+ */
+export function nodeIdentity(num, user = null) {
+  if (!Number.isFinite(num)) return null;
+  const id = `!${(num >>> 0).toString(16).padStart(8, "0")}`;
+  const short = user?.shortName?.trim();
+  return {
+    num,
+    id,
+    // The display shows four characters; a node with no short name set shows
+    // the last four of its id, so that is the honest fallback rather than "?".
+    shortName: short || id.slice(-4).toUpperCase(),
+    longName: user?.longName?.trim() || "",
+  };
+}
+
+export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onNodeInfo, onChannel, onMyNodeInfo, onRegion, onError, onReconnecting, onReconnected, onGaveUp, onGattQueue, onGattProbe, onIdentity }) {
   if (mode.kind === "bc") {
     const link = createBroadcastChannelLink({ room: mode.room, loss: mode.loss });
     // preset only changes the airtime *estimates* (and with them the ARQ's
@@ -168,6 +197,10 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
       close: () => courier.close(),
     };
   }
+
+  // The node's own number, which arrives before its name and is needed to
+  // tell its entry in the node database from everybody else's.
+  let myNum = null;
 
   // Before anything talks to the radio: the transport's first act is to
   // subscribe for notifications, and a `startNotifications` that loses the
@@ -215,9 +248,21 @@ export async function connectCourier({ mode, onEvent, onTelemetry, onStatus, onN
       region: onRegion,
       airUtilTx: onTelemetry,
       status: onStatus,
-      nodeInfo: onNodeInfo,
+      // Who this node is, derived here so no page has to reassemble it. The
+      // number arrives first and the name later, if at all, so this fires
+      // twice: once with the id, once with the four characters beside it.
+      nodeInfo: (node) => {
+        if (onIdentity && myNum != null && node?.num === myNum) {
+          onIdentity(nodeIdentity(myNum, node.user));
+        }
+        if (onNodeInfo) onNodeInfo(node);
+      },
       channel: onChannel,
-      myNodeInfo: onMyNodeInfo,
+      myNodeInfo: (info) => {
+        myNum = info?.myNodeNum ?? info?.num ?? null;
+        if (onIdentity) onIdentity(nodeIdentity(myNum));
+        if (onMyNodeInfo) onMyNodeInfo(info);
+      },
       reconnecting: onReconnecting,
       reconnected: onReconnected,
       gaveUp: onGaveUp,
