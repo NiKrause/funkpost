@@ -10,6 +10,21 @@ const plural = (n, one, many) => (n === 1 ? one : many);
 
 export const WORDS = {
   en: {
+    /* The jump bar. Short on purpose: these are pills in a row that
+       scrolls sideways on a phone, and a card's own legend is a sentence. */
+    jump: {
+      label: "Jump to a part of this page",
+      radio: "Radio",
+      broadcast: "Sending",
+      interval: "Interval",
+      show: "Showing",
+      "check-in": "State",
+      hunt: "Fox",
+      compass: "Compass",
+      where: "Where",
+      map: "Map",
+      people: "People",
+    },
     title: "mesh-trail — everyone on one map",
     tagline: "each device says where it is · every other device draws the trail",
     intro:
@@ -184,6 +199,21 @@ export const WORDS = {
   },
 
   de: {
+    /* The jump bar. Short on purpose: these are pills in a row that
+       scrolls sideways on a phone, and a card's own legend is a sentence. */
+    jump: {
+      label: "Zu einem Teil dieser Seite springen",
+      radio: "Funk",
+      broadcast: "Senden",
+      interval: "Takt",
+      show: "Anzeigen",
+      "check-in": "Zustand",
+      hunt: "Fuchs",
+      compass: "Kompass",
+      where: "Wo",
+      map: "Karte",
+      people: "Leute",
+    },
     title: "mesh-trail — alle auf einer Karte",
     tagline: "jedes Gerät sagt, wo es ist · jedes andere zeichnet die Spur",
     intro:

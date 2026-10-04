@@ -34,6 +34,7 @@
   import { connectCourier, watchWindowErrors } from "@le-space/funkpost-radio";
   import { createChannelBook } from "@le-space/funkpost-radio/channels.js";
   import { createWakeLock } from "@le-space/funkpost-radio/wake-lock.js";
+  import JumpBar from "@le-space/funkpost-radio/JumpBar.svelte";
   import {
     decodeNodePosition,
     preferFix,
@@ -380,6 +381,28 @@
     refreshPeers();
     restartBeacons();
   }
+
+  /**
+   * What the jump bar offers, in the order the cards appear.
+   *
+   * The conditions are the ones on the cards themselves, which is the one
+   * place this can drift. A link to a card that is switched off would do
+   * nothing rather than break, but it would still be a lie about the page.
+   */
+  const jumps = $derived(
+    [
+      { id: "radio", label: t.jump.radio },
+      { id: "broadcast", label: t.jump.broadcast },
+      broadcasting && { id: "interval", label: t.jump.interval },
+      { id: "show", label: t.jump.show },
+      show.checkIn && { id: "check-in", label: t.jump["check-in"] },
+      show.hunt && { id: "hunt", label: t.jump.hunt },
+      show.compass && { id: "compass", label: t.jump.compass },
+      { id: "where", label: t.jump.where },
+      show.map && { id: "map", label: t.jump.map },
+      show.people && { id: "people", label: t.jump.people },
+    ].filter(Boolean),
+  );
 
   // ------------------------------------------------------------- the position
 
@@ -754,7 +777,9 @@
     <p>{t.intro}</p>
   </header>
 
-  <section class="card">
+  <JumpBar items={jumps} label={t.jump.label} />
+
+  <section class="card" id="radio">
     <h2>{t.radio.legend}</h2>
     <p data-testid="radio-status" data-phase={phase}>
       <span class="dot" data-phase={phase}></span>
@@ -808,7 +833,7 @@
     <p class="dim">{t.radio.awakeWhy}</p>
   </section>
 
-  <section class="card">
+  <section class="card" id="broadcast">
     <h2>{t.broadcast.legend}</h2>
     {#if onPublicChannel && !broadcasting}
       <p class="warn" data-testid="public-warning">{t.broadcast.publicWarning}</p>
@@ -843,7 +868,7 @@
   </section>
 
   {#if broadcasting}
-    <section class="card">
+    <section class="card" id="interval">
       <h2>{t.interval.legend}</h2>
       <fieldset data-testid="interval">
         <legend class="sr-only">{t.interval.legend}</legend>
@@ -879,7 +904,7 @@
     </section>
   {/if}
 
-  <section class="card">
+  <section class="card" id="show">
     <h2>{t.show.legend}</h2>
     <fieldset class="switches" data-testid="switches">
       <legend class="sr-only">{t.show.legend}</legend>
@@ -902,7 +927,7 @@
   </section>
 
   {#if show.checkIn}
-    <section class="card">
+    <section class="card" id="check-in">
       <h2>{t.checkIn.legend}</h2>
       <p class="states" data-testid="check-in">
         {#each STATES as state (state)}
@@ -922,7 +947,7 @@
   {/if}
 
   {#if show.hunt}
-    <section class="card">
+    <section class="card" id="hunt">
       <h2>{t.hunt.legend}</h2>
       <p>
         <label>
@@ -946,7 +971,7 @@
   {/if}
 
   {#if show.compass}
-    <section class="card">
+    <section class="card" id="compass">
       <h2>{t.compass.legend}</h2>
       {#if compass}
         <p class="compass" data-testid="compass">
@@ -973,7 +998,7 @@
     </section>
   {/if}
 
-  <section class="card">
+  <section class="card" id="where">
     <h2>{t.where.legend}</h2>
     <p data-testid="here">
       {#if here}
@@ -1005,7 +1030,7 @@
   </section>
 
   {#if show.map}
-    <section class="card">
+    <section class="card" id="map">
     <h2>{t.map.legend}</h2>
     {#if trails.length === 0 && !here}
       <p class="dim" data-testid="map-empty">{t.map.empty}</p>
@@ -1017,7 +1042,7 @@
   {/if}
 
   {#if show.people}
-    <section class="card">
+    <section class="card" id="people">
     <h2>{t.people.legend}</h2>
     <p class="dim mono" data-testid="people-summary">{t.people.summary(peerSummary)}</p>
     {#if peerRows.length === 0}
@@ -1123,6 +1148,11 @@
     color: var(--ls-text-dim);
     line-height: 1.55;
   }
+  /* A jump must not put the heading under the bar it was made from. */
+  section[id] {
+    scroll-margin-top: 3.2rem;
+  }
+
   .card {
     background: var(--ls-bg-2);
     border: 1px solid var(--ls-card-border);

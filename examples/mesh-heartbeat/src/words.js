@@ -16,6 +16,19 @@ const plural = (n, one, many) => (n === 1 ? one : many);
 
 export const WORDS = {
   en: {
+    /* The jump bar. Short on purpose: these are pills in a row that
+       scrolls sideways on a phone, and a card's own legend is a sentence. */
+    jump: {
+      label: "Jump to a part of this page",
+      radio: "Radio",
+      role: "Role",
+      partner: "Partner",
+      where: "Where",
+      map: "Map",
+      heard: "Heard",
+      track: "Ride",
+      log: "Log",
+    },
     title: "mesh-heartbeat — how far does the mesh reach?",
     tagline: "one device stays · one travels · every beat recorded with where it went out",
     intro:
@@ -210,6 +223,19 @@ export const WORDS = {
   },
 
   de: {
+    /* The jump bar. Short on purpose: these are pills in a row that
+       scrolls sideways on a phone, and a card's own legend is a sentence. */
+    jump: {
+      label: "Zu einem Teil dieser Seite springen",
+      radio: "Funk",
+      role: "Rolle",
+      partner: "Partner",
+      where: "Wo",
+      map: "Karte",
+      heard: "Gehört",
+      track: "Fahrt",
+      log: "Protokoll",
+    },
     title: "mesh-heartbeat — wie weit reicht das Mesh?",
     tagline: "ein Gerät bleibt · eines fährt · jeder Beat mit dem Ort festgehalten",
     intro:
