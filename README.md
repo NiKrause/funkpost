@@ -13,7 +13,7 @@ the difference gets a table, not a footnote:
 | what crosses the mesh | the WebRTC handshake: offer and answer, as small signed payloads | the database itself: OrbitDB entries, as signed blocks | one signed event at a time — and rules that *generate* a calendar instead of listing it |
 | first contact | two frames | a few kilobytes, ~12 frames | tens of bytes; a three-week busy mask is one frame |
 | WebRTC | yes — and the connection afterwards still needs an IP path (same Wi-Fi, or both online) | none — no offer, no answer, no IP path anywhere | none |
-| built? | designed, **not built** | **built, and first over the air 4 Sep 2026** | **built, and first booking over the air 6 Sep 2026** |
+| built? | designed, **not built** | **built, and first over the air 4 Sep 2026** — the package underneath is [under review](#the-storage-bridge-is-under-review) | **built, and first booking over the air 6 Sep 2026** |
 | pick it when | there is an IP path, but no way to swap a handshake over it | who wrote what must be **provable** | the **link** is the scarce thing |
 | demo | — | [mesh-todo](https://nikrause.github.io/funkpost/mesh-todo/) | [mesh-calendar](https://nikrause.github.io/funkpost/mesh-calendar/) |
 | the sentence to remember | *LoRa carries the handshake, not the connection.* | *The mesh carries the data when there is no connection to carry.* | *What you do not send costs nothing.* |
@@ -131,7 +131,8 @@ worth testing.
 **21 September 2026 — a list survived a wiped phone.** A Galaxy Fold 5 made a
 list and backed it up, and was reset; a Galaxy A57 with the same YubiKey had
 the same identity, brought the list back with the key alone, and wrote to it —
-nothing typed in, nothing carried over.
+nothing typed in, nothing carried over. One evening, one list — and the
+storage bridge that carried it is now under review, which is the next section.
 
 **Not yet on real radios:** how far the mesh reaches
 ([#180](https://github.com/NiKrause/funkpost/issues/180)), a decision travelling
@@ -141,6 +142,48 @@ and what is still unsettled is kept honestly in
 **[field notes](docs/field-notes.md)**; what the next bench has to show — what
 to press, and when each run counts — is on the **[run sheet](docs/run-sheet.md)**;
 sequencing and gates are in **[ROADMAP.md](ROADMAP.md)**.
+
+### The storage bridge is under review
+
+⚠ **[orbitdb-storage-bridge](https://github.com/NiKrause/orbitdb-storage-bridge)
+— the package this repository takes its replication protocol and its backups
+from — is being re-planned and reviewed. Until that lands, do not build on
+it.** Both halves of it have crossed real hardware, and both are in the review
+for the same reason: what they cost was measured afterwards.
+
+**Replication over the mesh works, and spends the budget it exists to save.**
+`courier-sync` is the MIT seam this repository binds to the radio, and it
+carried 4 September. What is wrong with it is measured rather than suspected:
+
+| | |
+|---|---|
+| a delta carries the whole log | every time — and a delta that joins nothing is asked for again ([bridge#127](https://github.com/NiKrause/orbitdb-storage-bridge/issues/127)) |
+| a 32-byte presence answer waits behind a 5.7 KB delta | nine minutes, on the carrier where the small payload was the whole point ([bridge#128](https://github.com/NiKrause/orbitdb-storage-bridge/issues/128)) |
+| asking storage for a block nobody has waits out a network timeout | ~20 s on a phone with no peers, in four places — the sharp one is the repair loop, where a hash we also lack is the *ordinary* case ([bridge#134](https://github.com/NiKrause/orbitdb-storage-bridge/issues/134)) |
+| the send timeout fires inside an honest delivery | five minutes, against seven measured on `LONG_FAST`; `examples/mesh-todo/src/stack.js` carries a 20-minute stopgap and the reason ([bridge#126](https://github.com/NiKrause/orbitdb-storage-bridge/issues/126)) |
+
+**Backup and restore do not scale.** The 21 September result above stands as a
+measurement and not as a feature: restore takes 1.4 s at 50 entries, 40 s at
+500, and at 2 000 entries **did not finish inside ten minutes** — measured
+13 October 2026 against bridge 0.17.0
+([bridge#152](https://github.com/NiKrause/orbitdb-storage-bridge/issues/152)).
+Three of the storage drivers have never moved a byte against a live account
+([bridge#60](https://github.com/NiKrause/orbitdb-storage-bridge/issues/60));
+reading a backup back without an HTTP gateway in the path works in pieces and
+is wired end to end nowhere
+([bridge#70](https://github.com/NiKrause/orbitdb-storage-bridge/issues/70));
+and Storacha, the service the package was built around, has not operated since
+May 2026.
+
+The re-plan is
+[bridge#147](https://github.com/NiKrause/orbitdb-storage-bridge/issues/147) —
+one sealed file per backup, a keyring header, an Aleph listing per paying
+account — and what is open at any moment is
+[the bridge's issue list](https://github.com/NiKrause/orbitdb-storage-bridge/issues).
+Two of the instruments on the demo menu, **recovery** and the **storage
+probe**, live in that repository and exist to answer exactly these questions.
+They are measuring tools for the review, not features: do not hand them
+anything you would miss.
 
 ## The mesh carries the data, not the program
 
