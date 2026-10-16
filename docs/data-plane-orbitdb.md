@@ -2,7 +2,9 @@
 
 # The database plane (OrbitDB)
 
-Status: **built and tested on hardware — first over-the-air replication 4 September 2026**
+Status: **built and tested on hardware — first over-the-air replication 4 September 2026**,
+and the package underneath it is **[under review](../README.md#the-storage-bridge-is-under-review)**:
+replication over the radio works, backing a database up and getting it back does not scale.
 
 ## The data plane — built
 
